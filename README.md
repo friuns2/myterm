@@ -19,6 +19,27 @@ A compact Node.js web-based terminal emulator using WebSockets and PTY (pseudo-t
 ✅ **Interactive Tools**: ssh, ftp, python REPL  
 ✅ **All Shell Features**: tab completion, command history, ctrl+c/z  
 
+## Installation
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/friuns2/web-terminal-emulator.git
+cd web-terminal-emulator
+```
+
+2. **Install dependencies:**
+```bash
+npm install
+```
+
+3. **Run the terminal:**
+```bash
+npm start
+```
+
+4. **Open in browser:**
+Navigate to http://localhost:3000
+
 ## Usage
 
 ### Web Terminal (Recommended)
