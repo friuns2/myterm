@@ -1,84 +1,122 @@
-const output = document.getElementById('output');
-const input = document.getElementById('command-input');
-const terminal = document.getElementById('terminal');
+// Initialize xterm.js terminal
+const { Terminal } = window;
+const { FitAddon } = window.FitAddon;
+
+const terminal = new Terminal({
+    cursorBlink: true,
+    fontFamily: 'Courier New, monospace',
+    fontSize: 14,
+    theme: {
+        background: '#000000',
+        foreground: '#00ff00',
+        cursor: '#00ff00',
+        cursorAccent: '#000000',
+        selection: 'rgba(0, 255, 0, 0.3)'
+    },
+    allowTransparency: false
+});
+
+// Add fit addon for responsive sizing
+const fitAddon = new FitAddon();
+terminal.loadAddon(fitAddon);
+
+// Mount terminal to DOM
+const terminalContainer = document.getElementById('terminal');
+terminal.open(terminalContainer);
+
+// Fit terminal to container
+fitAddon.fit();
 
 // WebSocket connection
 const ws = new WebSocket(`ws://${window.location.host}`);
 
+let isConnected = false;
+
 ws.onopen = () => {
     console.log('Connected to terminal');
+    isConnected = true;
+    
+    // Send initial terminal size
+    ws.send(JSON.stringify({
+        type: 'resize',
+        cols: terminal.cols,
+        rows: terminal.rows
+    }));
 };
 
 ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    
-    if (message.type === 'clear') {
-        output.textContent = '';
-        return;
-    }
-    
-    if (message.type === 'output') {
-        output.textContent += message.data;
-        output.scrollTop = output.scrollHeight;
+    try {
+        const message = JSON.parse(event.data);
+        
+        switch (message.type) {
+            case 'output':
+                // Write PTY output to terminal
+                terminal.write(message.data);
+                break;
+                
+            case 'exit':
+                terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
+                terminal.write('Connection closed. Refresh to reconnect.\r\n');
+                isConnected = false;
+                break;
+                
+            default:
+                console.log('Unknown message type:', message.type);
+        }
+    } catch (error) {
+        console.error('Error parsing message:', error);
     }
 };
 
 ws.onclose = () => {
-    output.textContent += '\nConnection lost. Refresh to reconnect.\n';
+    console.log('WebSocket connection closed');
+    if (isConnected) {
+        terminal.write('\r\nConnection lost. Refresh to reconnect.\r\n');
+    }
+    isConnected = false;
 };
 
 ws.onerror = (error) => {
-    output.textContent += `\nWebSocket error: ${error}\n`;
+    console.error('WebSocket error:', error);
+    terminal.write('\r\nWebSocket error occurred.\r\n');
 };
 
-// Handle command input
-input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        const command = input.value.trim();
-        
-        if (command) {
-            // Show command in output
-            output.textContent += `${command}\n`;
-            
-            // Send command to server
-            ws.send(JSON.stringify({ command }));
-            
-            // Clear input
-            input.value = '';
-            
-            // Scroll to bottom
-            output.scrollTop = output.scrollHeight;
-        }
+// Handle terminal input
+terminal.onData((data) => {
+    if (isConnected) {
+        ws.send(JSON.stringify({
+            type: 'input',
+            data: data
+        }));
     }
 });
 
-// Keep input focused
-terminal.addEventListener('click', () => {
-    input.focus();
+// Handle terminal resize
+const handleResize = () => {
+    fitAddon.fit();
+    if (isConnected) {
+        ws.send(JSON.stringify({
+            type: 'resize',
+            cols: terminal.cols,
+            rows: terminal.rows
+        }));
+    }
+};
+
+// Resize terminal when window resizes
+window.addEventListener('resize', handleResize);
+
+// Handle visibility change (focus/blur)
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        terminal.focus();
+    }
 });
 
-// Command history
-let history = [];
-let historyIndex = -1;
+// Focus terminal when clicking anywhere
+document.addEventListener('click', () => {
+    terminal.focus();
+});
 
-input.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (history.length > 0 && historyIndex < history.length - 1) {
-            historyIndex++;
-            input.value = history[history.length - 1 - historyIndex];
-        }
-    } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (historyIndex > 0) {
-            historyIndex--;
-            input.value = history[history.length - 1 - historyIndex];
-        } else if (historyIndex === 0) {
-            historyIndex = -1;
-            input.value = '';
-        }
-    } else if (e.key === 'Enter' && input.value.trim()) {
-        history.push(input.value.trim());
-        historyIndex = -1;
-    }
-}); 
+// Initial focus
+terminal.focus();
