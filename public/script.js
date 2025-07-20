@@ -27,59 +27,87 @@ terminal.open(terminalContainer);
 // Fit terminal to container
 fitAddon.fit();
 
-// WebSocket connection
-const ws = new WebSocket(`ws://${window.location.host}`);
-
+let ws;
+let sessionID = localStorage.getItem('terminalSessionID'); // Try to retrieve existing session ID
 let isConnected = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_BASE_DELAY = 1000; // 1 second
 
-ws.onopen = () => {
-    console.log('Connected to terminal');
-    isConnected = true;
-    
-    // Send initial terminal size
-    ws.send(JSON.stringify({
-        type: 'resize',
-        cols: terminal.cols,
-        rows: terminal.rows
-    }));
-};
+const connectWebSocket = () => {
+    const url = sessionID ? `ws://${window.location.host}?sessionID=${sessionID}` : `ws://${window.location.host}`;
+    ws = new WebSocket(url);
 
-ws.onmessage = (event) => {
-    try {
-        const message = JSON.parse(event.data);
+    ws.onopen = () => {
+        console.log('Connected to terminal');
+        isConnected = true;
+        reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         
-        switch (message.type) {
-            case 'output':
-                // Write PTY output to terminal
-                terminal.write(message.data);
-                break;
+        // Send initial terminal size
+        ws.send(JSON.stringify({
+            type: 'resize',
+            cols: terminal.cols,
+            rows: terminal.rows
+        }));
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            
+            switch (message.type) {
+                case 'output':
+                    // Write PTY output to terminal
+                    terminal.write(message.data);
+                    break;
                 
-            case 'exit':
-                terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
-                terminal.write('Connection closed. Refresh to reconnect.\r\n');
-                isConnected = false;
-                break;
-                
-            default:
-                console.log('Unknown message type:', message.type);
+                case 'sessionID':
+                    // Store session ID received from server
+                    sessionID = message.sessionID;
+                    localStorage.setItem('terminalSessionID', sessionID);
+                    console.log(`Received new session ID: ${sessionID}`);
+                    break;
+                    
+                case 'exit':
+                    terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
+                    terminal.write('Connection closed. Refresh to reconnect.\r\n');
+                    isConnected = false;
+                    // Optionally, clear session ID if process truly exited
+                    localStorage.removeItem('terminalSessionID');
+                    break;
+                    
+                default:
+                    console.log('Unknown message type:', message.type);
+            }
+        } catch (error) {
+            console.error('Error parsing message:', error);
         }
-    } catch (error) {
-        console.error('Error parsing message:', error);
-    }
+    };
+
+    ws.onclose = () => {
+        console.log('WebSocket connection closed');
+        isConnected = false;
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts);
+            reconnectAttempts++;
+            console.log(`Attempting to reconnect in ${delay / 1000} seconds... (Attempt ${reconnectAttempts})`);
+            terminal.write(`\r\nConnection lost. Attempting to reconnect...\r\n`);
+            setTimeout(connectWebSocket, delay);
+        } else {
+            terminal.write('\r\nConnection lost. Max reconnect attempts reached. Refresh to reconnect.\r\n');
+            localStorage.removeItem('terminalSessionID'); // Clear session ID on max attempts
+        }
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        terminal.write('\r\nWebSocket error occurred. Attempting to reconnect.\r\n');
+        ws.close(); // Force close to trigger onclose and reconnect logic
+    };
 };
 
-ws.onclose = () => {
-    console.log('WebSocket connection closed');
-    if (isConnected) {
-        terminal.write('\r\nConnection lost. Refresh to reconnect.\r\n');
-    }
-    isConnected = false;
-};
-
-ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-    terminal.write('\r\nWebSocket error occurred.\r\n');
-};
+// Initial WebSocket connection
+connectWebSocket();
 
 // Handle terminal input
 terminal.onData((data) => {
