@@ -9,7 +9,7 @@ const port = 3000;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId }
-const SESSION_TIMEOUT = 10 * 1000; // 10 seconds timeout for session persistence
+const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; 
 
 // Serve static files
 app.use(express.static('public'));

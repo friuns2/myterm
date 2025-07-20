@@ -97,4 +97,48 @@ body {
 #output::-webkit-scrollbar-thumb {
     background: #00ff00;
     border-radius: 4px;
+}
+
+/* Virtual Keyboard Styles */
+#virtual-keyboard {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #222;
+    padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 1000;
+}
+
+.key-row {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+.key-button {
+    background-color: #444;
+    color: #eee;
+    border: 1px solid #555;
+    border-radius: 5px;
+    padding: 10px 15px;
+    margin: 0 5px;
+    font-size: 1.1em;
+    cursor: pointer;
+    flex-grow: 1;
+    max-width: 100px; /* Limit button width */
+}
+
+.key-button:active {
+    background-color: #00ff00;
+    color: #000;
+}
+
+.arrow-up, .arrow-down, .arrow-left, .arrow-right {
+    font-size: 1.5em;
+    padding: 5px 15px;
 } 

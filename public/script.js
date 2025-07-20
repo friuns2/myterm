@@ -148,3 +148,53 @@ document.addEventListener('click', () => {
 
 // Initial focus
 terminal.focus();
+
+// Virtual keyboard input
+const virtualKeyboard = document.getElementById('virtual-keyboard');
+if (virtualKeyboard) {
+    virtualKeyboard.addEventListener('click', (event) => {
+        const button = event.target.closest('.key-button');
+        if (button) {
+            const keyCode = parseInt(button.dataset.keyCode, 10);
+            let data = '';
+
+            switch (keyCode) {
+                case 27: // Esc
+                    data = '\x1B';
+                    break;
+                case 9: // Tab
+                    data = '\x09';
+                    break;
+                case 17: // Ctrl (we can't directly simulate Ctrl, but we can send an empty string or specific Ctrl combinations if needed)
+                    // For simplicity, we'll focus on common Ctrl combinations. E.g., Ctrl+C is ''
+                    // For a general 'Ctrl' key, it's more about state, which is complex without a full keyboard listener.
+                    // For now, no direct single character for 'Ctrl' itself.
+                    break;
+                case 18: // Alt (similar to Ctrl, no direct single character)
+                    break;
+                case 38: // Up Arrow
+                    data = '\x1B[A';
+                    break;
+                case 40: // Down Arrow
+                    data = '\x1B[B';
+                    break;
+                case 37: // Left Arrow
+                    data = '\x1B[D';
+                    break;
+                case 39: // Right Arrow
+                    data = '\x1B[C';
+                    break;
+                default:
+                    // For other keys, if we add them, we'd map them here.
+                    break;
+            }
+
+            if (isConnected && data) {
+                ws.send(JSON.stringify({
+                    type: 'input',
+                    data: data
+                }));
+            }
+        }
+    });
+}
