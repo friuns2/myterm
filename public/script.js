@@ -165,12 +165,28 @@ if (virtualKeyboard) {
                 case 9: // Tab
                     data = '\x09';
                     break;
-                case 17: // Ctrl (we can't directly simulate Ctrl, but we can send an empty string or specific Ctrl combinations if needed)
-                    // For simplicity, we'll focus on common Ctrl combinations. E.g., Ctrl+C is ''
-                    // For a general 'Ctrl' key, it's more about state, which is complex without a full keyboard listener.
-                    // For now, no direct single character for 'Ctrl' itself.
+                case 17: // Ctrl
+                    // Prompt user for the next key
+                    const nextKey = prompt("Enter next key for Ctrl combination (e.g., 'c' for Ctrl+C, 'z' for Ctrl+Z):");
+                    if (nextKey) {
+                        const charCode = nextKey.toLowerCase().charCodeAt(0);
+                        if (charCode >= 97 && charCode <= 122) { // 'a' through 'z'
+                            data = String.fromCharCode(charCode - 96); // Convert to Ctrl+A to Ctrl+Z
+                        } else if (nextKey === '[') {
+                            data = '\x1B'; // Ctrl+[ is Esc
+                        } else if (nextKey === '\\') {
+                            data = '\x1C'; // Ctrl+\ is FS (File Separator)
+                        } else if (nextKey === ']') {
+                            data = '\x1D'; // Ctrl+] is GS (Group Separator)
+                        } else if (nextKey === '^') {
+                            data = '\x1E'; // Ctrl+^ is RS (Record Separator)
+                        } else if (nextKey === '_') {
+                            data = '\x1F'; // Ctrl+_ is US (Unit Separator)
+                        }
+                    }
                     break;
-                case 18: // Alt (similar to Ctrl, no direct single character)
+                case 3: // Ctrl+C (ASCII End-of-Text character)
+                    data = '\x03';
                     break;
                 case 38: // Up Arrow
                     data = '\x1B[A';
