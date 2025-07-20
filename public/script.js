@@ -142,12 +142,40 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Focus terminal when clicking anywhere
-document.addEventListener('click', () => {
-    terminal.focus();
+document.addEventListener('click', (event) => {
+    // Only focus terminal if the click is not inside the custom input container
+    const customInputContainer = document.getElementById('custom-input-container');
+    if (customInputContainer && !customInputContainer.contains(event.target)) {
+        terminal.focus();
+    }
 });
 
 // Initial focus
 terminal.focus();
+
+// Custom input field handling
+const customCommandInput = document.getElementById('custom-command-input');
+const sendCommandButton = document.getElementById('send-command-button');
+
+if (customCommandInput && sendCommandButton) {
+    const sendCommand = () => {
+        const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
+        if (isConnected) {
+            ws.send(JSON.stringify({
+                type: 'input',
+                data: command
+            }));
+            customCommandInput.value = ''; // Clear input after sending
+        }
+    };
+
+    sendCommandButton.addEventListener('click', sendCommand);
+    customCommandInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            sendCommand();
+        }
+    });
+}
 
 // Virtual keyboard input
 const virtualKeyboard = document.getElementById('virtual-keyboard');
