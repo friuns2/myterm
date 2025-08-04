@@ -43,9 +43,11 @@ const connectWebSocket = () => {
         isConnected = true;
         reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         
-        // Show reconnection status if this is a reconnect with existing session
+        // Request full terminal content if reconnected to an existing session
         if (sessionID) {
-            terminal.write('\r\n\x1b[32m[Reconnected - restoring session...]\x1b[0m\r\n');
+            ws.send(JSON.stringify({
+                type: 'request_restore'
+            }));
         }
         
         // Send initial terminal size
@@ -73,11 +75,13 @@ const connectWebSocket = () => {
                     console.log(`Received new session ID: ${sessionID}`);
                     break;
                 
-                case 'restore':
+                case 'restore_complete':
                     // Clear terminal and restore buffered content
                     terminal.clear();
                     terminal.write(message.data);
-                    console.log('Terminal content restored from buffer');
+                    console.log('Terminal content restored from PTY');
+                    // Also show a reconnected message for user feedback
+                    terminal.write(`\r\n\x1b[32m[Reconnected - session restored]\x1b[0m\r\n`);
                     break;
                     
                 case 'exit':

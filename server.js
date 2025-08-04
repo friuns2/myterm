@@ -1,3 +1,8 @@
+// Function to escape a string for use in a regular expression
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the matched substring
+}
+
 const express = require('express');
 const WebSocket = require('ws');
 const pty = require('node-pty');
@@ -8,9 +13,8 @@ const app = express();
 const port = 8080;
 
 // Store active terminal sessions
-const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
+const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, isRestoring }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; 
-const BUFFER_SIZE = 10000; // Store last 10KB of output (more reasonable size)
 
 // Serve static files
 app.use(express.static('public'));
@@ -36,18 +40,12 @@ wss.on('connection', (ws, req) => {
     clearTimeout(session.timeoutId);
     // Update WebSocket instance
     session.ws = ws;
+    session.isRestoring = true; // Set flag to indicate restoration in progress
     console.log(`Reconnected to session: ${sessionID}`);
     
-    // Send buffered content to restore terminal state
-    if (session.buffer) {
-      // Send restore message after a small delay to ensure WebSocket is ready
-      setTimeout(() => {
-        ws.send(JSON.stringify({
-          type: 'restore',
-          data: session.buffer
-        }));
-      }, 50);
-    }
+    // Request full terminal content from PTY upon reconnection
+    ptyProcess.write('\x1b[?2026h'); // VT sequence to request full screen content
+
   } else {
     // Create new PTY process and session
     sessionID = uuidv4();
@@ -60,7 +58,7 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    sessions.set(sessionID, { ptyProcess, ws, timeoutId: null, buffer: '' });
+    sessions.set(sessionID, { ptyProcess, ws, timeoutId: null, isRestoring: false });
     console.log(`New session created: ${sessionID}`);
 
     // Send session ID to client
@@ -70,21 +68,23 @@ wss.on('connection', (ws, req) => {
     }));
   }
 
-  // Send PTY output to WebSocket and buffer it
+  // Send PTY output to WebSocket
   ptyProcess.onData((data) => {
-    ws.send(JSON.stringify({
-      type: 'output',
-      data: data
-    }));
-    
-    // Buffer the output for session persistence
     const session = sessions.get(sessionID);
-    if (session) {
-      session.buffer += data;
-      // Keep buffer size manageable
-      if (session.buffer.length > BUFFER_SIZE) {
-        session.buffer = session.buffer.slice(-BUFFER_SIZE);
-      }
+    if (session && session.isRestoring) {
+      // During restoration, accumulate data as part of the full screen content
+      // This might need more sophisticated handling to ensure proper parsing of VT sequences
+      // For now, assuming raw content is sent and client handles clearing.
+      ws.send(JSON.stringify({
+        type: 'restore_complete',
+        data: data
+      }));
+      session.isRestoring = false; // Reset flag after sending initial content
+    } else {
+      ws.send(JSON.stringify({
+        type: 'output',
+        data: data
+      }));
     }
   });
 
@@ -106,13 +106,21 @@ wss.on('connection', (ws, req) => {
 
       switch (msg.type) {
         case 'input':
-          // Send input to PTY
           ptyProcess.write(msg.data);
           break;
 
         case 'resize':
           // Resize PTY
           ptyProcess.resize(msg.cols, msg.rows);
+          break;
+          
+        case 'request_restore':
+          // Client is requesting full terminal content
+          const session = sessions.get(sessionID);
+          if (session) {
+            session.isRestoring = true;
+            ptyProcess.write('\x1b[?2026h'); // Request full screen content again
+          }
           break;
 
         default:
