@@ -42,6 +42,7 @@ const connectWebSocket = () => {
         console.log('Connected to terminal');
         isConnected = true;
         reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+        terminal.clear(); // Clear the terminal on successful connection or reconnection
         
         // Send initial terminal size
         ws.send(JSON.stringify({
