@@ -43,6 +43,14 @@ const connectWebSocket = () => {
         isConnected = true;
         reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         
+        // Force screen refresh on reconnection
+        if (sessionID) {
+            // Clear texture atlas to force redraw
+            terminal.clearTextureAtlas();
+            // Refresh the entire terminal display
+            terminal.refresh(0, terminal.rows - 1);
+        }
+        
         // Send initial terminal size
         ws.send(JSON.stringify({
             type: 'resize',

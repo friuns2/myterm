@@ -8,8 +8,9 @@ const app = express();
 const port = 3000;
 
 // Store active terminal sessions
-const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId }
-const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; 
+const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
+const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
+const MAX_BUFFER_SIZE = 10000; // Maximum number of characters to buffer 
 
 // Serve static files
 app.use(express.static('public'));
@@ -36,6 +37,15 @@ wss.on('connection', (ws, req) => {
     // Update WebSocket instance
     session.ws = ws;
     console.log(`Reconnected to session: ${sessionID}`);
+    
+    // Send buffered content to reconnecting client
+    if (session.buffer && session.buffer.length > 0) {
+      ws.send(JSON.stringify({
+        type: 'output',
+        data: session.buffer
+      }));
+      console.log(`Sent ${session.buffer.length} characters from buffer`);
+    }
   } else {
     // Create new PTY process and session
     sessionID = uuidv4();
@@ -48,7 +58,7 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    sessions.set(sessionID, { ptyProcess, ws, timeoutId: null });
+    sessions.set(sessionID, { ptyProcess, ws, timeoutId: null, buffer: '' });
     console.log(`New session created: ${sessionID}`);
 
     // Send session ID to client
@@ -58,12 +68,27 @@ wss.on('connection', (ws, req) => {
     }));
   }
 
-  // Send PTY output to WebSocket
+  // Send PTY output to WebSocket and buffer it
   ptyProcess.onData((data) => {
-    ws.send(JSON.stringify({
-      type: 'output',
-      data: data
-    }));
+    const session = sessions.get(sessionID);
+    if (session) {
+      // Add data to buffer
+      session.buffer += data;
+      
+      // Trim buffer if it exceeds maximum size
+      if (session.buffer.length > MAX_BUFFER_SIZE) {
+        // Keep only the last MAX_BUFFER_SIZE characters
+        session.buffer = session.buffer.slice(-MAX_BUFFER_SIZE);
+      }
+      
+      // Send data to connected client if WebSocket is open
+      if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(JSON.stringify({
+          type: 'output',
+          data: data
+        }));
+      }
+    }
   });
 
   // Handle PTY exit
@@ -92,6 +117,8 @@ wss.on('connection', (ws, req) => {
           // Resize PTY
           ptyProcess.resize(msg.cols, msg.rows);
           break;
+
+
 
         default:
           console.log('Unknown message type:', msg.type);
