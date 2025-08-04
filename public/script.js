@@ -33,25 +33,17 @@ let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_BASE_DELAY = 1000; // 1 second
-let isReconnecting = false; // Flag to track if this is a reconnection
 
 const connectWebSocket = () => {
     const url = sessionID ? `ws://${window.location.host}?sessionID=${sessionID}` : `ws://${window.location.host}`;
     ws = new WebSocket(url);
 
-    // Set reconnecting flag if we have an existing session ID
-    isReconnecting = sessionID !== null;
-
     ws.onopen = () => {
         console.log('Connected to terminal');
         isConnected = true;
         reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-
-        // Only clear terminal for new connections, not reconnections
-        if (!isReconnecting) {
-            terminal.clear();
-        }
-
+        terminal.clear(); // Clear the terminal on successful connection or reconnection
+        
         // Send initial terminal size
         ws.send(JSON.stringify({
             type: 'resize',
@@ -71,13 +63,12 @@ const connectWebSocket = () => {
                     break;
 
                 case 'buffer':
-                    // Restore buffered output on reconnection
-                    if (isReconnecting && message.data) {
+                    // Restore buffered output on session restoration
+                    if (message.data) {
                         terminal.clear(); // Clear first, then restore buffer
                         terminal.write(message.data);
                         console.log('Terminal buffer restored');
                     }
-                    isReconnecting = false; // Reset flag after buffer restoration
                     break;
 
                 case 'sessionID':
@@ -85,7 +76,6 @@ const connectWebSocket = () => {
                     sessionID = message.sessionID;
                     localStorage.setItem('terminalSessionID', sessionID);
                     console.log(`Received new session ID: ${sessionID}`);
-                    isReconnecting = false; // This is a new session, not a reconnection
                     break;
                     
                 case 'exit':

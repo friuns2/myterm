@@ -1,0 +1,5 @@
+{
+  "sessionID": "af3e491c-0cdf-4a00-af52-a3da011b95b8",
+  "buffer": "bash: bindkey: command not found\r\n\r\nThe default interactive shell is now zsh.\r\nTo update your account to use zsh, please run `chsh -s /bin/zsh`.\r\nFor more details, please visit https://support.apple.com/kb/HT208050.\r\nbash-3.2$ hi\r\nbash: hi: command not found\r\nbash-3.2$ ",
+  "timestamp": 1754320897905
+}
