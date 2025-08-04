@@ -7,11 +7,11 @@ const terminal = new Terminal({
     fontFamily: 'Courier New, monospace',
     fontSize: 14,
     theme: {
-        background: '#000000',
-        foreground: '#00ff00',
-        cursor: '#00ff00',
-        cursorAccent: '#000000',
-        selection: 'rgba(0, 255, 0, 0.3)'
+        background: '#1f2937', // Tailwind/DaisyUI: bg-base-300 (dark gray)
+        foreground: '#d1d5db', // Tailwind/DaisyUI: text-base-content (light gray)
+        cursor: '#3b82f6',     // Tailwind/DaisyUI: text-primary (blue)
+        cursorAccent: '#1f2937', // Tailwind/DaisyUI: bg-base-300
+        selection: 'rgba(59, 130, 246, 0.3)' // Tailwind/DaisyUI: primary with transparency
     },
     allowTransparency: false
 });
@@ -182,6 +182,15 @@ if (customCommandInput && sendCommandButton) {
         if (event.key === 'Enter') {
             sendCommand();
         }
+    });
+
+    // Handle custom input field focus to prevent terminal input conflict
+    customCommandInput.addEventListener('focus', () => {
+        terminal.blur(); // Remove focus from terminal when input field is focused
+    });
+
+    customCommandInput.addEventListener('blur', () => {
+        terminal.focus(); // Return focus to terminal when input field loses focus
     });
 }
 
