@@ -10,10 +10,27 @@ const port = 3000;
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer 
+const MAX_BUFFER_SIZE = 10000; // Maximum number of characters to buffer 
 
 // Serve static files
 app.use(express.static('public'));
+
+// API endpoint to get session list
+app.get('/api/sessions', (req, res) => {
+  const sessionList = [];
+  sessions.forEach((session, sessionID) => {
+    // Get last line from buffer for status
+    const lines = session.buffer.split('\n');
+    const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
+    
+    sessionList.push({
+      id: sessionID,
+      status: lastLine.trim() || 'Active session',
+      created: session.created || new Date().toISOString()
+    });
+  });
+  res.json(sessionList);
+});
 
 const server = app.listen(port, () => {
   console.log(`Web Terminal running at http://localhost:${port}`);
@@ -58,7 +75,7 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    const session = { ptyProcess, ws, timeoutId: null, buffer: '' };
+    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString() };
     sessions.set(sessionID, session);
     console.log(`New session created: ${sessionID}`);
 

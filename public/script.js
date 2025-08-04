@@ -28,11 +28,24 @@ terminal.open(terminalContainer);
 fitAddon.fit();
 
 let ws;
-let sessionID = localStorage.getItem('terminalSessionID'); // Try to retrieve existing session ID
+let sessionID = getSessionIDFromURL();
 let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_BASE_DELAY = 1000; // 1 second
+
+// Function to get session ID from URL parameters
+function getSessionIDFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('session');
+}
+
+// Function to update URL with session ID
+function updateURLWithSession(sessionId) {
+    const url = new URL(window.location);
+    url.searchParams.set('session', sessionId);
+    window.history.replaceState({}, '', url);
+}
 
 const connectWebSocket = () => {
     const url = sessionID ? `ws://${window.location.host}?sessionID=${sessionID}` : `ws://${window.location.host}`;
@@ -73,6 +86,7 @@ const connectWebSocket = () => {
                     // Store session ID received from server
                     sessionID = message.sessionID;
                     localStorage.setItem('terminalSessionID', sessionID);
+                    updateURLWithSession(sessionID);
                     console.log(`Received new session ID: ${sessionID}`);
                     break;
                     
@@ -114,8 +128,78 @@ const connectWebSocket = () => {
     };
 };
 
-// Initial WebSocket connection
-connectWebSocket();
+// Function to show session list
+async function showSessionList() {
+    try {
+        const response = await fetch('/api/sessions');
+        const sessions = await response.json();
+        
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = `
+            <div class="p-6 max-w-4xl mx-auto">
+                <h1 class="text-2xl font-bold mb-6 text-center">Terminal Sessions</h1>
+                <div class="grid gap-4 mb-6">
+                    ${sessions.map(session => `
+                        <div class="card bg-base-200 shadow-xl cursor-pointer hover:bg-base-300 transition-colors" 
+                             onclick="connectToSession('${session.id}')">
+                            <div class="card-body p-4">
+                                <h2 class="card-title text-sm">${session.id}</h2>
+                                <p class="text-xs opacity-70">Status: ${session.status}</p>
+                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="text-center">
+                    <button class="btn btn-primary" onclick="createNewSession()">Create New Session</button>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Failed to load sessions:', error);
+        createNewSession();
+    }
+}
+
+// Function to connect to existing session
+function connectToSession(sessionId) {
+    sessionID = sessionId;
+    localStorage.setItem('terminalSessionID', sessionID);
+    updateURLWithSession(sessionID);
+    initializeTerminal();
+}
+
+// Function to create new session
+function createNewSession() {
+    sessionID = null;
+    localStorage.removeItem('terminalSessionID');
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    window.history.replaceState({}, '', url);
+    initializeTerminal();
+}
+
+// Function to initialize terminal
+function initializeTerminal() {
+    const terminalContainer = document.getElementById('terminal-container');
+    terminalContainer.innerHTML = '<div id="terminal" class="w-full h-full"></div>';
+    
+    // Re-mount terminal to new DOM element
+    const newTerminalElement = document.getElementById('terminal');
+    terminal.open(newTerminalElement);
+    fitAddon.fit();
+    
+    // Connect WebSocket
+    connectWebSocket();
+}
+
+// Check if we should show session list or connect directly
+if (!sessionID) {
+    showSessionList();
+} else {
+    // Initial WebSocket connection
+    connectWebSocket();
+}
 
 // Handle terminal input
 terminal.onData((data) => {
