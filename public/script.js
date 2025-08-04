@@ -189,7 +189,7 @@ if (customCommandInput && sendCommandButton) {
 const virtualKeyboard = document.getElementById('virtual-keyboard');
 if (virtualKeyboard) {
     virtualKeyboard.addEventListener('click', (event) => {
-        const button = event.target.closest('.key-button');
+        const button = event.target.closest('button[data-key-code]');
         if (button) {
             const keyCode = parseInt(button.dataset.keyCode, 10);
             let data = '';
