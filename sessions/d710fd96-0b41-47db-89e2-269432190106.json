@@ -1,0 +1,5 @@
+{
+  "sessionID": "d710fd96-0b41-47db-89e2-269432190106",
+  "buffer": "bash: bindkey: command not found\r\n\r\nThe default interactive shell is now zsh.\r\nTo update your account to use zsh, please run `chsh -s /bin/zsh`.\r\nFor more details, please visit https://support.apple.com/kb/HT208050.\r\nbash-3.2$ echo \"Hello World\"\r\nHello World\r\nbash-3.2$ pwd\r\n/Users/igor/temp/myshell-vscode\r\nbash-3.2$ date\r\nMon Aug  4 22:29:49 +07 2025\r\nbash-3.2$ ",
+  "timestamp": 1754321542947
+}

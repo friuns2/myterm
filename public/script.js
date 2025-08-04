@@ -42,8 +42,7 @@ const connectWebSocket = () => {
         console.log('Connected to terminal');
         isConnected = true;
         reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-        terminal.clear(); // Clear the terminal on successful connection or reconnection
-        
+
         // Send initial terminal size
         ws.send(JSON.stringify({
             type: 'resize',
@@ -62,22 +61,26 @@ const connectWebSocket = () => {
                     terminal.write(message.data);
                     break;
 
-                case 'buffer':
-                    // Restore buffered output on session restoration
-                    if (message.data) {
-                        terminal.clear(); // Clear first, then restore buffer
-                        terminal.write(message.data);
-                        console.log('Terminal buffer restored');
-                    }
-                    break;
-
                 case 'sessionID':
                     // Store session ID received from server
                     sessionID = message.sessionID;
                     localStorage.setItem('terminalSessionID', sessionID);
                     console.log(`Received new session ID: ${sessionID}`);
                     break;
-                    
+
+                case 'restore_buffer':
+                    // Clear terminal and restore buffer content
+                    terminal.clear();
+                    if (message.data) {
+                        console.log(`Restoring buffer: ${message.data.length} characters`);
+                        terminal.write(message.data);
+                    }
+                    break;
+
+                case 'buffer_cleared':
+                    terminal.write(`\r\n${message.message}\r\n`);
+                    break;
+
                 case 'exit':
                     terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
                     terminal.write('Connection closed. Refresh to reconnect.\r\n');
@@ -85,7 +88,7 @@ const connectWebSocket = () => {
                     // Optionally, clear session ID if process truly exited
                     localStorage.removeItem('terminalSessionID');
                     break;
-                    
+
                 default:
                     console.log('Unknown message type:', message.type);
             }
@@ -166,6 +169,7 @@ terminal.focus();
 // Custom input field handling
 const customCommandInput = document.getElementById('custom-command-input');
 const sendCommandButton = document.getElementById('send-command-button');
+const clearBufferButton = document.getElementById('clear-buffer-button');
 
 if (customCommandInput && sendCommandButton) {
     const sendCommand = () => {
@@ -183,6 +187,17 @@ if (customCommandInput && sendCommandButton) {
     customCommandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             sendCommand();
+        }
+    });
+}
+
+// Clear buffer button handling
+if (clearBufferButton) {
+    clearBufferButton.addEventListener('click', () => {
+        if (isConnected && confirm('Are you sure you want to clear the session buffer? This action cannot be undone.')) {
+            ws.send(JSON.stringify({
+                type: 'clear_buffer'
+            }));
         }
     });
 }

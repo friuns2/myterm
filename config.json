@@ -1,0 +1,23 @@
+{
+  "server": {
+    "port": 8086,
+    "sessionTimeout": 7200000,
+    "bufferSaveInterval": 5000,
+    "maxBufferSize": 1048576,
+    "sessionsDir": "./sessions",
+    "cleanupMaxAge": 604800000
+  },
+  "terminal": {
+    "defaultCols": 80,
+    "defaultRows": 24,
+    "shell": {
+      "win32": "powershell.exe",
+      "default": "bash"
+    }
+  },
+  "features": {
+    "bufferEnabled": true,
+    "autoReconnect": true,
+    "sessionPersistence": true
+  }
+}
