@@ -10,7 +10,7 @@ const port = 3000;
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 10000; // Maximum number of characters to buffer 
+const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer 
 
 // Serve static files
 app.use(express.static('public'));

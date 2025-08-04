@@ -44,7 +44,7 @@ function getSessionIDFromURL() {
 function updateURLWithSession(sessionId) {
     const url = new URL(window.location);
     url.searchParams.set('session', sessionId);
-    window.history.replaceState({}, '', url);
+    window.history.pushState({ sessionId }, '', url);
 }
 
 const connectWebSocket = () => {
@@ -175,14 +175,24 @@ function createNewSession() {
     localStorage.removeItem('terminalSessionID');
     const url = new URL(window.location);
     url.searchParams.delete('session');
-    window.history.replaceState({}, '', url);
+    window.history.pushState({ sessionList: true }, '', url);
     initializeTerminal();
 }
 
 // Function to initialize terminal
 function initializeTerminal() {
     const terminalContainer = document.getElementById('terminal-container');
-    terminalContainer.innerHTML = '<div id="terminal" class="w-full h-full"></div>';
+    terminalContainer.innerHTML = `
+        <div class="flex flex-col h-full">
+            <div class="flex justify-between items-center p-2 bg-base-200 border-b border-base-300">
+                <button class="btn btn-sm btn-ghost" onclick="goBackToSessionList()">
+                    ← Back to Sessions
+                </button>
+                <span class="text-sm opacity-70">Session: ${sessionID || 'New'}</span>
+            </div>
+            <div id="terminal" class="flex-1"></div>
+        </div>
+    `;
     
     // Re-mount terminal to new DOM element
     const newTerminalElement = document.getElementById('terminal');
@@ -193,10 +203,48 @@ function initializeTerminal() {
     connectWebSocket();
 }
 
+// Function to go back to session list
+function goBackToSessionList() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+    }
+    sessionID = null;
+    localStorage.removeItem('terminalSessionID');
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    window.history.pushState({ sessionList: true }, '', url);
+    showSessionList();
+}
+
+// Handle browser navigation
+window.addEventListener('popstate', (event) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlSessionID = urlParams.get('session');
+    
+    if (urlSessionID) {
+        // Navigate to session
+        sessionID = urlSessionID;
+        localStorage.setItem('terminalSessionID', sessionID);
+        initializeTerminal();
+    } else {
+        // Navigate to session list
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close();
+        }
+        sessionID = null;
+        localStorage.removeItem('terminalSessionID');
+        showSessionList();
+    }
+});
+
 // Check if we should show session list or connect directly
 if (!sessionID) {
+    // Push initial state for session list
+    window.history.replaceState({ sessionList: true }, '', window.location);
     showSessionList();
 } else {
+    // Push initial state for session
+    window.history.replaceState({ sessionId: sessionID }, '', window.location);
     // Initial WebSocket connection
     connectWebSocket();
 }
