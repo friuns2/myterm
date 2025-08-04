@@ -102,3 +102,6 @@ pids
 .idea/
 *.swp
 *.swo 
+
+# Crush working dir
+.crush/

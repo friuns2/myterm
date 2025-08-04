@@ -8,8 +8,9 @@ const app = express();
 const port = 8080;
 
 // Store active terminal sessions
-const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId }
+const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; 
+const BUFFER_SIZE = 10000; // Store last 10KB of output (more reasonable size)
 
 // Serve static files
 app.use(express.static('public'));
@@ -36,6 +37,17 @@ wss.on('connection', (ws, req) => {
     // Update WebSocket instance
     session.ws = ws;
     console.log(`Reconnected to session: ${sessionID}`);
+    
+    // Send buffered content to restore terminal state
+    if (session.buffer) {
+      // Send restore message after a small delay to ensure WebSocket is ready
+      setTimeout(() => {
+        ws.send(JSON.stringify({
+          type: 'restore',
+          data: session.buffer
+        }));
+      }, 50);
+    }
   } else {
     // Create new PTY process and session
     sessionID = uuidv4();
@@ -48,7 +60,7 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    sessions.set(sessionID, { ptyProcess, ws, timeoutId: null });
+    sessions.set(sessionID, { ptyProcess, ws, timeoutId: null, buffer: '' });
     console.log(`New session created: ${sessionID}`);
 
     // Send session ID to client
@@ -58,12 +70,22 @@ wss.on('connection', (ws, req) => {
     }));
   }
 
-  // Send PTY output to WebSocket
+  // Send PTY output to WebSocket and buffer it
   ptyProcess.onData((data) => {
     ws.send(JSON.stringify({
       type: 'output',
       data: data
     }));
+    
+    // Buffer the output for session persistence
+    const session = sessions.get(sessionID);
+    if (session) {
+      session.buffer += data;
+      // Keep buffer size manageable
+      if (session.buffer.length > BUFFER_SIZE) {
+        session.buffer = session.buffer.slice(-BUFFER_SIZE);
+      }
+    }
   });
 
   // Handle PTY exit
