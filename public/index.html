@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,28 +7,28 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div id="terminal-container">
-        <div id="terminal"></div>
+<body class="bg-base-200 text-base-content min-h-screen flex flex-col items-center justify-center p-4">
+    <div id="terminal-container" class="w-full max-w-4xl h-96 bg-base-300 rounded-lg shadow-xl overflow-hidden mb-4">
+        <div id="terminal" class="w-full h-full"></div>
     </div>
-    <div id="virtual-keyboard">
-        <div id="custom-input-container">
-            <label for="custom-command-input">Command:</label>
-            <input type="text" id="custom-command-input" placeholder="Enter command">
-            <button id="send-command-button">Send</button>
+    <div id="virtual-keyboard" class="w-full max-w-4xl bg-base-100 p-4 rounded-lg shadow-xl">
+        <div id="custom-input-container" class="flex items-center space-x-2 mb-4">
+            <label for="custom-command-input" class="text-lg font-semibold">Command:</label>
+            <input type="text" id="custom-command-input" placeholder="Enter command" class="input input-bordered input-primary flex-grow">
+            <button id="send-command-button" class="btn btn-primary">Send</button>
         </div>
-        <div class="key-row">
-            <button class="key-button" data-key-code="27">Esc</button>
-            <button class="key-button" data-key-code="9">Tab</button>
-            <button class="key-button" data-key-code="17">Ctrl</button>
-        </div>
-        <div class="key-row">
-            <button class="key-button arrow-up" data-key-code="38">↑</button>
-        </div>
-        <div class="key-row">
-            <button class="key-button arrow-left" data-key-code="37">←</button>
-            <button class="key-button arrow-down" data-key-code="40">↓</button>
-            <button class="key-button arrow-right" data-key-code="39">→</button>
+        <div class="grid grid-cols-3 gap-2 sm:grid-cols-6 md:grid-cols-9 lg:grid-cols-12">
+            <button class="btn btn-secondary col-span-1" data-key-code="27">Esc</button>
+            <button class="btn btn-secondary col-span-1" data-key-code="9">Tab</button>
+            <button class="btn btn-secondary col-span-1" data-key-code="17">Ctrl</button>
+            <div class="col-span-3 flex justify-center items-center">
+                <button class="btn btn-secondary w-16 h-10" data-key-code="38">↑</button>
+            </div>
+            <div class="col-span-3 flex justify-around items-center">
+                <button class="btn btn-secondary w-16 h-10" data-key-code="37">←</button>
+                <button class="btn btn-secondary w-16 h-10" data-key-code="40">↓</button>
+                <button class="btn btn-secondary w-16 h-10" data-key-code="39">→</button>
+            </div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
