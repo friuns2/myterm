@@ -10,7 +10,7 @@ const port = 3000;
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 10000; // Maximum number of characters to buffer 
+const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer 
 
 // Serve static files
 app.use(express.static('public'));
@@ -58,7 +58,8 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    sessions.set(sessionID, { ptyProcess, ws, timeoutId: null, buffer: '' });
+    const session = { ptyProcess, ws, timeoutId: null, buffer: '' };
+    sessions.set(sessionID, session);
     console.log(`New session created: ${sessionID}`);
 
     // Send session ID to client
@@ -66,41 +67,45 @@ wss.on('connection', (ws, req) => {
       type: 'sessionID',
       sessionID: sessionID
     }));
-  }
 
-  // Send PTY output to WebSocket and buffer it
-  ptyProcess.onData((data) => {
-    const session = sessions.get(sessionID);
-    if (session) {
-      // Add data to buffer
-      session.buffer += data;
-      
-      // Trim buffer if it exceeds maximum size
-      if (session.buffer.length > MAX_BUFFER_SIZE) {
-        // Keep only the last MAX_BUFFER_SIZE characters
-        session.buffer = session.buffer.slice(-MAX_BUFFER_SIZE);
+    // Set up PTY event handlers only for new sessions
+    // Send PTY output to WebSocket and buffer it
+    ptyProcess.onData((data) => {
+      const currentSession = sessions.get(sessionID);
+      if (currentSession) {
+        // Add data to buffer
+        currentSession.buffer += data;
+        
+        // Trim buffer if it exceeds maximum size
+        if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+          // Keep only the last MAX_BUFFER_SIZE characters
+          currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+        }
+        
+        // Send data to connected client if WebSocket is open
+        if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+          currentSession.ws.send(JSON.stringify({
+            type: 'output',
+            data: data
+          }));
+        }
       }
-      
-      // Send data to connected client if WebSocket is open
-      if (session.ws && session.ws.readyState === WebSocket.OPEN) {
-        session.ws.send(JSON.stringify({
-          type: 'output',
-          data: data
+    });
+
+    // Handle PTY exit
+    ptyProcess.onExit(({ exitCode, signal }) => {
+      console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
+      const currentSession = sessions.get(sessionID);
+      if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+        currentSession.ws.send(JSON.stringify({
+          type: 'exit',
+          exitCode,
+          signal
         }));
       }
-    }
-  });
-
-  // Handle PTY exit
-  ptyProcess.onExit(({ exitCode, signal }) => {
-    console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
-    ws.send(JSON.stringify({
-      type: 'exit',
-      exitCode,
-      signal
-    }));
-    sessions.delete(sessionID); // Clean up session on exit
-  });
+      sessions.delete(sessionID); // Clean up session on exit
+    });
+  }
 
   // Handle WebSocket messages
   ws.on('message', (message) => {
