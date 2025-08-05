@@ -29,6 +29,7 @@ fitAddon.fit();
 
 let ws;
 let sessionID = getSessionIDFromURL(); // Get session ID from URL only
+let currentProject = getProjectFromURL() || null;
 let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -40,11 +41,33 @@ function getSessionIDFromURL() {
     return urlParams.get('session');
 }
 
+function getProjectFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('project');
+}
+
 // Function to update URL with session ID using pushState for navigation history
-function updateURLWithSession(sessionId) {
+function updateURLWithSession(sessionId, projectName = null) {
     const url = new URL(window.location);
     url.searchParams.set('session', sessionId);
+    if (projectName) {
+        url.searchParams.set('project', projectName);
+    }
     window.history.pushState({ sessionId: sessionId }, '', url);
+}
+
+function updateURLWithProject(projectName) {
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    url.searchParams.set('project', projectName);
+    window.history.pushState({ project: projectName }, '', url);
+}
+
+function clearURLParams() {
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    url.searchParams.delete('project');
+    window.history.pushState({}, '', url);
 }
 
 // Function to navigate back to session list
@@ -52,11 +75,36 @@ function goBackToSessionList() {
     const url = new URL(window.location);
     url.searchParams.delete('session');
     window.history.pushState({ sessionList: true }, '', url);
-    showSessionList();
+    if (currentProject) {
+        showProjectSessions(currentProject);
+    } else {
+        showProjectList();
+    }
+}
+
+function goBackToProjectList() {
+    clearURLParams();
+    currentProject = null;
+    sessionID = null;
+    showProjectList();
 }
 
 const connectWebSocket = () => {
-    const url = sessionID ? `ws://${window.location.host}?sessionID=${sessionID}` : `ws://${window.location.host}`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let url = `${protocol}//${window.location.host}`;
+    
+    const params = new URLSearchParams();
+    if (sessionID) {
+        params.append('sessionID', sessionID);
+    }
+    if (currentProject) {
+        params.append('projectName', currentProject);
+    }
+    
+    if (params.toString()) {
+        url += `?${params.toString()}`;
+    }
+    
     ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -93,7 +141,7 @@ const connectWebSocket = () => {
                 case 'sessionID':
                     // Store session ID received from server
                     sessionID = message.sessionID;
-                    updateURLWithSession(sessionID);
+                    updateURLWithSession(sessionID, currentProject);
                     console.log(`Received new session ID: ${sessionID}`);
                     break;
                     
@@ -132,49 +180,140 @@ const connectWebSocket = () => {
     };
 };
 
-// Function to show session list
-async function showSessionList() {
+// Function to show project list
+async function showProjectList() {
     try {
-        const response = await fetch('/api/sessions');
+        const response = await fetch('/api/projects');
+        const projects = await response.json();
+        
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = `
+            <div class="p-6 max-w-4xl mx-auto">
+                <h1 class="text-2xl font-bold mb-6 text-center">Projects</h1>
+                <div class="mb-6">
+                    <div class="flex gap-2">
+                        <input type="text" id="project-name" placeholder="Enter project name" class="input input-bordered flex-1">
+                        <button class="btn btn-primary" onclick="createNewProject()">Create Project</button>
+                    </div>
+                </div>
+                <div class="grid gap-4 mb-6">
+                    ${projects.length === 0 ? '<p class="text-center opacity-70">No projects found</p>' : 
+                        projects.map(project => `
+                            <div class="card bg-base-200 shadow-xl">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-center">
+                                        <div class="cursor-pointer flex-1" onclick="selectProject('${project}')">
+                                            <h2 class="card-title text-sm">${project}</h2>
+                                        </div>
+                                        <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
+                                            Open
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Failed to load projects:', error);
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading projects</div>';
+    }
+}
+
+async function createNewProject() {
+    const projectNameInput = document.getElementById('project-name');
+    const projectName = projectNameInput.value.trim();
+    
+    if (!projectName) {
+        alert('Please enter a project name');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/projects', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: projectName })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            selectProject(result.name);
+        } else {
+            alert(result.error || 'Failed to create project');
+        }
+    } catch (error) {
+        console.error('Error creating project:', error);
+        alert('Error creating project');
+    }
+}
+
+function selectProject(projectName) {
+    currentProject = projectName;
+    updateURLWithProject(projectName);
+    showProjectSessions(projectName);
+}
+
+async function showProjectSessions(projectName) {
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`);
         const sessions = await response.json();
         
         const terminalContainer = document.getElementById('terminal-container');
-         terminalContainer.innerHTML = `
-             <div class="p-6 max-w-4xl mx-auto">
-                 <h1 class="text-2xl font-bold mb-6 text-center">Terminal Sessions</h1>
-                 <div class="grid gap-4 mb-6">
-                     ${sessions.map(session => `
-                         <div class="card bg-base-200 shadow-xl">
-                             <div class="card-body p-4">
-                                 <div class="flex justify-between items-start">
-                                     <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}')">
-                                         <h2 class="card-title text-sm">${session.id}</h2>
-                                         <p class="text-xs opacity-70">Status: ${session.status}</p>
-                                         <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                                     </div>
-                                     <button class="btn btn-error btn-sm ml-2" onclick="killSession('${session.id}')">
-                                         Kill
-                                     </button>
-                                 </div>
-                             </div>
-                         </div>
-                     `).join('')}
-                 </div>
-                 <div class="text-center">
-                     <button class="btn btn-primary" onclick="createNewSession()">Create New Session</button>
-                 </div>
-             </div>
-         `;
+        terminalContainer.innerHTML = `
+            <div class="p-6 max-w-4xl mx-auto">
+                <div class="mb-6">
+                    <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
+                </div>
+                <h1 class="text-2xl font-bold mb-6 text-center">Sessions for Project: ${projectName}</h1>
+                <div class="grid gap-4 mb-6">
+                    ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
+                        sessions.map(session => `
+                            <div class="card bg-base-200 shadow-xl">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-start">
+                                        <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
+                                            <h2 class="card-title text-sm">${session.id}</h2>
+                                            <p class="text-xs opacity-70">Status: ${session.status}</p>
+                                            <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                Connect
+                                            </button>
+                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                Kill
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+                <div class="text-center">
+                    <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
+                </div>
+            </div>
+        `;
     } catch (error) {
-        console.error('Failed to load sessions:', error);
-        createNewSession();
+        console.error('Error fetching sessions:', error);
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading sessions</div>';
     }
 }
 
 // Function to connect to existing session
-function connectToSession(sessionId) {
+function connectToSession(sessionId, projectName = null) {
     sessionID = sessionId;
-    updateURLWithSession(sessionID);
+    currentProject = projectName || currentProject;
+    updateURLWithSession(sessionID, currentProject);
     initializeTerminal();
 }
 
@@ -187,8 +326,12 @@ async function killSession(sessionId) {
         const result = await response.json();
         
         if (result.success) {
-            // Refresh the session list
-            showSessionList();
+            // Refresh the appropriate list
+            if (currentProject) {
+                showProjectSessions(currentProject);
+            } else {
+                showProjectList();
+            }
         } else {
             alert('Failed to kill session: ' + result.message);
         }
@@ -198,12 +341,11 @@ async function killSession(sessionId) {
     }
 }
 
-// Function to create new session
-function createNewSession() {
+// Function to create new session for project
+function createNewSessionForProject(projectName) {
     sessionID = null;
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    window.history.pushState({ newSession: true }, '', url);
+    currentProject = projectName;
+    updateURLWithProject(projectName);
     initializeTerminal();
 }
 
@@ -233,21 +375,27 @@ function initializeTerminal() {
 // Handle browser navigation (back/forward buttons)
 window.addEventListener('popstate', (event) => {
     const newSessionID = getSessionIDFromURL();
-    if (newSessionID) {
-        sessionID = newSessionID;
+    const newProject = getProjectFromURL();
+    
+    sessionID = newSessionID;
+    currentProject = newProject;
+    
+    if (sessionID) {
         initializeTerminal();
+    } else if (currentProject) {
+        showProjectSessions(currentProject);
     } else {
-        sessionID = null;
-        showSessionList();
+        showProjectList();
     }
 });
 
-// Check if we should show session list or connect directly
-if (!sessionID) {
-    showSessionList();
+// Check URL parameters and show appropriate interface
+if (sessionID) {
+    initializeTerminal();
+} else if (currentProject) {
+    showProjectSessions(currentProject);
 } else {
-    // Initial WebSocket connection
-    connectWebSocket();
+    showProjectList();
 }
 
 // Handle terminal input

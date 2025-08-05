@@ -2,32 +2,75 @@ const express = require('express');
 const WebSocket = require('ws');
 const pty = require('node-pty');
 const os = require('os');
+const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid'); // Import uuid
 
 const app = express();
-const port = 3007;
+const port = 3016;
 
 // Store active terminal sessions
-const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
+const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer 
+const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer
+const PROJECTS_DIR = path.join(__dirname, '..', 'projects'); 
 
 // Serve static files
 app.use(express.static('public'));
 
-// API endpoint to get session list
-app.get('/api/sessions', (req, res) => {
+// API endpoint to get projects list
+app.get('/api/projects', (req, res) => {
+  try {
+    if (!fs.existsSync(PROJECTS_DIR)) {
+      fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+    }
+    const projects = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    res.json(projects);
+  } catch (error) {
+    console.error('Error reading projects:', error);
+    res.status(500).json({ error: 'Failed to read projects' });
+  }
+});
+
+// API endpoint to create a new project
+app.post('/api/projects', express.json(), (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'Project name is required' });
+  }
+  
+  const projectPath = path.join(PROJECTS_DIR, name.trim());
+  try {
+    if (fs.existsSync(projectPath)) {
+      return res.status(409).json({ error: 'Project already exists' });
+    }
+    fs.mkdirSync(projectPath, { recursive: true });
+    res.json({ success: true, name: name.trim() });
+  } catch (error) {
+    console.error('Error creating project:', error);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// API endpoint to get session list for a project
+app.get('/api/projects/:projectName/sessions', (req, res) => {
+  const projectName = req.params.projectName;
   const sessionList = [];
   sessions.forEach((session, sessionID) => {
-    // Get last line from buffer for status
-    const lines = session.buffer.split('\n');
-    const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
-    
-    sessionList.push({
-      id: sessionID,
-      status: lastLine.trim() || 'Active session',
-      created: session.created || new Date().toISOString()
-    });
+    if (session.projectName === projectName) {
+      // Get last line from buffer for status
+      const lines = session.buffer.split('\n');
+      const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
+      
+      sessionList.push({
+        id: sessionID,
+        status: lastLine.trim() || 'Active session',
+        created: session.created || new Date().toISOString(),
+        projectName: session.projectName
+      });
+    }
   });
   res.json(sessionList);
 });
@@ -61,8 +104,11 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
   console.log('Terminal connected');
-
-  let sessionID = req.url.split('?sessionID=')[1];
+  
+  // Parse session ID and project name from query parameters
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  let sessionID = url.searchParams.get('sessionID');
+  const projectName = url.searchParams.get('projectName');
   let ptyProcess;
 
   if (sessionID && sessions.has(sessionID)) {
@@ -87,17 +133,31 @@ wss.on('connection', (ws, req) => {
     // Create new PTY process and session
     sessionID = uuidv4();
     const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+    
+    // Determine working directory
+    let cwd = process.cwd();
+    if (projectName) {
+      const projectPath = path.join(PROJECTS_DIR, projectName);
+      if (fs.existsSync(projectPath)) {
+        cwd = projectPath;
+      } else {
+        // Create project directory if it doesn't exist
+        fs.mkdirSync(projectPath, { recursive: true });
+        cwd = projectPath;
+      }
+    }
+    
     ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-color',
       cols: 80,
       rows: 24,
-      cwd: process.cwd(),
+      cwd: cwd,
       env: process.env
     });
 
-    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString() };
+    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
     sessions.set(sessionID, session);
-    console.log(`New session created: ${sessionID}`);
+    console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
     // Send session ID to client
     ws.send(JSON.stringify({
