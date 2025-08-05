@@ -95,6 +95,45 @@ app.delete('/api/sessions/:sessionId', (req, res) => {
   }
 });
 
+// API endpoint to delete a project
+app.delete('/api/projects/:projectName', (req, res) => {
+  const projectName = req.params.projectName;
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  
+  try {
+    // First, kill all sessions for this project
+    const sessionsToDelete = [];
+    sessions.forEach((session, sessionID) => {
+      if (session.projectName === projectName) {
+        sessionsToDelete.push(sessionID);
+      }
+    });
+    
+    // Kill all sessions for this project
+    sessionsToDelete.forEach(sessionID => {
+      const session = sessions.get(sessionID);
+      if (session) {
+        session.ptyProcess.kill();
+        if (session.timeoutId) {
+          clearTimeout(session.timeoutId);
+        }
+        sessions.delete(sessionID);
+      }
+    });
+    
+    // Delete the project directory
+    if (fs.existsSync(projectPath)) {
+      fs.rmSync(projectPath, { recursive: true, force: true });
+      res.json({ success: true, message: 'Project deleted successfully' });
+    } else {
+      res.status(404).json({ success: false, message: 'Project not found' });
+    }
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete project' });
+  }
+});
+
 const server = app.listen(port, () => {
   console.log(`Web Terminal running at http://localhost:${port}`);
 });

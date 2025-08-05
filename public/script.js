@@ -287,7 +287,10 @@ async function showProjectList() {
                                 <div class="card-body p-4">
                                     <div class="flex justify-between items-center mb-4">
                                         <h2 class="card-title text-lg">${project.name}</h2>
-                                        <button class="btn btn-primary btn-sm" onclick="createNewSessionForProject('${project.name}')">New Session</button>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-primary btn-sm" onclick="createNewSessionForProject('${project.name}')">New Session</button>
+                                            <button class="btn btn-error btn-sm" onclick="deleteProject('${project.name}')">Delete</button>
+                                        </div>
                                     </div>
                                     <div class="grid gap-2">
                                         ${project.sessions.length === 0 ? 
@@ -436,6 +439,31 @@ async function killSession(sessionId) {
     } catch (error) {
         console.error('Error killing session:', error);
         alert('Error killing session');
+    }
+}
+
+async function deleteProject(projectName) {
+    if (!confirm(`Are you sure you want to delete the project "${projectName}"? This will delete all sessions and project data permanently.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            console.log(`Project ${projectName} deleted successfully`);
+            // Refresh the project list
+            showProjectList();
+        } else {
+            alert(result.message || 'Failed to delete project');
+        }
+    } catch (error) {
+        console.error('Error deleting project:', error);
+        alert('Error deleting project');
     }
 }
 
