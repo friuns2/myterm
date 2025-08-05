@@ -54,16 +54,6 @@ app.post('/api/projects', express.json(), (req, res) => {
   }
 });
 
-// Function to strip ANSI escape codes from text
-function stripAnsiCodes(text) {
-  // Remove ANSI escape sequences
-  return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-             .replace(/\x1b\][^\x07]*\x07/g, '') // OSC sequences
-             .replace(/\x1b[\[\]()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '') // Additional sequences
-             .replace(/[\x00-\x1f\x7f-\x9f]/g, '') // Control characters
-             .trim();
-}
-
 // API endpoint to get session list for a project
 app.get('/api/projects/:projectName/sessions', (req, res) => {
   const projectName = req.params.projectName;
@@ -74,12 +64,9 @@ app.get('/api/projects/:projectName/sessions', (req, res) => {
       const lines = session.buffer.split('\n');
       const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
       
-      // Strip ANSI codes from status
-      const cleanStatus = stripAnsiCodes(lastLine);
-      
       sessionList.push({
         id: sessionID,
-        status: cleanStatus || 'Active session',
+        status: lastLine.trim() || 'Active session',
         created: session.created || new Date().toISOString(),
         projectName: session.projectName
       });
