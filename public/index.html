@@ -6,35 +6,116 @@
     <title>Web Terminal</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.24/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-base-100 h-screen flex flex-col overflow-hidden">
+<body class="bg-base-100 h-screen flex flex-col overflow-hidden" x-data="terminalApp()">
+    <!-- Header with Session Info -->
+    <div class="bg-base-200 p-2 border-b border-base-300" x-show="sessionId">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium">Session:</span>
+                <code class="text-xs bg-base-300 px-2 py-1 rounded" x-text="sessionId"></code>
+                <div class="badge badge-success badge-sm" x-show="isConnected">Connected</div>
+                <div class="badge badge-error badge-sm" x-show="!isConnected">Disconnected</div>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn btn-sm btn-outline" @click="showSessionList()" x-show="sessionId">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                    Sessions
+                </button>
+                <button class="btn btn-sm btn-error" @click="createNewSession()" x-show="sessionId">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    New
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Terminal Container -->
-    <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden">
+    <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden" x-show="!showingSessions">
         <div id="terminal" class="w-full h-full"></div>
     </div>
 
+    <!-- Session List -->
+    <div class="flex-1 p-4 overflow-auto" x-show="showingSessions">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Terminal Sessions</h2>
+                <button class="btn btn-primary" @click="createNewSession()">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    New Session
+                </button>
+            </div>
+            
+            <div class="grid gap-4" x-show="sessions.length > 0">
+                <template x-for="session in sessions" :key="session.id">
+                    <div class="card bg-base-200 shadow-md">
+                        <div class="card-body p-4">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h3 class="font-mono text-sm mb-1" x-text="session.id"></h3>
+                                    <p class="text-sm text-base-content/70 mb-2" x-text="session.status"></p>
+                                    <p class="text-xs text-base-content/50" x-text="'Created: ' + new Date(session.created).toLocaleString()"></p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button class="btn btn-sm btn-primary" @click="connectToSession(session.id)">
+                                        Connect
+                                    </button>
+                                    <button class="btn btn-sm btn-error" @click="killSession(session.id)">
+                                        Kill
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <div class="text-center py-8" x-show="sessions.length === 0">
+                <p class="text-base-content/70 mb-4">No active sessions</p>
+                <button class="btn btn-primary" @click="createNewSession()">
+                    Create Your First Session
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Command Input Section -->
-    <div class="bg-base-200 p-2 border-t border-base-300">
+    <div class="bg-base-200 p-2 border-t border-base-300" x-show="!showingSessions">
         <div class="flex gap-2 items-center">
-            <input type="text" id="custom-command-input" placeholder="Enter command..." 
-                   class="input input-bordered input-sm flex-1 bg-base-100 text-sm" />
-            <button id="send-command-button" class="btn btn-primary btn-sm">Send</button>
+            <input type="text" 
+                   x-model="commandInput" 
+                   @keydown.enter="sendCommand()" 
+                   placeholder="Enter command..." 
+                   class="input input-bordered input-sm flex-1 bg-base-100 text-sm" 
+                   :disabled="!isConnected" />
+            <button @click="sendCommand()" 
+                    class="btn btn-primary btn-sm" 
+                    :disabled="!isConnected || !commandInput.trim()">
+                Send
+            </button>
         </div>
     </div>
 
     <!-- Virtual Keyboard for Mobile -->
-    <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300 lg:hidden">
+    <div class="bg-base-200 p-2 border-t border-base-300 lg:hidden" x-show="!showingSessions">
         <!-- All Keys in One Row -->
         <div class="flex gap-1 justify-center flex-wrap">
-            <button class="btn btn-xs btn-outline" data-key-code="27">Esc</button>
-            <button class="btn btn-xs btn-outline" data-key-code="9">Tab</button>
-            <button class="btn btn-xs btn-outline" data-key-code="17">Ctrl</button>
-            <button class="btn btn-xs btn-outline" data-key-code="38">↑</button>
-            <button class="btn btn-xs btn-outline" data-key-code="37">←</button>
-            <button class="btn btn-xs btn-outline" data-key-code="40">↓</button>
-            <button class="btn btn-xs btn-outline" data-key-code="39">→</button>
+            <button class="btn btn-xs btn-outline" @click="sendKey(27)">Esc</button>
+            <button class="btn btn-xs btn-outline" @click="sendKey(9)">Tab</button>
+            <button class="btn btn-xs btn-outline" @click="sendKey(17)">Ctrl</button>
+            <button class="btn btn-xs btn-outline" @click="sendKey(38)">↑</button>
+            <button class="btn btn-xs btn-outline" @click="sendKey(37)">←</button>
+            <button class="btn btn-xs btn-outline" @click="sendKey(40)">↓</button>
+            <button class="btn btn-xs btn-outline" @click="sendKey(39)">→</button>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>

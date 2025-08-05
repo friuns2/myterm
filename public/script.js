@@ -1,385 +1,285 @@
-// Initialize xterm.js terminal
-const { Terminal } = window;
-const { FitAddon } = window.FitAddon;
-
-const terminal = new Terminal({
-    cursorBlink: true,
-    fontFamily: 'Courier New, monospace',
-    fontSize: 14,
-    theme: {
-        background: '#000000',
-        foreground: '#00ff00',
-        cursor: '#00ff00',
-        cursorAccent: '#000000',
-        selection: 'rgba(0, 255, 0, 0.3)'
-    },
-    allowTransparency: false
-});
-
-// Add fit addon for responsive sizing
-const fitAddon = new FitAddon();
-terminal.loadAddon(fitAddon);
-
-// Mount terminal to DOM
-const terminalContainer = document.getElementById('terminal');
-terminal.open(terminalContainer);
-
-// Fit terminal to container
-fitAddon.fit();
-
-let ws;
-let sessionID = getSessionIDFromURL(); // Get session ID from URL only
-let isConnected = false;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_BASE_DELAY = 1000; // 1 second
-
-// Function to get session ID from URL parameters
-function getSessionIDFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('session');
-}
-
-// Function to update URL with session ID using pushState for navigation history
-function updateURLWithSession(sessionId) {
-    const url = new URL(window.location);
-    url.searchParams.set('session', sessionId);
-    window.history.pushState({ sessionId: sessionId }, '', url);
-}
-
-// Function to navigate back to session list
-function goBackToSessionList() {
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    window.history.pushState({ sessionList: true }, '', url);
-    showSessionList();
-}
-
-const connectWebSocket = () => {
-    const url = sessionID ? `ws://${window.location.host}?sessionID=${sessionID}` : `ws://${window.location.host}`;
-    ws = new WebSocket(url);
-
-    ws.onopen = () => {
-        console.log('Connected to terminal');
-        isConnected = true;
-        reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+// Alpine.js Terminal App Component
+function terminalApp() {
+    return {
+        // State
+        sessionId: null,
+        isConnected: false,
+        showingSessions: false,
+        sessions: [],
+        commandInput: '',
         
-        // Force screen refresh on reconnection
-        if (sessionID) {
-            // Clear texture atlas to force redraw
-            terminal.clearTextureAtlas();
-            // Refresh the entire terminal display
-            terminal.refresh(0, terminal.rows - 1);
-        }
+        // Terminal instances
+        terminal: null,
+        fitAddon: null,
+        ws: null,
+        reconnectAttempts: 0,
         
-        // Send initial terminal size
-        ws.send(JSON.stringify({
-            type: 'resize',
-            cols: terminal.cols,
-            rows: terminal.rows
-        }));
-    };
-
-    ws.onmessage = (event) => {
-        try {
-            const message = JSON.parse(event.data);
+        // Constants
+        MAX_RECONNECT_ATTEMPTS: 10,
+        RECONNECT_BASE_DELAY: 1000,
+        
+        // Initialize
+        init() {
+            this.sessionId = this.getSessionIDFromURL();
             
-            switch (message.type) {
-                case 'output':
-                    // Write PTY output to terminal
-                    terminal.write(message.data);
-                    break;
+            if (!this.sessionId) {
+                this.showSessionList();
+            } else {
+                this.initializeTerminal();
+            }
+            
+            // Handle browser navigation
+            window.addEventListener('popstate', (event) => {
+                if (event.state && event.state.sessionId) {
+                    this.connectToSession(event.state.sessionId);
+                } else if (event.state && event.state.sessionList) {
+                    this.showSessionList();
+                }
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', () => this.handleResize());
+            
+            // Handle visibility change
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && this.terminal) {
+                    this.terminal.focus();
+                }
+            });
+        },
+        
+        // Utility functions
+        getSessionIDFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('session');
+        },
+        
+        updateURLWithSession(sessionId) {
+            const url = new URL(window.location);
+            url.searchParams.set('session', sessionId);
+            window.history.pushState({ sessionId: sessionId }, '', url);
+        },
+        
+        goBackToSessionList() {
+            const url = new URL(window.location);
+            url.searchParams.delete('session');
+            window.history.pushState({ sessionList: true }, '', url);
+            this.showSessionList();
+        },
+        
+        // Terminal initialization
+        initializeTerminal() {
+            if (this.terminal) {
+                this.terminal.dispose();
+            }
+            
+            const { Terminal } = window;
+            const { FitAddon } = window.FitAddon;
+            
+            this.terminal = new Terminal({
+                cursorBlink: true,
+                fontFamily: 'Courier New, monospace',
+                fontSize: 14,
+                theme: {
+                    background: '#000000',
+                    foreground: '#00ff00',
+                    cursor: '#00ff00',
+                    cursorAccent: '#000000',
+                    selection: 'rgba(0, 255, 0, 0.3)'
+                },
+                allowTransparency: false
+            });
+            
+            this.fitAddon = new FitAddon();
+            this.terminal.loadAddon(this.fitAddon);
+            
+            const terminalContainer = document.getElementById('terminal');
+            this.terminal.open(terminalContainer);
+            this.fitAddon.fit();
+            
+            // Handle terminal data
+            this.terminal.onData((data) => {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'input',
+                        data: data
+                    }));
+                }
+            });
+            
+            this.connectWebSocket();
+        },
+        
+        // WebSocket connection
+        connectWebSocket() {
+            const url = this.sessionId ? `ws://${window.location.host}?sessionID=${this.sessionId}` : `ws://${window.location.host}`;
+            this.ws = new WebSocket(url);
+            
+            this.ws.onopen = () => {
+                console.log('Connected to terminal');
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
                 
-                case 'sessionID':
-                    // Store session ID received from server
-                    sessionID = message.sessionID;
-                    updateURLWithSession(sessionID);
-                    console.log(`Received new session ID: ${sessionID}`);
-                    break;
-                    
-                case 'exit':
-                    terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
-                    terminal.write('Connection closed. Go back to session list.\r\n');
-                    isConnected = false;
-                    break;
-                    
-                default:
-                    console.log('Unknown message type:', message.type);
-            }
-        } catch (error) {
-            console.error('Error parsing message:', error);
-        }
-    };
-
-    ws.onclose = () => {
-        console.log('WebSocket connection closed');
-        isConnected = false;
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts);
-            reconnectAttempts++;
-            console.log(`Attempting to reconnect in ${delay / 1000} seconds... (Attempt ${reconnectAttempts})`);
-            terminal.write(`\r\nConnection lost. Attempting to reconnect...\r\n`);
-            setTimeout(connectWebSocket, delay);
-        } else {
-            terminal.write('\r\nConnection lost. Max reconnect attempts reached. Go back to session list.\r\n');
-        }
-    };
-
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        terminal.write('\r\nWebSocket error occurred. Attempting to reconnect.\r\n');
-        ws.close(); // Force close to trigger onclose and reconnect logic
-    };
-};
-
-// Function to show session list
-async function showSessionList() {
-    try {
-        const response = await fetch('/api/sessions');
-        const sessions = await response.json();
-        
-        const terminalContainer = document.getElementById('terminal-container');
-         terminalContainer.innerHTML = `
-             <div class="p-6 max-w-4xl mx-auto">
-                 <h1 class="text-2xl font-bold mb-6 text-center">Terminal Sessions</h1>
-                 <div class="grid gap-4 mb-6">
-                     ${sessions.map(session => `
-                         <div class="card bg-base-200 shadow-xl">
-                             <div class="card-body p-4">
-                                 <div class="flex justify-between items-start">
-                                     <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}')">
-                                         <h2 class="card-title text-sm">${session.id}</h2>
-                                         <p class="text-xs opacity-70">Status: ${session.status}</p>
-                                         <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                                     </div>
-                                     <button class="btn btn-error btn-sm ml-2" onclick="killSession('${session.id}')">
-                                         Kill
-                                     </button>
-                                 </div>
-                             </div>
-                         </div>
-                     `).join('')}
-                 </div>
-                 <div class="text-center">
-                     <button class="btn btn-primary" onclick="createNewSession()">Create New Session</button>
-                 </div>
-             </div>
-         `;
-    } catch (error) {
-        console.error('Failed to load sessions:', error);
-        createNewSession();
-    }
-}
-
-// Function to connect to existing session
-function connectToSession(sessionId) {
-    sessionID = sessionId;
-    updateURLWithSession(sessionID);
-    initializeTerminal();
-}
-
-// Function to kill a session
-async function killSession(sessionId) {
-    try {
-        const response = await fetch(`/api/sessions/${sessionId}`, {
-            method: 'DELETE'
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            // Refresh the session list
-            showSessionList();
-        } else {
-            alert('Failed to kill session: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Error killing session:', error);
-        alert('Error killing session');
-    }
-}
-
-// Function to create new session
-function createNewSession() {
-    sessionID = null;
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    window.history.pushState({ newSession: true }, '', url);
-    initializeTerminal();
-}
-
-// Function to initialize terminal
-function initializeTerminal() {
-    const terminalContainer = document.getElementById('terminal-container');
-    terminalContainer.innerHTML = `
-        <div class="flex flex-col h-full">
-            <div class="bg-base-200 p-2 border-b border-base-300">
-                <button class="btn btn-sm btn-outline" onclick="goBackToSessionList()">
-                    ← Back to Sessions
-                </button>
-            </div>
-            <div id="terminal" class="flex-1"></div>
-        </div>
-    `;
-    
-    // Re-mount terminal to new DOM element
-    const newTerminalElement = document.getElementById('terminal');
-    terminal.open(newTerminalElement);
-    fitAddon.fit();
-    
-    // Connect WebSocket
-    connectWebSocket();
-}
-
-// Handle browser navigation (back/forward buttons)
-window.addEventListener('popstate', (event) => {
-    const newSessionID = getSessionIDFromURL();
-    if (newSessionID) {
-        sessionID = newSessionID;
-        initializeTerminal();
-    } else {
-        sessionID = null;
-        showSessionList();
-    }
-});
-
-// Check if we should show session list or connect directly
-if (!sessionID) {
-    showSessionList();
-} else {
-    // Initial WebSocket connection
-    connectWebSocket();
-}
-
-// Handle terminal input
-terminal.onData((data) => {
-    if (isConnected) {
-        ws.send(JSON.stringify({
-            type: 'input',
-            data: data
-        }));
-    }
-});
-
-// Handle terminal resize
-const handleResize = () => {
-    fitAddon.fit();
-    if (isConnected) {
-        ws.send(JSON.stringify({
-            type: 'resize',
-            cols: terminal.cols,
-            rows: terminal.rows
-        }));
-    }
-};
-
-// Resize terminal when window resizes
-window.addEventListener('resize', handleResize);
-
-// Handle visibility change (focus/blur)
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-        terminal.focus();
-    }
-});
-
-// Focus terminal when clicking anywhere
-document.addEventListener('click', (event) => {
-    // Only focus terminal if the click is not inside the custom input container
-    const customInputContainer = document.getElementById('custom-input-container');
-    if (customInputContainer && !customInputContainer.contains(event.target)) {
-        terminal.focus();
-    }
-});
-
-// Initial focus
-terminal.focus();
-
-// Custom input field handling
-const customCommandInput = document.getElementById('custom-command-input');
-const sendCommandButton = document.getElementById('send-command-button');
-
-if (customCommandInput && sendCommandButton) {
-    const sendCommand = () => {
-        const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
-        if (isConnected) {
-            ws.send(JSON.stringify({
-                type: 'input',
-                data: command
-            }));
-            customCommandInput.value = ''; // Clear input after sending
-        }
-    };
-
-    sendCommandButton.addEventListener('click', sendCommand);
-    customCommandInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            sendCommand();
-        }
-    });
-}
-
-// Virtual keyboard input
-const virtualKeyboard = document.getElementById('virtual-keyboard');
-if (virtualKeyboard) {
-    virtualKeyboard.addEventListener('click', (event) => {
-        const button = event.target.closest('button[data-key-code]');
-        if (button) {
-            const keyCode = parseInt(button.dataset.keyCode, 10);
-            let data = '';
-
-            switch (keyCode) {
-                case 27: // Esc
-                    data = '\x1B';
-                    break;
-                case 9: // Tab
-                    data = '\x09';
-                    break;
-                case 17: // Ctrl
-                    // Prompt user for the next key
-                    const nextKey = prompt("Enter next key for Ctrl combination (e.g., 'c' for Ctrl+C, 'z' for Ctrl+Z):");
-                    if (nextKey) {
-                        const charCode = nextKey.toLowerCase().charCodeAt(0);
-                        if (charCode >= 97 && charCode <= 122) { // 'a' through 'z'
-                            data = String.fromCharCode(charCode - 96); // Convert to Ctrl+A to Ctrl+Z
-                        } else if (nextKey === '[') {
-                            data = '\x1B'; // Ctrl+[ is Esc
-                        } else if (nextKey === '\\') {
-                            data = '\x1C'; // Ctrl+\ is FS (File Separator)
-                        } else if (nextKey === ']') {
-                            data = '\x1D'; // Ctrl+] is GS (Group Separator)
-                        } else if (nextKey === '^') {
-                            data = '\x1E'; // Ctrl+^ is RS (Record Separator)
-                        } else if (nextKey === '_') {
-                            data = '\x1F'; // Ctrl+_ is US (Unit Separator)
-                        }
-                    }
-                    break;
-                case 3: // Ctrl+C (ASCII End-of-Text character)
-                    data = '\x03';
-                    break;
-                case 38: // Up Arrow
-                    data = '\x1B[A';
-                    break;
-                case 40: // Down Arrow
-                    data = '\x1B[B';
-                    break;
-                case 37: // Left Arrow
-                    data = '\x1B[D';
-                    break;
-                case 39: // Right Arrow
-                    data = '\x1B[C';
-                    break;
-                default:
-                    // For other keys, if we add them, we'd map them here.
-                    break;
-            }
-
-            if (isConnected && data) {
-                ws.send(JSON.stringify({
-                    type: 'input',
-                    data: data
+                if (this.sessionId && this.terminal) {
+                    this.terminal.clearTextureAtlas();
+                    this.terminal.refresh(0, this.terminal.rows - 1);
+                }
+                
+                this.ws.send(JSON.stringify({
+                    type: 'resize',
+                    cols: this.terminal.cols,
+                    rows: this.terminal.rows
                 }));
+            };
+            
+            this.ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    
+                    switch (message.type) {
+                        case 'output':
+                            this.terminal.write(message.data);
+                            break;
+                        
+                        case 'sessionID':
+                            this.sessionId = message.sessionID;
+                            this.updateURLWithSession(this.sessionId);
+                            console.log(`Received new session ID: ${this.sessionId}`);
+                            break;
+                            
+                        case 'exit':
+                            console.log('Terminal session ended');
+                            this.terminal.write('\r\n\x1b[31mSession ended. Reconnecting...\x1b[0m\r\n');
+                            setTimeout(() => this.connectWebSocket(), 2000);
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
+                }
+            };
+            
+            this.ws.onclose = () => {
+                console.log('WebSocket connection closed');
+                this.isConnected = false;
+                
+                if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+                    const delay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts);
+                    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS})`);
+                    
+                    setTimeout(() => {
+                        this.reconnectAttempts++;
+                        this.connectWebSocket();
+                    }, delay);
+                } else {
+                    console.error('Max reconnection attempts reached');
+                    if (this.terminal) {
+                        this.terminal.write('\r\n\x1b[31mConnection lost. Please refresh the page.\x1b[0m\r\n');
+                    }
+                }
+            };
+            
+            this.ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                this.isConnected = false;
+            };
+        },
+        
+        // Session management
+        async showSessionList() {
+            this.showingSessions = true;
+            try {
+                const response = await fetch('/api/sessions');
+                if (response.ok) {
+                    this.sessions = await response.json();
+                } else {
+                    console.error('Failed to fetch sessions');
+                    this.sessions = [];
+                }
+            } catch (error) {
+                console.error('Error fetching sessions:', error);
+                this.sessions = [];
+            }
+        },
+        
+        connectToSession(sessionId) {
+            this.sessionId = sessionId;
+            this.showingSessions = false;
+            this.updateURLWithSession(sessionId);
+            this.initializeTerminal();
+        },
+        
+        async killSession(sessionId) {
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    this.sessions = this.sessions.filter(s => s.id !== sessionId);
+                    if (this.sessionId === sessionId) {
+                        this.sessionId = null;
+                        this.showSessionList();
+                    }
+                } else {
+                    console.error('Failed to kill session');
+                }
+            } catch (error) {
+                console.error('Error killing session:', error);
+            }
+        },
+        
+        createNewSession() {
+            this.sessionId = null;
+            this.showingSessions = false;
+            this.initializeTerminal();
+        },
+        
+        // Command handling
+        sendCommand() {
+            if (this.commandInput.trim() && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({
+                    type: 'input',
+                    data: this.commandInput + '\r'
+                }));
+                this.commandInput = '';
+            }
+        },
+        
+        sendKey(keyCode) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                let keyData = '';
+                switch (keyCode) {
+                    case 27: keyData = '\x1b'; break; // Esc
+                    case 9: keyData = '\t'; break; // Tab
+                    case 17: keyData = '\x03'; break; // Ctrl+C
+                    case 38: keyData = '\x1b[A'; break; // Up arrow
+                    case 40: keyData = '\x1b[B'; break; // Down arrow
+                    case 37: keyData = '\x1b[D'; break; // Left arrow
+                    case 39: keyData = '\x1b[C'; break; // Right arrow
+                }
+                
+                if (keyData) {
+                    this.ws.send(JSON.stringify({
+                        type: 'input',
+                        data: keyData
+                    }));
+                }
+            }
+        },
+        
+        // Resize handling
+        handleResize() {
+            if (this.terminal && this.fitAddon) {
+                this.fitAddon.fit();
+                
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'resize',
+                        cols: this.terminal.cols,
+                        rows: this.terminal.rows
+                    }));
+                }
             }
         }
-    });
+    };
 }
