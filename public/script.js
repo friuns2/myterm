@@ -471,8 +471,9 @@ async function createNewProject() {
 
 function selectProject(projectName) {
     currentProject = projectName;
+    sessionID = null;
     updateURLWithProject(projectName);
-    showProjectSessions(projectName);
+    initializeTerminal();
 }
 
 async function showProjectSessions(projectName) {
@@ -1071,11 +1072,32 @@ function openWorktree(projectName, worktreeName) {
 }
 
 async function mergeWorktree(projectName, worktreeName) {
-    const targetBranch = prompt('Enter target branch to merge into (default: main):', 'main');
-    if (targetBranch === null) return; // User cancelled
+    const { value: targetBranch } = await Swal.fire({
+        title: 'Enter target branch',
+        input: 'text',
+        inputLabel: 'Target branch to merge into',
+        inputValue: 'main',
+        showCancelButton: true,
+        inputValidator: (value) => {
+            if (!value) {
+                return 'You need to enter a branch name!';
+            }
+        }
+    });
     
-    const confirmMerge = confirm(`Are you sure you want to merge worktree "${worktreeName}" into "${targetBranch || 'main'}"? This will also delete the worktree.`);
-    if (!confirmMerge) return;
+    if (!targetBranch) return; // User cancelled
+    
+    const confirmResult = await Swal.fire({
+        title: 'Confirm merge',
+        text: `Are you sure you want to merge worktree "${worktreeName}" into "${targetBranch}"? This will also delete the worktree.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, merge it!'
+    });
+    
+    if (!confirmResult.isConfirmed) return;
     
     try {
         const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(worktreeName)}/merge`, {
@@ -1145,8 +1167,6 @@ window.addEventListener('popstate', (event) => {
 // Check URL parameters and show appropriate interface
 if (sessionID) {
     initializeTerminal();
-} else if (currentProject) {
-    showProjectSessions(currentProject);
 } else {
     showSessionsAndProjectsList();
 }
@@ -1396,7 +1416,7 @@ if (customCommandInput) {
 // Virtual keyboard input
 const virtualKeyboard = document.getElementById('virtual-keyboard');
 if (virtualKeyboard) {
-    virtualKeyboard.addEventListener('click', (event) => {
+    virtualKeyboard.addEventListener('click', async (event) => {
         const button = event.target.closest('button[data-key-code]');
         if (button) {
             const keyCode = parseInt(button.dataset.keyCode, 10);
@@ -1411,7 +1431,18 @@ if (virtualKeyboard) {
                     break;
                 case 17: // Ctrl
                     // Prompt user for the next key
-                    const nextKey = prompt("Enter next key for Ctrl combination (e.g., 'c' for Ctrl+C, 'z' for Ctrl+Z):");
+                    const { value: nextKey } = await Swal.fire({
+                        title: 'Ctrl Key Combination',
+                        input: 'text',
+                        inputLabel: 'Enter next key for Ctrl combination',
+                        inputPlaceholder: "e.g., 'c' for Ctrl+C, 'z' for Ctrl+Z",
+                        showCancelButton: true,
+                        inputValidator: (value) => {
+                            if (!value) {
+                                return 'You need to enter a key!';
+                            }
+                        }
+                    });
                     if (nextKey) {
                         const charCode = nextKey.toLowerCase().charCodeAt(0);
                         if (charCode >= 97 && charCode <= 122) { // 'a' through 'z'
