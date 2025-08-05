@@ -189,22 +189,28 @@ function initializeTerminal() {
     
     // Connect WebSocket
     connectWebSocket();
+
+    // Dynamic padding for virtual keyboard
+    const vk = document.getElementById('virtual-keyboard');
+    let basePadding = 0;
+    if (vk) {
+      basePadding = vk.clientHeight;
+    }
+    if ('visualViewport' in window) {
+      const viewport = window.visualViewport;
+      const updatePadding = () => {
+        const keyboardHeight = window.innerHeight - viewport.height;
+        const totalPadding = basePadding + keyboardHeight;
+        document.getElementById('terminal-container').style.paddingBottom = `${totalPadding}px`;
+        handleResize();
+      };
+      updatePadding();
+      viewport.addEventListener('resize', updatePadding);
+      viewport.addEventListener('scroll', updatePadding);
+    }
     
     // Show navigation bar when terminal is active
     showNavigationBar();
-    
-    // Adjust for virtual keyboard if on mobile
-    adjustForVirtualKeyboard();
-    
-    // Add a MutationObserver to detect changes in the terminal's size
-    const resizeObserver = new ResizeObserver(() => {
-        if (fitAddon) {
-            fitAddon.fit();
-        }
-    });
-    
-    // Observe the terminal container for size changes
-    resizeObserver.observe(terminalContainer);
 }
 
 // Handle terminal resize
@@ -218,21 +224,6 @@ const handleResize = () => {
             cols: terminal.cols,
             rows: terminal.rows
         }));
-    }
-};
-
-// Function to adjust terminal size when virtual keyboard appears/disappears
-const adjustForVirtualKeyboard = () => {
-    // Check if we're on mobile
-    if (window.innerWidth <= 768) {
-        // Force a resize after a short delay to ensure proper rendering
-        setTimeout(() => {
-            if (fitAddon) {
-                fitAddon.fit();
-                // Scroll to bottom to ensure cursor is visible
-                terminal.scrollToBottom();
-            }
-        }, 100);
     }
 };
 
