@@ -205,8 +205,8 @@ app.post('/api/projects/:projectName/worktrees/:worktreeName/merge', express.jso
     const mergeCommands = [
       `git checkout ${targetBranch}`,
       `git merge ${currentBranch}`,
-      `git branch -d ${currentBranch}`,
-      `git worktree remove ${worktreePath}`
+      `git worktree remove ${worktreePath}`,
+      `git branch -d ${currentBranch}`
     ];
 
     let commandIndex = 0;
