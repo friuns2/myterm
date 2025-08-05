@@ -524,20 +524,19 @@ const sendCommandButton = document.getElementById('send-command-button');
 
 if (customCommandInput && sendCommandButton) {
     const sendCommand = () => {
-        // Only proceed if we're in a terminal session
-        if (!isConnected || !terminal) {
-            return;
+        // Focus terminal first to ensure it's active
+        if (terminal) {
+            terminal.focus();
         }
         
-        // Focus terminal first
-        terminal.focus();
-        
         const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
-        ws.send(JSON.stringify({
-            type: 'input',
-            data: command
-        }));
-        customCommandInput.value = ''; // Clear input after sending
+        if (isConnected) {
+            ws.send(JSON.stringify({
+                type: 'input',
+                data: command
+            }));
+            customCommandInput.value = ''; // Clear input after sending
+        }
     };
 
     sendCommandButton.addEventListener('click', sendCommand);
@@ -554,14 +553,6 @@ if (virtualKeyboard) {
     virtualKeyboard.addEventListener('click', (event) => {
         const button = event.target.closest('button[data-key-code]');
         if (button) {
-            // Only proceed if we're in a terminal session
-            if (!isConnected || !terminal) {
-                return;
-            }
-            
-            // Focus terminal first
-            terminal.focus();
-            
             const keyCode = parseInt(button.dataset.keyCode, 10);
             let data = '';
 
@@ -613,6 +604,11 @@ if (virtualKeyboard) {
             }
 
             if (isConnected && data) {
+                // Focus terminal first to ensure it's active
+                if (terminal) {
+                    terminal.focus();
+                }
+                
                 ws.send(JSON.stringify({
                     type: 'input',
                     data: data
