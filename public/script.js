@@ -285,9 +285,14 @@ async function showProjectList() {
                                         <div class="cursor-pointer flex-1" onclick="selectProject('${project}')">
                                             <h2 class="card-title text-sm">${project}</h2>
                                         </div>
-                                        <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
-                                            Open
-                                        </button>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-secondary btn-sm" onclick="showWorktrees('${project}')">
+                                                🌿 Worktrees
+                                            </button>
+                                            <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
+                                                Open
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -338,6 +343,107 @@ function selectProject(projectName) {
     currentProject = projectName;
     updateURLWithProject(projectName);
     showProjectSessions(projectName);
+}
+
+// Function to show worktrees for a project
+async function showWorktrees(projectName) {
+    hideNavigationBar();
+    
+    try {
+        const [sessionsResponse, worktreesResponse] = await Promise.all([
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`),
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`)
+        ]);
+        
+        const sessions = await sessionsResponse.json();
+        const worktrees = await worktreesResponse.json();
+        
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = `
+            <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
+                <div class="mb-6">
+                    <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
+                </div>
+                <h1 class="text-2xl font-bold mb-6 text-center">Project: ${projectName}</h1>
+                
+                <!-- Sessions Section -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4">Sessions</h2>
+                    <div class="grid gap-4 mb-4">
+                        ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
+                            sessions.map(session => `
+                                <div class="card bg-base-200 shadow-xl">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                <h2 class="card-title text-sm">${session.id}</h2>
+                                                <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                    Connect
+                                                </button>
+                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                    Kill
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                    <div class="text-center">
+                        <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
+                    </div>
+                </div>
+                
+                <!-- Worktrees Section -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4">Git Worktrees</h2>
+                    <div class="mb-4">
+                        <div class="flex gap-2">
+                            <input type="text" id="worktree-name" placeholder="Worktree name" class="input input-bordered flex-1">
+                            <input type="text" id="worktree-branch" placeholder="Branch name" class="input input-bordered flex-1">
+                            <button class="btn btn-secondary" onclick="createWorktree('${projectName}')">Create Worktree</button>
+                        </div>
+                    </div>
+                    <div class="projects-container grid gap-4">
+                        ${worktrees.length === 0 ? '<p class="text-center opacity-70">No worktrees found</p>' : 
+                            worktrees.map(worktree => `
+                                <div class="card bg-base-300 shadow-xl">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-center">
+                                            <div class="cursor-pointer flex-1" onclick="openWorktree('${projectName}', '${worktree.name}')">
+                                                <h2 class="card-title text-sm">🌿 ${worktree.name}</h2>
+                                                <p class="text-xs opacity-70">Branch: ${worktree.branch}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="openWorktree('${projectName}', '${worktree.name}')">
+                                                    Open
+                                                </button>
+                                                <button class="btn btn-success btn-sm" onclick="mergeWorktree('${projectName}', '${worktree.name}')">
+                                                    Merge
+                                                </button>
+                                                <button class="btn btn-error btn-sm" onclick="deleteWorktree('${projectName}', '${worktree.name}')">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading project data:', error);
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading project data</div>';
+    }
 }
 
 async function showProjectSessions(projectName) {
@@ -432,6 +538,115 @@ function createNewSessionForProject(projectName) {
     initializeTerminal();
 }
 
+// Function to create a new worktree
+async function createWorktree(projectName) {
+    const worktreeNameInput = document.getElementById('worktree-name');
+    const worktreeBranchInput = document.getElementById('worktree-branch');
+    
+    const worktreeName = worktreeNameInput.value.trim();
+    const branchName = worktreeBranchInput.value.trim();
+    
+    if (!worktreeName) {
+        alert('Please enter a worktree name');
+        return;
+    }
+    
+    if (!branchName) {
+        alert('Please enter a branch name');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: worktreeName, branch: branchName })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Clear inputs
+            worktreeNameInput.value = '';
+            worktreeBranchInput.value = '';
+            // Refresh the worktrees view
+            showWorktrees(projectName);
+        } else {
+            alert(result.error || 'Failed to create worktree');
+        }
+    } catch (error) {
+        console.error('Error creating worktree:', error);
+        alert('Error creating worktree');
+    }
+}
+
+// Function to open a worktree (create session in worktree directory)
+function openWorktree(projectName, worktreeName) {
+    sessionID = null;
+    currentProject = projectName;
+    // Set the working directory to the worktree path
+    const worktreePath = `../projects/${projectName}/worktrees/${worktreeName}`;
+    updateURLWithProject(projectName);
+    initializeTerminalInDirectory(worktreePath);
+}
+
+// Function to merge worktree back to main
+async function mergeWorktree(projectName, worktreeName) {
+    const targetBranch = prompt('Enter target branch to merge into (default: main):', 'main');
+    if (targetBranch === null) return; // User cancelled
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(worktreeName)}/merge`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ targetBranch: targetBranch || 'main' })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(result.message);
+            // Refresh the worktrees view
+            showWorktrees(projectName);
+        } else {
+            alert(result.error || 'Failed to merge worktree');
+        }
+    } catch (error) {
+        console.error('Error merging worktree:', error);
+        alert('Error merging worktree');
+    }
+}
+
+// Function to delete a worktree
+async function deleteWorktree(projectName, worktreeName) {
+    if (!confirm(`Are you sure you want to delete worktree '${worktreeName}'? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(worktreeName)}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(result.message);
+            // Refresh the worktrees view
+            showWorktrees(projectName);
+        } else {
+            alert(result.error || 'Failed to delete worktree');
+        }
+    } catch (error) {
+        console.error('Error deleting worktree:', error);
+        alert('Error deleting worktree');
+    }
+}
+
 // Function to initialize terminal
 function initializeTerminal() {
     const terminalContainer = document.getElementById('terminal-container');
@@ -461,6 +676,56 @@ function initializeTerminal() {
     
     // Focus the new terminal instance
     terminal.focus();
+    
+    // Connect WebSocket
+    connectWebSocket();
+    
+    // Show navigation bar when terminal is active
+    showNavigationBar();
+}
+
+// Function to initialize terminal in a specific directory (for worktrees)
+function initializeTerminalInDirectory(workingDirectory) {
+    const terminalContainer = document.getElementById('terminal-container');
+    terminalContainer.innerHTML = `
+        <div class="flex flex-col h-full">
+            <div class="bg-base-200 p-2 text-sm opacity-70">
+                Working in: ${workingDirectory}
+            </div>
+            <div id="terminal" class="flex-1"></div>
+        </div>
+    `;
+    
+    // Create a new terminal instance
+    createNewTerminal();
+    
+    // Mount new terminal to DOM element
+    const newTerminalElement = document.getElementById('terminal');
+    terminal.open(newTerminalElement);
+    fitAddon.fit();
+    
+    // Set up terminal data handler
+    terminal.onData((data) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'input',
+                data: data
+            }));
+        }
+    });
+    
+    // Focus the terminal
+    terminal.focus();
+    
+    // Send initial cd command to change to worktree directory
+    setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'input',
+                data: `cd "${workingDirectory}"\r`
+            }));
+        }
+    }, 500);
     
     // Connect WebSocket
     connectWebSocket();
@@ -560,7 +825,19 @@ function createFileItem(item) {
     const div = document.createElement('div');
     div.className = 'file-item p-2 rounded cursor-pointer flex items-center gap-2 text-sm';
     
-    const icon = item.type === 'directory' ? '📁' : '📄';
+    // Check if this is a worktree directory
+    const isWorktree = item.type === 'directory' && 
+                      (item.name === 'worktrees' || 
+                       (currentProject && item.path.includes(`../projects/${currentProject}/worktrees/`)));
+    
+    // Use different icon and style for worktrees
+    let icon = item.type === 'directory' ? '📁' : '📄';
+    if (isWorktree || item.name === 'worktrees') {
+        icon = '🌿'; // Branch icon for worktrees
+        div.classList.add('worktree-item');
+        div.style.backgroundColor = 'rgba(72, 187, 120, 0.1)'; // Light green background
+    }
+    
     const name = item.name.length > 25 ? item.name.substring(0, 22) + '...' : item.name;
     
     div.innerHTML = `

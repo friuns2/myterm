@@ -4,6 +4,7 @@ const pty = require('node-pty');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 const { v4: uuidv4 } = require('uuid'); // Import uuid
 
 const app = express();
@@ -47,6 +48,16 @@ app.post('/api/projects', express.json(), (req, res) => {
       return res.status(409).json({ error: 'Project already exists' });
     }
     fs.mkdirSync(projectPath, { recursive: true });
+    
+    // Initialize git repository
+    try {
+      execSync('git init', { cwd: projectPath, stdio: 'pipe' });
+      console.log(`Git repository initialized for project: ${name.trim()}`);
+    } catch (gitError) {
+      console.warn(`Failed to initialize git for project ${name.trim()}:`, gitError.message);
+      // Continue even if git init fails
+    }
+    
     res.json({ success: true, name: name.trim() });
   } catch (error) {
     console.error('Error creating project:', error);
@@ -234,6 +245,185 @@ app.post('/api/folder', express.json(), (req, res) => {
   } catch (error) {
     console.error('Error creating folder:', error);
     res.status(500).json({ error: 'Failed to create folder' });
+  }
+});
+
+// API endpoint to get worktrees for a project
+app.get('/api/projects/:projectName/worktrees', (req, res) => {
+  const projectName = req.params.projectName;
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreesPath = path.join(projectPath, 'worktrees');
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (!fs.existsSync(worktreesPath)) {
+      return res.json([]);
+    }
+    
+    const worktrees = fs.readdirSync(worktreesPath, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => {
+        const worktreePath = path.join(worktreesPath, dirent.name);
+        let branch = 'unknown';
+        try {
+          branch = execSync('git branch --show-current', { cwd: worktreePath, encoding: 'utf8' }).trim();
+        } catch (error) {
+          console.warn(`Failed to get branch for worktree ${dirent.name}:`, error.message);
+        }
+        return {
+          name: dirent.name,
+          branch: branch,
+          path: worktreePath
+        };
+      });
+    
+    res.json(worktrees);
+  } catch (error) {
+    console.error('Error reading worktrees:', error);
+    res.status(500).json({ error: 'Failed to read worktrees' });
+  }
+});
+
+// API endpoint to create a new worktree
+app.post('/api/projects/:projectName/worktrees', express.json(), (req, res) => {
+  const projectName = req.params.projectName;
+  const { name, branch } = req.body;
+  
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'Worktree name is required' });
+  }
+  
+  if (!branch || typeof branch !== 'string' || branch.trim() === '') {
+    return res.status(400).json({ error: 'Branch name is required' });
+  }
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreesPath = path.join(projectPath, 'worktrees');
+  const worktreePath = path.join(worktreesPath, name.trim());
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (fs.existsSync(worktreePath)) {
+      return res.status(409).json({ error: 'Worktree already exists' });
+    }
+    
+    // Create worktrees directory if it doesn't exist
+    if (!fs.existsSync(worktreesPath)) {
+      fs.mkdirSync(worktreesPath, { recursive: true });
+    }
+    
+    // Create git worktree
+    try {
+      execSync(`git worktree add worktrees/${name.trim()} ${branch.trim()}`, { 
+        cwd: projectPath, 
+        stdio: 'pipe' 
+      });
+      console.log(`Worktree created: ${name.trim()} on branch ${branch.trim()}`);
+    } catch (gitError) {
+      console.error(`Failed to create worktree:`, gitError.message);
+      return res.status(500).json({ error: `Failed to create worktree: ${gitError.message}` });
+    }
+    
+    res.json({ success: true, name: name.trim(), branch: branch.trim() });
+  } catch (error) {
+    console.error('Error creating worktree:', error);
+    res.status(500).json({ error: 'Failed to create worktree' });
+  }
+});
+
+// API endpoint to merge worktree back to main
+app.post('/api/projects/:projectName/worktrees/:worktreeName/merge', express.json(), (req, res) => {
+  const projectName = req.params.projectName;
+  const worktreeName = req.params.worktreeName;
+  const { targetBranch = 'main' } = req.body;
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreePath = path.join(projectPath, 'worktrees', worktreeName);
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (!fs.existsSync(worktreePath)) {
+      return res.status(404).json({ error: 'Worktree not found' });
+    }
+    
+    // Get current branch of worktree
+    let currentBranch;
+    try {
+      currentBranch = execSync('git branch --show-current', { 
+        cwd: worktreePath, 
+        encoding: 'utf8' 
+      }).trim();
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to get worktree branch' });
+    }
+    
+    // Switch to target branch in main project
+    try {
+      execSync(`git checkout ${targetBranch}`, { cwd: projectPath, stdio: 'pipe' });
+    } catch (error) {
+      console.warn(`Failed to checkout ${targetBranch}, continuing with current branch`);
+    }
+    
+    // Merge the worktree branch
+    try {
+      execSync(`git merge ${currentBranch}`, { cwd: projectPath, stdio: 'pipe' });
+      console.log(`Merged branch ${currentBranch} into ${targetBranch}`);
+    } catch (gitError) {
+      return res.status(500).json({ error: `Failed to merge: ${gitError.message}` });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Successfully merged ${currentBranch} into ${targetBranch}` 
+    });
+  } catch (error) {
+    console.error('Error merging worktree:', error);
+    res.status(500).json({ error: 'Failed to merge worktree' });
+  }
+});
+
+// API endpoint to delete a worktree
+app.delete('/api/projects/:projectName/worktrees/:worktreeName', (req, res) => {
+  const projectName = req.params.projectName;
+  const worktreeName = req.params.worktreeName;
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreePath = path.join(projectPath, 'worktrees', worktreeName);
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (!fs.existsSync(worktreePath)) {
+      return res.status(404).json({ error: 'Worktree not found' });
+    }
+    
+    // Remove git worktree
+    try {
+      execSync(`git worktree remove worktrees/${worktreeName}`, { 
+        cwd: projectPath, 
+        stdio: 'pipe' 
+      });
+      console.log(`Worktree removed: ${worktreeName}`);
+    } catch (gitError) {
+      console.error(`Failed to remove worktree:`, gitError.message);
+      return res.status(500).json({ error: `Failed to remove worktree: ${gitError.message}` });
+    }
+    
+    res.json({ success: true, message: `Worktree ${worktreeName} removed successfully` });
+  } catch (error) {
+    console.error('Error removing worktree:', error);
+    res.status(500).json({ error: 'Failed to remove worktree' });
   }
 });
 
