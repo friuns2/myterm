@@ -9,36 +9,21 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-base-100 h-screen flex flex-col overflow-hidden">
-    <!-- Terminal Container -->
-    <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden">
-        <div id="terminal" class="w-full h-full"></div>
-    </div>
+<body class="bg-base-100">
+    <div id="app"></div>
 
-    <!-- Command Input Section -->
-    <div class="bg-base-200 p-2 border-t border-base-300">
-        <div class="flex gap-2 items-center">
-            <input type="text" id="custom-command-input" placeholder="Enter command..." 
-                   class="input input-bordered input-sm flex-1 bg-base-100 text-sm" />
-            <button id="send-command-button" class="btn btn-primary btn-sm">Send</button>
-        </div>
-    </div>
-
-    <!-- Virtual Keyboard for Mobile -->
-    <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300 lg:hidden">
-        <!-- All Keys in One Row -->
-        <div class="flex gap-1 justify-center flex-wrap">
-            <button class="btn btn-xs btn-outline" data-key-code="27">Esc</button>
-            <button class="btn btn-xs btn-outline" data-key-code="9">Tab</button>
-            <button class="btn btn-xs btn-outline" data-key-code="17">Ctrl</button>
-            <button class="btn btn-xs btn-outline" data-key-code="38">↑</button>
-            <button class="btn btn-xs btn-outline" data-key-code="37">←</button>
-            <button class="btn btn-xs btn-outline" data-key-code="40">↓</button>
-            <button class="btn btn-xs btn-outline" data-key-code="39">→</button>
-        </div>
-    </div>
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.14/dist/vue.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
-    <script src="script.js"></script>
+    
+    <!-- Application Modules -->
+    <script src="js/terminal.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/session.js"></script>
+    <script src="js/ui.js"></script>
+    
+    <!-- Main Application -->
+    <script src="app.js"></script>
 </body>
 </html>
