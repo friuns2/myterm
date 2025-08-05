@@ -101,6 +101,7 @@ function ansiToHtml(text) {
 let ws;
 let sessionID = getSessionIDFromURL(); // Get session ID from URL only
 let currentProject = getProjectFromURL() || null;
+let currentWorktree = getWorktreeFromURL() || null;
 let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -117,6 +118,11 @@ function getProjectFromURL() {
     return urlParams.get('project');
 }
 
+function getWorktreeFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('worktree');
+}
+
 // Function to update URL with session ID using pushState for navigation history
 function updateURLWithSession(sessionId, projectName = null) {
     const url = new URL(window.location);
@@ -130,14 +136,81 @@ function updateURLWithSession(sessionId, projectName = null) {
 function updateURLWithProject(projectName) {
     const url = new URL(window.location);
     url.searchParams.delete('session');
+    url.searchParams.delete('worktree');
     url.searchParams.set('project', projectName);
     window.history.pushState({ project: projectName }, '', url);
 }
 
-function clearURLParams() {
+function updateURLWithWorktree(projectName, worktreeName) {
     const url = new URL(window.location);
     url.searchParams.delete('session');
+    url.searchParams.set('project', projectName);
+    url.searchParams.set('worktree', worktreeName);
+    window.history.pushState({ project: projectName, worktree: worktreeName }, '', url);
+}
+
+async function showWorktreeSessions(projectName, branchName) {
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(branchName)}/sessions`);
+        const sessions = await response.json();
+        
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = `
+            <div class="p-6 max-w-4xl mx-auto">
+                <div class="mb-6">
+                    <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
+                </div>
+                <h1 class="text-2xl font-bold mb-6 text-center">Sessions for Worktree: ${branchName}</h1>
+                <div class="grid gap-4 mb-6">
+                    ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this worktree</p>' : 
+                        sessions.map(session => `
+                            <div class="card bg-base-200 shadow-xl">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-start">
+                                        <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
+                                            <h2 class="card-title text-sm">${session.id}</h2>
+                                            <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                            <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                Connect
+                                            </button>
+                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                Kill
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+                <div class="text-center">
+                    <button class="btn btn-primary" onclick="createNewSessionForWorktree('${projectName}', '${branchName}')">Create New Session</button>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error fetching worktree sessions:', error);
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading worktree sessions</div>';
+    }
+}
+
+function createNewSessionForWorktree(projectName, branchName) {
+    sessionID = null;
+    currentProject = projectName;
+    currentWorktree = branchName;
+    updateURLWithWorktree(projectName, branchName);
+    initializeTerminal();
+}
+
+function clearURLParams() {
+    const url = new URL(window.location);
+    url.searchParams.delete('sessionID');
     url.searchParams.delete('project');
+    url.searchParams.delete('worktree');
     window.history.pushState({}, '', url);
 }
 
@@ -156,6 +229,7 @@ function goBackToSessionList() {
 function goBackToProjectList() {
     clearURLParams();
     currentProject = null;
+    currentWorktree = null;
     sessionID = null;
     showProjectList();
 }
@@ -170,6 +244,9 @@ const connectWebSocket = () => {
     }
     if (currentProject) {
         params.append('projectName', currentProject);
+    }
+    if (currentWorktree) {
+        params.append('worktreeName', currentWorktree);
     }
     
     if (params.toString()) {
@@ -307,7 +384,10 @@ async function showProjectList() {
                                             <div class="flex flex-wrap gap-1">
                                                 ${project.worktrees.map(worktree => `
                                                     <div class="badge badge-outline badge-sm flex items-center gap-1">
-                                                        <span>${worktree.branch}</span>
+                                                        <span class="cursor-pointer" onclick="selectWorktree('${project.name}', '${worktree.branch}')" title="Open worktree">${worktree.branch}</span>
+                                                        <button class="btn btn-xs btn-ghost p-0 h-4 w-4" onclick="selectWorktree('${project.name}', '${worktree.branch}')" title="Open">
+                                                            📂
+                                                        </button>
                                                         <button class="btn btn-xs btn-ghost p-0 h-4 w-4" onclick="mergeWorktree('${project.name}', '${worktree.branch}')" title="Merge back">
                                                             ↩
                                                         </button>
@@ -368,6 +448,13 @@ function selectProject(projectName) {
     currentProject = projectName;
     updateURLWithProject(projectName);
     showProjectSessions(projectName);
+}
+
+function selectWorktree(projectName, branchName) {
+    currentProject = projectName;
+    currentWorktree = branchName;
+    updateURLWithWorktree(projectName, branchName);
+    showWorktreeSessions(projectName, branchName);
 }
 
 async function showProjectSessions(projectName) {
@@ -502,12 +589,16 @@ function initializeTerminal() {
 window.addEventListener('popstate', (event) => {
     const newSessionID = getSessionIDFromURL();
     const newProject = getProjectFromURL();
+    const newWorktree = getWorktreeFromURL();
     
     sessionID = newSessionID;
     currentProject = newProject;
+    currentWorktree = newWorktree;
     
     if (sessionID) {
         initializeTerminal();
+    } else if (currentProject && currentWorktree) {
+        showWorktreeSessions(currentProject, currentWorktree);
     } else if (currentProject) {
         showProjectSessions(currentProject);
     } else {
@@ -518,6 +609,8 @@ window.addEventListener('popstate', (event) => {
 // Check URL parameters and show appropriate interface
 if (sessionID) {
     initializeTerminal();
+} else if (currentProject && currentWorktree) {
+    showWorktreeSessions(currentProject, currentWorktree);
 } else if (currentProject) {
     showProjectSessions(currentProject);
 } else {

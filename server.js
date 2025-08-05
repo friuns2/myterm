@@ -333,6 +333,25 @@ app.delete('/api/projects/:projectName/worktrees/:branchName', (req, res) => {
    }
  });
 
+// API endpoint to get sessions for a specific worktree
+app.get('/api/projects/:projectName/worktrees/:branchName/sessions', (req, res) => {
+  const { projectName, branchName } = req.params;
+  const sessionList = [];
+  
+  sessions.forEach((session, sessionId) => {
+    if (session.projectName === projectName && session.worktreeName === branchName) {
+      sessionList.push({
+        id: sessionId,
+        status: session.buffer || 'Ready',
+        created: session.created || new Date().toISOString(),
+        projectName: session.projectName,
+        worktreeName: session.worktreeName
+      });
+    }
+  });
+  res.json(sessionList);
+});
+
 const server = app.listen(port, () => {
   console.log(`Web Terminal running at http://localhost:${port}`);
 });
@@ -343,10 +362,11 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws, req) => {
   console.log('Terminal connected');
   
-  // Parse session ID and project name from query parameters
+  // Parse session ID, project name, and worktree name from query parameters
   const url = new URL(req.url, `http://${req.headers.host}`);
   let sessionID = url.searchParams.get('sessionID');
   const projectName = url.searchParams.get('projectName');
+  const worktreeName = url.searchParams.get('worktreeName');
   let ptyProcess;
 
   if (sessionID && sessions.has(sessionID)) {
@@ -375,13 +395,21 @@ wss.on('connection', (ws, req) => {
     // Determine working directory
     let cwd = process.cwd();
     if (projectName) {
-      const projectPath = path.join(PROJECTS_DIR, projectName);
-      if (fs.existsSync(projectPath)) {
-        cwd = projectPath;
+      let targetPath;
+      if (worktreeName) {
+        // Use worktree path if worktree is specified
+        targetPath = path.join(PROJECTS_DIR, projectName, 'worktrees', worktreeName);
       } else {
-        // Create project directory if it doesn't exist
-        fs.mkdirSync(projectPath, { recursive: true });
-        cwd = projectPath;
+        // Use main project path
+        targetPath = path.join(PROJECTS_DIR, projectName);
+      }
+      
+      if (fs.existsSync(targetPath)) {
+        cwd = targetPath;
+      } else if (!worktreeName) {
+        // Create project directory if it doesn't exist (only for main project, not worktrees)
+        fs.mkdirSync(targetPath, { recursive: true });
+        cwd = targetPath;
       }
     }
     
@@ -393,9 +421,9 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
+    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null, worktreeName: worktreeName || null };
     sessions.set(sessionID, session);
-    console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
+    console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}${worktreeName ? ` (worktree: ${worktreeName})` : ''}`);
 
     // Send session ID to client
     ws.send(JSON.stringify({
