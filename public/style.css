@@ -135,7 +135,6 @@
     
     #terminal-container {
         min-height: 30vh;
-        /* Virtual keyboard spacing handled in separate rule below */
     }
     
     /* Adjust navigation for mobile */
@@ -165,9 +164,14 @@
     
     #terminal-container {
         min-height: 25vh;
-        /* Virtual keyboard spacing handled in separate rule below */
     }
     
+    .xterm {
+        font-size: 11px !important;
+    }
+}
+
+@media (max-width: 480px) {
     .xterm {
         font-size: 10px !important;
     }
@@ -184,35 +188,35 @@
     border-top: 1px solid hsl(var(--bc) / 0.2);
 }
 
-/* Ensure main content doesn't overlap with virtual keyboard */
+/* Adjust main content to account for fixed virtual keyboard */
 body {
-    padding-bottom: 80px; /* Height of virtual keyboard + some margin */
+    padding-bottom: 60px;
 }
 
-/* Adjust terminal container to account for virtual keyboard */
+/* Main content area height adjustment */
+.flex-1.flex {
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
+}
+
+/* Ensure terminal container doesn't overlap with virtual keyboard */
 #terminal-container {
     margin-bottom: 0;
-    padding-bottom: 10px;
+    height: 100%;
 }
 
-/* Additional mobile adjustments */
+/* Additional mobile-specific adjustments */
 @media (max-width: 768px) {
-    /* Increase padding for mobile devices */
     body {
-        padding-bottom: 90px;
+        padding-bottom: 70px;
     }
     
-    #terminal-container {
-        min-height: calc(30vh - 90px);
-    }
-}
-
-@media (max-width: 480px) {
-    body {
-        padding-bottom: 100px;
+    .flex-1.flex {
+        height: calc(100vh - 70px);
+        max-height: calc(100vh - 70px);
     }
     
-    #terminal-container {
-        min-height: calc(25vh - 100px);
+    #virtual-keyboard {
+        height: 70px;
     }
 }
