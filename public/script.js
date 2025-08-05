@@ -488,8 +488,22 @@ function createNewSessionForProject(projectName) {
 
 // Function to create a new worktree
 async function createWorktree(projectName) {
-    const branchName = prompt('Enter branch name for the worktree:');
-    if (!branchName || branchName.trim() === '') {
+    const { value: branchName } = await Swal.fire({
+        title: 'Create Worktree',
+        text: 'Enter branch name for the worktree:',
+        input: 'text',
+        inputPlaceholder: 'Branch name',
+        showCancelButton: true,
+        confirmButtonText: 'Create',
+        cancelButtonText: 'Cancel',
+        inputValidator: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Branch name is required!';
+            }
+        }
+    });
+    
+    if (!branchName) {
         return;
     }
     
@@ -505,7 +519,12 @@ async function createWorktree(projectName) {
         const result = await response.json();
         
         if (response.ok) {
-            alert(`Worktree '${result.name}' created successfully for branch '${result.branch}'`);
+            await Swal.fire({
+                title: 'Success!',
+                text: `Worktree '${result.name}' created successfully for branch '${result.branch}'`,
+                icon: 'success',
+                confirmButtonText: 'OK'
+            });
             // Refresh the current view
             if (currentProject === projectName) {
                 showProjectSessions(projectName);
@@ -513,11 +532,21 @@ async function createWorktree(projectName) {
                 showProjectList();
             }
         } else {
-            alert(result.error || 'Failed to create worktree');
+            await Swal.fire({
+                title: 'Error!',
+                text: result.error || 'Failed to create worktree',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
         }
     } catch (error) {
         console.error('Error creating worktree:', error);
-        alert('Error creating worktree');
+        await Swal.fire({
+            title: 'Error!',
+            text: 'Error creating worktree',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
     }
 }
 
@@ -532,7 +561,18 @@ function openWorktreeSession(projectName, worktreeName) {
 
 // Function to merge worktree back to main
 async function mergeWorktree(projectName, worktreeName) {
-    if (!confirm(`Are you sure you want to merge worktree '${worktreeName}' back to main and delete it?`)) {
+    const result = await Swal.fire({
+        title: 'Merge Worktree',
+        text: `Are you sure you want to merge worktree '${worktreeName}' back to main and delete it?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, merge it!',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6'
+    });
+    
+    if (!result.isConfirmed) {
         return;
     }
     
@@ -547,15 +587,30 @@ async function mergeWorktree(projectName, worktreeName) {
         const result = await response.json();
         
         if (response.ok) {
-            alert('Worktree merged and removed successfully');
+            await Swal.fire({
+                title: 'Success!',
+                text: 'Worktree merged and removed successfully',
+                icon: 'success',
+                confirmButtonText: 'OK'
+            });
             // Refresh the sessions view
             showProjectSessions(projectName);
         } else {
-            alert(result.error || 'Failed to merge worktree');
+            await Swal.fire({
+                title: 'Error!',
+                text: result.error || 'Failed to merge worktree',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
         }
     } catch (error) {
         console.error('Error merging worktree:', error);
-        alert('Error merging worktree');
+        await Swal.fire({
+            title: 'Error!',
+            text: 'Error merging worktree',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
     }
 }
 
@@ -689,7 +744,7 @@ if (customCommandInput && sendCommandButton) {
 // Virtual keyboard input
 const virtualKeyboard = document.getElementById('virtual-keyboard');
 if (virtualKeyboard) {
-    virtualKeyboard.addEventListener('click', (event) => {
+    virtualKeyboard.addEventListener('click', async (event) => {
         const button = event.target.closest('button[data-key-code]');
         if (button) {
             const keyCode = parseInt(button.dataset.keyCode, 10);
@@ -704,7 +759,23 @@ if (virtualKeyboard) {
                     break;
                 case 17: // Ctrl
                     // Prompt user for the next key
-                    const nextKey = prompt("Enter next key for Ctrl combination (e.g., 'c' for Ctrl+C, 'z' for Ctrl+Z):");
+                    const { value: nextKey } = await Swal.fire({
+                        title: 'Ctrl Key Combination',
+                        text: "Enter next key for Ctrl combination (e.g., 'c' for Ctrl+C, 'z' for Ctrl+Z):",
+                        input: 'text',
+                        inputPlaceholder: 'Key (e.g., c, z, [, \\, ], ^, _)',
+                        showCancelButton: true,
+                        confirmButtonText: 'Send',
+                        cancelButtonText: 'Cancel',
+                        inputValidator: (value) => {
+                            if (!value || value.trim() === '') {
+                                return 'Please enter a key!';
+                            }
+                            if (value.length > 1 && !['[', '\\', ']', '^', '_'].includes(value)) {
+                                return 'Please enter a single character!';
+                            }
+                        }
+                    });
                     if (nextKey) {
                         const charCode = nextKey.toLowerCase().charCodeAt(0);
                         if (charCode >= 97 && charCode <= 122) { // 'a' through 'z'
