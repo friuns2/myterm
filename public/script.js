@@ -443,7 +443,11 @@ async function createNewProject() {
     const projectName = projectNameInput.value.trim();
     
     if (!projectName) {
-        alert('Please enter a project name');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Please enter a project name',
+            icon: 'error'
+        });
         return;
     }
     
@@ -461,11 +465,19 @@ async function createNewProject() {
         if (response.ok) {
             selectProject(result.name);
         } else {
-            alert(result.error || 'Failed to create project');
+            await Swal.fire({
+                title: 'Error',
+                text: result.error || 'Failed to create project',
+                icon: 'error'
+            });
         }
     } catch (error) {
         console.error('Error creating project:', error);
-        alert('Error creating project');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Error creating project',
+            icon: 'error'
+        });
     }
 }
 
@@ -599,11 +611,19 @@ async function killSession(sessionId) {
                 showProjectList();
             }
         } else {
-            alert('Failed to kill session: ' + result.message);
+            await Swal.fire({
+                title: 'Error',
+                text: 'Failed to kill session: ' + result.message,
+                icon: 'error'
+            });
         }
     } catch (error) {
         console.error('Error killing session:', error);
-        alert('Error killing session');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Error killing session',
+            icon: 'error'
+        });
     }
 }
 
@@ -712,7 +732,11 @@ async function loadDirectory(dirPath) {
         }
     } catch (error) {
         console.error('Error loading directory:', error);
-        alert('Failed to load directory: ' + error.message);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to load directory: ' + error.message,
+            icon: 'error'
+        });
     }
 }
 
@@ -794,13 +818,21 @@ async function openFileInEditor(filePath) {
         
     } catch (error) {
         console.error('Error opening file:', error);
-        alert('Failed to open file: ' + error.message);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to open file: ' + error.message,
+            icon: 'error'
+        });
     }
 }
 
 async function saveCurrentFile() {
     if (!currentEditingFile) {
-        alert('No file is currently being edited');
+        await Swal.fire({
+            title: 'Warning',
+            text: 'No file is currently being edited',
+            icon: 'warning'
+        });
         return;
     }
     
@@ -838,7 +870,11 @@ async function saveCurrentFile() {
         
     } catch (error) {
         console.error('Error saving file:', error);
-        alert('Failed to save file: ' + error.message);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to save file: ' + error.message,
+            icon: 'error'
+        });
     }
 }
 
@@ -882,7 +918,11 @@ async function handleFileCreation() {
     if (!fileName) return;
     
     if (!currentBrowserPath) {
-        alert('No directory selected');
+        await Swal.fire({
+            title: 'Warning',
+            text: 'No directory selected',
+            icon: 'warning'
+        });
         return;
     }
     
@@ -916,7 +956,11 @@ async function handleFileCreation() {
         
     } catch (error) {
         console.error('Error creating file:', error);
-        alert('Failed to create file: ' + error.message);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to create file: ' + error.message,
+            icon: 'error'
+        });
     }
 }
 
@@ -927,7 +971,11 @@ async function handleFolderCreation() {
     if (!folderName) return;
     
     if (!currentBrowserPath) {
-        alert('No directory selected');
+        await Swal.fire({
+            title: 'Warning',
+            text: 'No directory selected',
+            icon: 'warning'
+        });
         return;
     }
     
@@ -955,7 +1003,11 @@ async function handleFolderCreation() {
         
     } catch (error) {
         console.error('Error creating folder:', error);
-        alert('Failed to create folder: ' + error.message);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to create folder: ' + error.message,
+            icon: 'error'
+        });
     }
 }
 
@@ -1035,7 +1087,11 @@ async function handleWorktreeCreation(projectName) {
     const branch = branchInput.value.trim();
     
     if (!name) {
-        alert('Please enter a worktree name');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Please enter a worktree name',
+            icon: 'error'
+        });
         return;
     }
     
@@ -1055,11 +1111,19 @@ async function handleWorktreeCreation(projectName) {
             // Refresh the project sessions view
             showProjectSessions(projectName);
         } else {
-            alert(result.error || 'Failed to create worktree');
+            await Swal.fire({
+                title: 'Error',
+                text: result.error || 'Failed to create worktree',
+                icon: 'error'
+            });
         }
     } catch (error) {
         console.error('Error creating worktree:', error);
-        alert('Error creating worktree');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Error creating worktree',
+            icon: 'error'
+        });
     }
 }
 
@@ -1111,21 +1175,43 @@ async function mergeWorktree(projectName, worktreeName) {
         const result = await response.json();
         
         if (response.ok) {
-            alert(result.message || 'Worktree merged successfully');
+            await Swal.fire({
+                title: 'Success!',
+                text: result.message || 'Worktree merged successfully',
+                icon: 'success'
+            });
             // Refresh the project sessions view
             showProjectSessions(projectName);
         } else {
-            alert(result.error || 'Failed to merge worktree');
+            await Swal.fire({
+                title: 'Error',
+                text: result.error || 'Failed to merge worktree',
+                icon: 'error'
+            });
         }
     } catch (error) {
         console.error('Error merging worktree:', error);
-        alert('Error merging worktree');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Error merging worktree',
+            icon: 'error'
+        });
     }
 }
 
 async function deleteWorktree(projectName, worktreeName) {
-    const confirmDelete = confirm(`Are you sure you want to delete worktree "${worktreeName}"? This action cannot be undone.`);
-    if (!confirmDelete) return;
+    const confirmResult = await Swal.fire({
+        title: 'Delete Worktree',
+        text: `Are you sure you want to delete worktree "${worktreeName}"? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel'
+    });
+    
+    if (!confirmResult.isConfirmed) return;
     
     try {
         const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(worktreeName)}`, {
@@ -1135,15 +1221,27 @@ async function deleteWorktree(projectName, worktreeName) {
         const result = await response.json();
         
         if (response.ok) {
-            alert(result.message || 'Worktree deleted successfully');
+            await Swal.fire({
+                title: 'Success!',
+                text: result.message || 'Worktree deleted successfully',
+                icon: 'success'
+            });
             // Refresh the project sessions view
             showProjectSessions(projectName);
         } else {
-            alert(result.error || 'Failed to delete worktree');
+            await Swal.fire({
+                title: 'Error',
+                text: result.error || 'Failed to delete worktree',
+                icon: 'error'
+            });
         }
     } catch (error) {
         console.error('Error deleting worktree:', error);
-        alert('Error deleting worktree');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Error deleting worktree',
+            icon: 'error'
+        });
     }
 }
 
