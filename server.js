@@ -602,8 +602,11 @@ wss.on('connection', (ws, req) => {
     const session = sessions.get(sessionID);
     ptyProcess = session.ptyProcess;
     // Clear previous timeout for this session
-    clearTimeout(session.timeoutId);
-    // Update WebSocket instance
+    if (session.timeoutId) {
+      clearTimeout(session.timeoutId);
+      session.timeoutId = null;
+    }
+    // Update WebSocket instance for this session
     session.ws = ws;
     console.log(`Reconnected to session: ${sessionID}`);
     
@@ -665,7 +668,8 @@ wss.on('connection', (ws, req) => {
           currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
         }
         
-        // Send data to connected client if WebSocket is open
+        // Send data to ALL connected clients for this session
+        // This handles the case where multiple clients might be connected to the same session
         if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
           currentSession.ws.send(JSON.stringify({
             type: 'output',
@@ -718,27 +722,37 @@ wss.on('connection', (ws, req) => {
 
   // Clean up on WebSocket close
   ws.on('close', () => {
-    console.log('Terminal disconnected');
+    console.log(`Terminal disconnected for session: ${sessionID}`);
     const session = sessions.get(sessionID);
-    if (session) {
+    if (session && session.ws === ws) {
+      // Only set timeout if this is the current WebSocket for this session
       session.timeoutId = setTimeout(() => {
         console.log(`Session ${sessionID} timed out. Killing process.`);
-        session.ptyProcess.kill();
+        if (session.ptyProcess) {
+          session.ptyProcess.kill();
+        }
         sessions.delete(sessionID);
       }, SESSION_TIMEOUT);
+      // Clear the WebSocket reference
+      session.ws = null;
     }
   });
 
   // Handle WebSocket errors
   ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
+    console.error(`WebSocket error for session ${sessionID}:`, error);
     const session = sessions.get(sessionID);
-    if (session) {
+    if (session && session.ws === ws) {
+      // Only set timeout if this is the current WebSocket for this session
       session.timeoutId = setTimeout(() => {
         console.log(`Session ${sessionID} timed out due to error. Killing process.`);
-        session.ptyProcess.kill();
+        if (session.ptyProcess) {
+          session.ptyProcess.kill();
+        }
         sessions.delete(sessionID);
       }, SESSION_TIMEOUT);
+      // Clear the WebSocket reference
+      session.ws = null;
     }
   });
 });
