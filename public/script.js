@@ -152,18 +152,14 @@ function goBackToSessionList() {
     const url = new URL(window.location);
     url.searchParams.delete('session');
     window.history.pushState({ sessionList: true }, '', url);
-    if (currentProject) {
-        showProjectSessions(currentProject);
-    } else {
-        showProjectList();
-    }
+    showAllSessions();
 }
 
 function goBackToProjectList() {
     clearURLParams();
     currentProject = null;
     sessionID = null;
-    showProjectList();
+    showAllSessions();
 }
 
 const connectWebSocket = () => {
@@ -257,9 +253,107 @@ const connectWebSocket = () => {
     };
 };
 
-// Function to show project list
+// Function to show all sessions from all projects
+async function showAllSessions() {
+    // Hide navigation bar when showing all sessions
+    hideNavigationBar();
+    
+    try {
+        const [sessionsResponse, projectsResponse] = await Promise.all([
+            fetch('/api/sessions'),
+            fetch('/api/projects')
+        ]);
+        const sessions = await sessionsResponse.json();
+        const projects = await projectsResponse.json();
+        
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = `
+            <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
+                <h1 class="text-2xl font-bold mb-6 text-center">All Sessions</h1>
+                
+                <!-- Create New Session Section -->
+                <div class="mb-6">
+                    <div class="flex gap-2 mb-4">
+                        <select id="project-select" class="select select-bordered flex-1">
+                            <option value="">Select existing project...</option>
+                            ${projects.map(project => `<option value="${project}">${project}</option>`).join('')}
+                            <option value="__new__">Create new project</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="createNewSessionWithProject()">Create New Session</button>
+                    </div>
+                    <div id="new-project-input" class="hidden">
+                        <div class="flex gap-2">
+                            <input type="text" id="new-project-name" placeholder="Enter new project name" class="input input-bordered flex-1">
+                            <button class="btn btn-secondary" onclick="cancelNewProject()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sessions List -->
+                <div class="sessions-container grid gap-4 flex-1 overflow-auto">
+                    ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions found</p>' : 
+                        sessions.map(session => `
+                            <div class="card bg-base-200 shadow-xl">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-start">
+                                        <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                            <h2 class="card-title text-sm">${session.id}</h2>
+                                            <p class="text-xs opacity-70 mb-1">Project: ${session.projectName}</p>
+                                            <p class="text-xs opacity-70 line-clamp-3 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                            <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                                Connect
+                                            </button>
+                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                Kill
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+                
+                <!-- Projects Management Section -->
+                <div class="mt-6 pt-6 border-t border-base-300">
+                    <div class="flex justify-center gap-4">
+                        <button class="btn btn-outline" onclick="showProjectManagement()">Manage Projects</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add event listener for project select dropdown
+        const projectSelect = document.getElementById('project-select');
+        const newProjectInput = document.getElementById('new-project-input');
+        
+        projectSelect.addEventListener('change', function() {
+            if (this.value === '__new__') {
+                newProjectInput.classList.remove('hidden');
+                document.getElementById('new-project-name').focus();
+            } else {
+                newProjectInput.classList.add('hidden');
+            }
+        });
+        
+    } catch (error) {
+        console.error('Failed to load sessions:', error);
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading sessions</div>';
+    }
+}
+
+// Function to show project list (now used for project management)
 async function showProjectList() {
-    // Hide navigation bar when showing project list
+    showProjectManagement();
+}
+
+// Function to show project management
+async function showProjectManagement() {
+    // Hide navigation bar when showing project management
     hideNavigationBar();
     
     try {
@@ -269,7 +363,10 @@ async function showProjectList() {
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
             <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
-                <h1 class="text-2xl font-bold mb-6 text-center">Projects</h1>
+                <div class="mb-6">
+                    <button class="btn btn-outline" onclick="showAllSessions()">← Back to All Sessions</button>
+                </div>
+                <h1 class="text-2xl font-bold mb-6 text-center">Project Management</h1>
                 <div class="mb-6">
                     <div class="flex gap-2">
                         <input type="text" id="project-name" placeholder="Enter project name" class="input input-bordered flex-1">
@@ -287,7 +384,7 @@ async function showProjectList() {
                                         </div>
                                         <div class="flex gap-2">
                                             <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
-                                                Open
+                                                View Sessions
                                             </button>
                                             <button class="btn btn-secondary btn-sm" onclick="createWorktreeModal('${project}')">
                                                 + Worktree
@@ -461,12 +558,8 @@ async function killSession(sessionId) {
         const result = await response.json();
         
         if (result.success) {
-            // Refresh the appropriate list
-            if (currentProject) {
-                showProjectSessions(currentProject);
-            } else {
-                showProjectList();
-            }
+            // Refresh the all sessions view
+            showAllSessions();
         } else {
             alert('Failed to kill session: ' + result.message);
         }
@@ -476,11 +569,76 @@ async function killSession(sessionId) {
     }
 }
 
+// Function to create new session with project selection
+function createNewSessionWithProject() {
+    const projectSelect = document.getElementById('project-select');
+    const newProjectName = document.getElementById('new-project-name');
+    
+    let selectedProject = projectSelect.value;
+    
+    if (selectedProject === '__new__') {
+        const newName = newProjectName.value.trim();
+        if (!newName) {
+            alert('Please enter a project name');
+            return;
+        }
+        selectedProject = newName;
+        
+        // Create the new project first
+        createProjectAndSession(selectedProject);
+    } else if (selectedProject) {
+        // Use existing project
+        createNewSessionForProject(selectedProject);
+    } else {
+        // No project selected, create session without project
+        createNewSessionForProject(null);
+    }
+}
+
+// Function to create new project and then session
+async function createProjectAndSession(projectName) {
+    try {
+        const response = await fetch('/api/projects', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: projectName })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Project created successfully, now create session
+            createNewSessionForProject(projectName);
+        } else {
+            alert('Failed to create project: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error creating project:', error);
+        alert('Error creating project');
+    }
+}
+
+// Function to cancel new project creation
+function cancelNewProject() {
+    const projectSelect = document.getElementById('project-select');
+    const newProjectInput = document.getElementById('new-project-input');
+    
+    projectSelect.value = '';
+    newProjectInput.classList.add('hidden');
+    document.getElementById('new-project-name').value = '';
+}
+
 // Function to create new session for project
 function createNewSessionForProject(projectName) {
     sessionID = null;
     currentProject = projectName;
-    updateURLWithProject(projectName);
+    if (projectName) {
+        updateURLWithProject(projectName);
+    } else {
+        clearURLParams();
+    }
     initializeTerminal();
 }
 
@@ -1008,7 +1166,7 @@ window.addEventListener('popstate', (event) => {
     } else if (currentProject) {
         showProjectSessions(currentProject);
     } else {
-        showProjectList();
+        showAllSessions();
     }
 });
 
@@ -1018,7 +1176,7 @@ if (sessionID) {
 } else if (currentProject) {
     showProjectSessions(currentProject);
 } else {
-    showProjectList();
+    showAllSessions();
 }
 
 // Event listeners for file browser and editor
@@ -1027,11 +1185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const backToSessionsBtn = document.getElementById('back-to-sessions');
     if (backToSessionsBtn) {
         backToSessionsBtn.addEventListener('click', () => {
-            if (currentProject) {
-                goBackToProjectList();
-            } else {
-                goBackToSessionList();
-            }
+            goBackToSessionList();
         });
     }
     
