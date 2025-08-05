@@ -215,6 +215,19 @@ function setupCustomCommandInput() {
     const customCommandInput = document.getElementById('custom-command-input');
 
     if (customCommandInput) {
+        // Adjust terminal when input is focused (virtual keyboard appears on mobile)
+        customCommandInput.addEventListener('focus', () => {
+            if (typeof adjustForVirtualKeyboard === 'function') {
+                adjustForVirtualKeyboard();
+            }
+        });
+        
+        // Also adjust when input is blurred (virtual keyboard disappears)
+        customCommandInput.addEventListener('blur', () => {
+            if (typeof adjustForVirtualKeyboard === 'function') {
+                adjustForVirtualKeyboard();
+            }
+        });
         const sendCommand = () => {
             // Focus terminal first to ensure it's active
             if (terminal) {
@@ -264,6 +277,13 @@ function setupCustomCommandInput() {
 function setupVirtualKeyboard() {
     const virtualKeyboard = document.getElementById('virtual-keyboard');
     if (virtualKeyboard) {
+        // Call adjust function when virtual keyboard is interacted with
+        virtualKeyboard.addEventListener('touchstart', () => {
+            if (typeof adjustForVirtualKeyboard === 'function') {
+                adjustForVirtualKeyboard();
+            }
+        });
+        
         virtualKeyboard.addEventListener('click', async (event) => {
             const button = event.target.closest('button[data-key-code]');
             if (button) {
@@ -350,4 +370,4 @@ function setupVirtualKeyboard() {
             }
         });
     }
-} 
+}

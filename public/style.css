@@ -177,46 +177,37 @@
     }
 }
 
-/* Virtual keyboard positioning and overlap prevention */
-#virtual-keyboard {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    background-color: hsl(var(--b2));
-    border-top: 1px solid hsl(var(--bc) / 0.2);
-}
-
-/* Adjust main content to account for fixed virtual keyboard */
-body {
-    padding-bottom: 60px;
-}
-
-/* Main content area height adjustment */
-.flex-1.flex {
-    height: calc(100vh - 60px);
-    max-height: calc(100vh - 60px);
-}
-
-/* Ensure terminal container doesn't overlap with virtual keyboard */
-#terminal-container {
-    margin-bottom: 0;
-    height: 100%;
-}
-
-/* Additional mobile-specific adjustments */
+/* Prevent overlap between terminal and virtual keyboard on mobile */
 @media (max-width: 768px) {
+    /* Add bottom padding to terminal container to account for virtual keyboard */
+    #terminal-container {
+        padding-bottom: 70px;
+    }
+    
+    /* Ensure virtual keyboard stays at bottom */
+    #virtual-keyboard {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background-color: var(--b2);
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Adjust body to account for fixed virtual keyboard */
     body {
         padding-bottom: 70px;
     }
     
-    .flex-1.flex {
-        height: calc(100vh - 70px);
-        max-height: calc(100vh - 70px);
+    /* Ensure xterm viewport doesn't extend under the keyboard */
+    .xterm-viewport {
+        overflow-y: auto !important;
+        padding-bottom: 70px !important;
     }
     
-    #virtual-keyboard {
-        height: 70px;
+    /* Adjust terminal size to prevent content from being hidden under keyboard */
+    #terminal {
+        margin-bottom: 70px;
     }
 }
