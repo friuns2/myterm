@@ -296,6 +296,9 @@ async function showProjectList() {
                                             <button class="btn btn-primary btn-sm" onclick="selectProject('${project.name}')">
                                                 Open
                                             </button>
+                                            <button class="btn btn-error btn-sm" onclick="deleteProject('${project.name}')">
+                                                Delete
+                                            </button>
                                         </div>
                                     </div>
                                     ${project.worktrees.length > 0 ? `
@@ -540,7 +543,7 @@ window.addEventListener('resize', handleResize);
 
 // Handle visibility change (focus/blur)
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
+    if (!document.hidden && terminal) {
         terminal.focus();
     }
 });
@@ -831,6 +834,61 @@ async function deleteWorktree(projectName, branchName) {
                 text: 'Failed to delete worktree',
                 icon: 'error',
                 confirmButtonText: 'OK'
+            });
+        }
+    }
+}
+
+async function deleteProject(projectName) {
+    const result = await Swal.fire({
+        title: 'Delete Project',
+        text: `Are you sure you want to delete the project '${projectName}'? This will permanently delete all files and cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        input: 'text',
+        inputPlaceholder: `Type '${projectName}' to confirm`,
+        inputValidator: (value) => {
+            if (value !== projectName) {
+                return 'Please type the project name exactly to confirm deletion';
+            }
+        }
+    });
+
+    if (result.isConfirmed) {
+        try {
+            const response = await fetch(`/api/projects/${projectName}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                await Swal.fire({
+                    title: 'Deleted!',
+                    text: data.message || 'Project has been deleted.',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+                // Refresh the project list
+                showProjectList();
+            } else {
+                await Swal.fire({
+                    title: 'Error',
+                    text: data.error || 'Failed to delete project',
+                    icon: 'error'
+                });
+            }
+        } catch (error) {
+            console.error('Error deleting project:', error);
+            await Swal.fire({
+                title: 'Error',
+                text: 'Failed to delete project: ' + error.message,
+                icon: 'error'
             });
         }
     }

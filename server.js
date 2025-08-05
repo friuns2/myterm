@@ -35,6 +35,45 @@ app.get('/api/projects', (req, res) => {
   }
 });
 
+// API endpoint to delete a project
+app.delete('/api/projects/:projectName', (req, res) => {
+  const { projectName } = req.params;
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Kill any active sessions for this project
+    const sessionsToKill = [];
+    sessions.forEach((session, sessionID) => {
+      if (session.projectName === projectName) {
+        sessionsToKill.push(sessionID);
+      }
+    });
+    
+    sessionsToKill.forEach(sessionID => {
+      const session = sessions.get(sessionID);
+      if (session) {
+        session.ptyProcess.kill();
+        if (session.timeoutId) {
+          clearTimeout(session.timeoutId);
+        }
+        sessions.delete(sessionID);
+      }
+    });
+    
+    // Remove project directory recursively
+    fs.rmSync(projectPath, { recursive: true, force: true });
+    
+    res.json({ success: true, message: `Project '${projectName}' deleted successfully` });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ error: 'Failed to delete project: ' + error.message });
+  }
+});
+
 // API endpoint to create a new project
 app.post('/api/projects', express.json(), (req, res) => {
   const { name } = req.body;
@@ -49,10 +88,15 @@ app.post('/api/projects', express.json(), (req, res) => {
     }
     fs.mkdirSync(projectPath, { recursive: true });
     
-    // Initialize git repository
+    // Initialize git repository with initial commit
     try {
       execSync('git init', { cwd: projectPath, stdio: 'pipe' });
-      console.log(`Git repository initialized for project: ${name.trim()}`);
+      // Create initial README file
+      fs.writeFileSync(path.join(projectPath, 'README.md'), `# ${name.trim()}\n\nProject created on ${new Date().toISOString()}\n`);
+      // Add and commit initial file
+      execSync('git add README.md', { cwd: projectPath, stdio: 'pipe' });
+      execSync('git commit -m "Initial commit"', { cwd: projectPath, stdio: 'pipe' });
+      console.log(`Git repository initialized with initial commit for project: ${name.trim()}`);
     } catch (gitError) {
       console.warn('Failed to initialize git repository:', gitError.message);
     }
