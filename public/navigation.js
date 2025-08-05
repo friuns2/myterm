@@ -1,6 +1,6 @@
 // Navigation and URL handling module
 
-import { getURLParameter, clearURLParams } from './utils.js';
+import { getURLParameter, updateURLParameters } from './utils.js';
 import { getSessionID, getCurrentProject, setCurrentProject } from './websocket.js';
 import { showSessionsAndProjectsList, showProjectSessions } from './sessions.js';
 
@@ -58,7 +58,7 @@ export function goBackToSessionList() {
  * Navigate back to project list
  */
 export function goBackToProjectList() {
-    clearURLParams();
+    updateURLParameters(null);
     setCurrentProject(null);
     showSessionsAndProjectsList();
     hideNavigationBar();
