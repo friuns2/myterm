@@ -54,8 +54,193 @@
     }
 }
 
+/* File Browser Styles */
+.file-browser {
+    background: hsl(var(--b2));
+    border-right: 1px solid hsl(var(--b3));
+}
+
+.file-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.file-item:hover {
+    background: hsl(var(--b3));
+}
+
+.file-item.selected {
+    background: hsl(var(--p) / 0.2);
+    color: hsl(var(--pc));
+}
+
+.file-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* Editor Styles */
+.editor-container {
+    background: hsl(var(--b1));
+}
+
+.editor-textarea {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    background: hsl(var(--b1));
+    color: hsl(var(--bc));
+    border: none;
+    outline: none;
+    resize: none;
+    tab-size: 4;
+}
+
+.editor-textarea:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Tab Styles */
+.tab-content {
+    min-height: 0;
+    flex: 1;
+}
+
+.tab-active {
+    background: hsl(var(--p));
+    color: hsl(var(--pc));
+}
+
+/* File Tree Styles */
+.file-tree {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+}
+
+.file-tree-item {
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 1px 0;
+}
+
+.file-tree-folder {
+    font-weight: 500;
+}
+
+.file-tree-file {
+    color: hsl(var(--bc) / 0.8);
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .terminal-container {
+        height: 50vh;
+    }
+    
+    .virtual-keyboard {
+        padding: 0.5rem;
+    }
+    
+    .virtual-keyboard button {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Mobile layout adjustments */
+    .main-content {
+        flex-direction: column !important;
+        height: calc(100vh - 120px);
+    }
+    
+    .file-browser {
+        width: 100% !important;
+        height: 40vh !important;
+        min-height: 200px;
+        border-right: none !important;
+        border-bottom: 1px solid hsl(var(--b3));
+        order: 2;
+    }
+    
+    .content-area {
+        height: 60vh !important;
+        order: 1;
+    }
+    
+    .tab-content {
+        height: calc(60vh - 48px) !important;
+    }
+    
+    .editor-textarea {
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    
+    /* Mobile file browser */
+    .file-tree {
+        font-size: 12px;
+    }
+    
+    .file-tree-item {
+        padding: 8px;
+        margin: 2px 0;
+    }
+    
+    /* Mobile toolbar */
+    .toolbar {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .toolbar .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Mobile tabs */
+    .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+    
+    .tab {
+        flex-shrink: 0;
+        min-width: 80px;
+        font-size: 0.875rem;
+    }
+    
+    /* Mobile modals */
+    .modal-box {
+        width: 95vw;
+        max-width: 95vw;
+        margin: 0 auto;
+    }
+    
+    /* Hide file browser toggle on mobile when collapsed */
+    .file-browser.hidden + .content-area {
+        height: calc(100vh - 120px) !important;
+    }
+}
+
 /* Prevent overlap between back button and virtual keyboard on mobile */
 @media (max-width: 768px) {
+    .back-button {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        z-index: 1000;
+        background: hsl(var(--b1));
+        border: 1px solid hsl(var(--b3));
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .terminal-container {
+        padding-top: 60px;
+        padding-bottom: 70px;
+    }
+    
     /* Add bottom padding to terminal container to account for virtual keyboard */
     #terminal-container {
         padding-bottom: 70px;
@@ -73,5 +258,22 @@
     /* Adjust body to account for fixed virtual keyboard */
     body {
         padding-bottom: 70px;
+    }
+}
+
+/* Touch-friendly improvements */
+@media (max-width: 768px) and (pointer: coarse) {
+    .file-item {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .btn {
+        min-height: 44px;
+    }
+    
+    .tab {
+        min-height: 44px;
     }
 }

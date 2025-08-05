@@ -95,6 +95,194 @@ app.delete('/api/sessions/:sessionId', (req, res) => {
   }
 });
 
+// API endpoint to browse files in a project
+app.get('/api/projects/:projectName/files', (req, res) => {
+  const projectName = req.params.projectName;
+  const relativePath = req.query.path || '';
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const fullPath = path.join(projectPath, relativePath);
+  
+  // Security check: ensure path is within project directory
+  if (!fullPath.startsWith(projectPath)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  
+  try {
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'Path not found' });
+    }
+    
+    const stats = fs.statSync(fullPath);
+    if (stats.isDirectory()) {
+      const items = fs.readdirSync(fullPath, { withFileTypes: true })
+        .map(dirent => ({
+          name: dirent.name,
+          type: dirent.isDirectory() ? 'directory' : 'file',
+          path: path.join(relativePath, dirent.name).replace(/\\/g, '/')
+        }))
+        .sort((a, b) => {
+          // Directories first, then files
+          if (a.type !== b.type) {
+            return a.type === 'directory' ? -1 : 1;
+          }
+          return a.name.localeCompare(b.name);
+        });
+      
+      res.json({ type: 'directory', items });
+    } else {
+      res.json({ type: 'file', name: path.basename(fullPath) });
+    }
+  } catch (error) {
+    console.error('Error browsing files:', error);
+    res.status(500).json({ error: 'Failed to browse files' });
+  }
+});
+
+// API endpoint to read file content
+app.get('/api/projects/:projectName/files/content', (req, res) => {
+  const projectName = req.params.projectName;
+  const relativePath = req.query.path;
+  
+  if (!relativePath) {
+    return res.status(400).json({ error: 'File path is required' });
+  }
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const fullPath = path.join(projectPath, relativePath);
+  
+  // Security check: ensure path is within project directory
+  if (!fullPath.startsWith(projectPath)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  
+  try {
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    const stats = fs.statSync(fullPath);
+    if (!stats.isFile()) {
+      return res.status(400).json({ error: 'Path is not a file' });
+    }
+    
+    const content = fs.readFileSync(fullPath, 'utf8');
+    res.json({ content, path: relativePath });
+  } catch (error) {
+    console.error('Error reading file:', error);
+    res.status(500).json({ error: 'Failed to read file' });
+  }
+});
+
+// API endpoint to save file content
+app.put('/api/projects/:projectName/files/content', express.json(), (req, res) => {
+  const projectName = req.params.projectName;
+  const { path: relativePath, content } = req.body;
+  
+  if (!relativePath || content === undefined) {
+    return res.status(400).json({ error: 'File path and content are required' });
+  }
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const fullPath = path.join(projectPath, relativePath);
+  
+  // Security check: ensure path is within project directory
+  if (!fullPath.startsWith(projectPath)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  
+  try {
+    // Create directory if it doesn't exist
+    const dir = path.dirname(fullPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
+    fs.writeFileSync(fullPath, content, 'utf8');
+    res.json({ success: true, message: 'File saved successfully' });
+  } catch (error) {
+    console.error('Error saving file:', error);
+    res.status(500).json({ error: 'Failed to save file' });
+  }
+});
+
+// API endpoint to create new file or directory
+app.post('/api/projects/:projectName/files', express.json(), (req, res) => {
+  const projectName = req.params.projectName;
+  const { path: relativePath, type } = req.body;
+  
+  if (!relativePath || !type) {
+    return res.status(400).json({ error: 'Path and type are required' });
+  }
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const fullPath = path.join(projectPath, relativePath);
+  
+  // Security check: ensure path is within project directory
+  if (!fullPath.startsWith(projectPath)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  
+  try {
+    if (fs.existsSync(fullPath)) {
+      return res.status(409).json({ error: 'File or directory already exists' });
+    }
+    
+    if (type === 'directory') {
+      fs.mkdirSync(fullPath, { recursive: true });
+    } else if (type === 'file') {
+      // Create directory if it doesn't exist
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(fullPath, '', 'utf8');
+    } else {
+      return res.status(400).json({ error: 'Invalid type. Must be "file" or "directory"' });
+    }
+    
+    res.json({ success: true, message: `${type} created successfully` });
+  } catch (error) {
+    console.error('Error creating file/directory:', error);
+    res.status(500).json({ error: `Failed to create ${type}` });
+  }
+});
+
+// API endpoint to delete file or directory
+app.delete('/api/projects/:projectName/files', express.json(), (req, res) => {
+  const projectName = req.params.projectName;
+  const { path: relativePath } = req.body;
+  
+  if (!relativePath) {
+    return res.status(400).json({ error: 'File path is required' });
+  }
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const fullPath = path.join(projectPath, relativePath);
+  
+  // Security check: ensure path is within project directory
+  if (!fullPath.startsWith(projectPath)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  
+  try {
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'File or directory not found' });
+    }
+    
+    const stats = fs.statSync(fullPath);
+    if (stats.isDirectory()) {
+      fs.rmSync(fullPath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(fullPath);
+    }
+    
+    res.json({ success: true, message: 'Deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting file/directory:', error);
+    res.status(500).json({ error: 'Failed to delete' });
+  }
+});
+
 const server = app.listen(port, () => {
   console.log(`Web Terminal running at http://localhost:${port}`);
 });

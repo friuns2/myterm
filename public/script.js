@@ -6,6 +6,12 @@ const { FitAddon } = window.FitAddon;
 let terminal = null;
 let fitAddon = null;
 
+// File browser and editor state
+let currentFilePath = null;
+let currentFileContent = '';
+let isFileModified = false;
+let currentBrowsePath = '';
+
 // Function to create a new terminal instance
 function createNewTerminal() {
     // Dispose of existing terminal if it exists
@@ -373,6 +379,11 @@ async function showProjectSessions(projectName) {
                 </div>
             </div>
         `;
+        
+        // Show file browser for the project
+        setTimeout(() => {
+            showFileBrowserForProject();
+        }, 100);
     } catch (error) {
         console.error('Error fetching sessions:', error);
         const terminalContainer = document.getElementById('terminal-container');
@@ -386,6 +397,26 @@ function connectToSession(sessionId, projectName = null) {
     currentProject = projectName || currentProject;
     updateURLWithSession(sessionID, currentProject);
     initializeTerminal();
+    
+    // Show file browser for the project after connecting
+    setTimeout(() => {
+        showFileBrowserForProject();
+    }, 1000);
+}
+
+function showFileBrowserForProject() {
+    if (currentProject) {
+        currentBrowsePath = '';
+        loadFileTree();
+        const fileBrowser = document.getElementById('file-browser');
+        const toggleBtn = document.getElementById('toggle-files-btn');
+        if (fileBrowser && fileBrowser.classList.contains('hidden')) {
+            fileBrowser.classList.remove('hidden');
+            if (toggleBtn) {
+                toggleBtn.classList.add('btn-active');
+            }
+        }
+    }
 }
 
 // Function to kill a session
@@ -645,4 +676,521 @@ if (virtualKeyboard) {
             }
         }
     });
+}
+
+// File Browser and Editor Functionality
+
+// Toggle file browser visibility
+function toggleFileBrowser() {
+    const fileBrowser = document.getElementById('file-browser');
+    const toggleBtn = document.getElementById('toggle-files-btn');
+    
+    if (fileBrowser.classList.contains('hidden')) {
+        fileBrowser.classList.remove('hidden');
+        toggleBtn.classList.add('btn-active');
+        if (currentProject) {
+            loadFileTree();
+        }
+        // On mobile, scroll to file browser when opened
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                fileBrowser.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+    } else {
+        fileBrowser.classList.add('hidden');
+        toggleBtn.classList.remove('btn-active');
+    }
+}
+
+// Load file tree for current project
+async function loadFileTree(path = '') {
+    if (!currentProject) return;
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(currentProject)}/files?path=${encodeURIComponent(path)}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error loading files:', data.error);
+            return;
+        }
+        
+        const fileTree = document.getElementById('file-tree');
+        const projectNameEl = document.getElementById('current-project-name');
+        projectNameEl.textContent = currentProject;
+        
+        if (data.type === 'directory') {
+            renderFileTree(data.items, path);
+        }
+    } catch (error) {
+        console.error('Error loading file tree:', error);
+    }
+}
+
+// Render file tree
+function renderFileTree(items, basePath = '') {
+    const fileTree = document.getElementById('file-tree');
+    
+    let html = '';
+    
+    // Add back button if not at root
+    if (basePath) {
+        const parentPath = basePath.split('/').slice(0, -1).join('/');
+        html += `
+            <div class="file-item flex items-center gap-2 p-1 hover:bg-base-300 rounded cursor-pointer" data-path="${parentPath}" data-type="directory">
+                <svg class="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                <span class="text-sm text-base-content/70">..</span>
+            </div>
+        `;
+    }
+    
+    // Add files and directories
+    items.forEach(item => {
+        const icon = item.type === 'directory' 
+            ? '<svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h2a2 2 0 012 2v0H8v0z"></path></svg>'
+            : '<svg class="w-4 h-4 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>';
+        
+        html += `
+            <div class="file-item flex items-center gap-2 p-1 hover:bg-base-300 rounded cursor-pointer" data-path="${item.path}" data-type="${item.type}">
+                ${icon}
+                <span class="text-sm truncate">${item.name}</span>
+            </div>
+        `;
+    });
+    
+    fileTree.innerHTML = html;
+    currentBrowsePath = basePath;
+    
+    // Add click handlers
+    fileTree.querySelectorAll('.file-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const path = item.dataset.path;
+            const type = item.dataset.type;
+            
+            if (type === 'directory') {
+                loadFileTree(path);
+            } else {
+                openFile(path);
+            }
+        });
+        
+        // Add context menu for delete
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const path = item.dataset.path;
+            if (path && path !== '..') {
+                if (confirm(`Delete ${item.dataset.type} "${path}"?`)) {
+                    deleteFileOrFolder(path);
+                }
+            }
+        });
+    });
+}
+
+// Open file in editor
+async function openFile(filePath) {
+    if (!currentProject || !filePath) return;
+    
+    // Check if current file is modified
+    if (isFileModified && !confirm('You have unsaved changes. Continue without saving?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(currentProject)}/files/content?path=${encodeURIComponent(filePath)}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error loading file:', data.error);
+            return;
+        }
+        
+        currentFilePath = filePath;
+        currentFileContent = data.content;
+        isFileModified = false;
+        
+        // Update UI
+        document.getElementById('file-editor').value = data.content;
+        document.getElementById('current-file-name').textContent = filePath;
+        document.getElementById('current-file-name').classList.remove('hidden');
+        document.getElementById('save-file-btn').classList.remove('hidden');
+        document.getElementById('editor-tab').classList.remove('hidden');
+        
+        // Switch to editor tab
+        switchToEditor();
+        
+    } catch (error) {
+        console.error('Error opening file:', error);
+    }
+}
+
+// Save current file
+async function saveFile() {
+    if (!currentProject || !currentFilePath) return;
+    
+    const content = document.getElementById('file-editor').value;
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(currentProject)}/files/content`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: currentFilePath,
+                content: content
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error saving file:', data.error);
+            alert('Error saving file: ' + data.error);
+            return;
+        }
+        
+        currentFileContent = content;
+        isFileModified = false;
+        updateSaveButtonState();
+        
+        // Show success feedback
+        const saveBtn = document.getElementById('save-file-btn');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Saved';
+        setTimeout(() => {
+            saveBtn.innerHTML = originalText;
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Error saving file:', error);
+        alert('Error saving file');
+    }
+}
+
+// Create new file
+async function createNewFile(fileName) {
+    if (!currentProject || !fileName) return;
+    
+    const filePath = currentBrowsePath ? `${currentBrowsePath}/${fileName}` : fileName;
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(currentProject)}/files`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: filePath,
+                type: 'file'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            alert('Error creating file: ' + data.error);
+            return;
+        }
+        
+        // Refresh file tree and open the new file
+        loadFileTree(currentBrowsePath);
+        openFile(filePath);
+        
+    } catch (error) {
+        console.error('Error creating file:', error);
+        alert('Error creating file');
+    }
+}
+
+// Create new folder
+async function createNewFolder(folderName) {
+    if (!currentProject || !folderName) return;
+    
+    const folderPath = currentBrowsePath ? `${currentBrowsePath}/${folderName}` : folderName;
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(currentProject)}/files`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: folderPath,
+                type: 'directory'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            alert('Error creating folder: ' + data.error);
+            return;
+        }
+        
+        // Refresh file tree
+        loadFileTree(currentBrowsePath);
+        
+    } catch (error) {
+        console.error('Error creating folder:', error);
+        alert('Error creating folder');
+    }
+}
+
+// Delete file or folder
+async function deleteFileOrFolder(path) {
+    if (!currentProject || !path) return;
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(currentProject)}/files`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: path
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            alert('Error deleting: ' + data.error);
+            return;
+        }
+        
+        // If deleted file is currently open, close it
+        if (currentFilePath === path) {
+            closeFile();
+        }
+        
+        // Refresh file tree
+        loadFileTree(currentBrowsePath);
+        
+    } catch (error) {
+        console.error('Error deleting:', error);
+        alert('Error deleting');
+    }
+}
+
+// Close current file
+function closeFile() {
+    currentFilePath = null;
+    currentFileContent = '';
+    isFileModified = false;
+    
+    document.getElementById('file-editor').value = '';
+    document.getElementById('current-file-name').classList.add('hidden');
+    document.getElementById('save-file-btn').classList.add('hidden');
+    document.getElementById('editor-tab').classList.add('hidden');
+    
+    switchToTerminal();
+}
+
+// Switch between terminal and editor
+function switchToTerminal() {
+    document.getElementById('terminal-container').classList.remove('hidden');
+    document.getElementById('editor-container').classList.add('hidden');
+    document.getElementById('terminal-tab').classList.add('btn-active');
+    document.getElementById('terminal-tab').classList.remove('btn-ghost');
+    document.getElementById('editor-tab').classList.remove('btn-active');
+    document.getElementById('editor-tab').classList.add('btn-ghost');
+    
+    // Resize terminal
+    if (terminal && fitAddon) {
+        setTimeout(() => {
+            fitAddon.fit();
+        }, 100);
+    }
+}
+
+function switchToEditor() {
+    document.getElementById('terminal-container').classList.add('hidden');
+    document.getElementById('editor-container').classList.remove('hidden');
+    document.getElementById('editor-tab').classList.add('btn-active');
+    document.getElementById('editor-tab').classList.remove('btn-ghost');
+    document.getElementById('terminal-tab').classList.remove('btn-active');
+    document.getElementById('terminal-tab').classList.add('btn-ghost');
+    
+    // Focus editor
+    document.getElementById('file-editor').focus();
+}
+
+// Update save button state
+function updateSaveButtonState() {
+    const saveBtn = document.getElementById('save-file-btn');
+    if (isFileModified) {
+        saveBtn.classList.remove('btn-ghost');
+        saveBtn.classList.add('btn-primary');
+    } else {
+        saveBtn.classList.add('btn-ghost');
+        saveBtn.classList.remove('btn-primary');
+    }
+}
+
+// Event Listeners
+
+// Toggle files button
+document.getElementById('toggle-files-btn').addEventListener('click', toggleFileBrowser);
+
+// Tab switching
+document.getElementById('terminal-tab').addEventListener('click', switchToTerminal);
+document.getElementById('editor-tab').addEventListener('click', switchToEditor);
+
+// Save file button
+document.getElementById('save-file-btn').addEventListener('click', saveFile);
+
+// File editor change detection
+document.getElementById('file-editor').addEventListener('input', () => {
+    const currentContent = document.getElementById('file-editor').value;
+    isFileModified = currentContent !== currentFileContent;
+    updateSaveButtonState();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Ctrl+S to save
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        if (currentFilePath) {
+            saveFile();
+        }
+    }
+    
+    // Ctrl+` to toggle terminal/editor
+    if (e.ctrlKey && e.key === '`') {
+        e.preventDefault();
+        const terminalVisible = !document.getElementById('terminal-container').classList.contains('hidden');
+        if (terminalVisible && currentFilePath) {
+            switchToEditor();
+        } else {
+            switchToTerminal();
+        }
+    }
+});
+
+// Mobile touch handling
+let touchStartY = 0;
+let touchStartX = 0;
+
+document.addEventListener('touchstart', function(e) {
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+}, { passive: true });
+
+document.addEventListener('touchend', function(e) {
+    if (!touchStartY || !touchStartX) return;
+    
+    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diffY = touchStartY - touchEndY;
+    const diffX = touchStartX - touchEndX;
+    
+    // Only handle swipes on mobile
+    if (window.innerWidth <= 768) {
+        // Horizontal swipe to toggle file browser (only if vertical swipe is minimal)
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50 && Math.abs(diffY) < 100) {
+            const fileBrowser = document.getElementById('file-browser');
+            if (diffX > 0 && !fileBrowser.classList.contains('hidden')) {
+                // Swipe left to hide file browser
+                toggleFileBrowser();
+            } else if (diffX < 0 && fileBrowser.classList.contains('hidden')) {
+                // Swipe right to show file browser
+                toggleFileBrowser();
+            }
+        }
+    }
+    
+    touchStartY = 0;
+    touchStartX = 0;
+}, { passive: true });
+
+// Handle orientation changes
+window.addEventListener('orientationchange', function() {
+    setTimeout(() => {
+        // Recalculate terminal size
+        if (terminal && fitAddon) {
+            fitAddon.fit();
+        }
+        
+        // Adjust layout
+        const fileBrowser = document.getElementById('file-browser');
+        const contentArea = document.getElementById('content-area');
+        
+        if (window.innerWidth <= 768) {
+            // Portrait mode - stack vertically
+            if (fileBrowser && contentArea) {
+                fileBrowser.style.height = '40vh';
+                contentArea.style.height = '60vh';
+            }
+        } else {
+            // Landscape mode - side by side
+            if (fileBrowser && contentArea) {
+                fileBrowser.style.height = 'auto';
+                contentArea.style.height = 'auto';
+            }
+        }
+    }, 100);
+});
+
+// New file/folder buttons
+document.getElementById('new-file-btn').addEventListener('click', () => {
+    document.getElementById('new-file-modal').classList.add('modal-open');
+    document.getElementById('new-file-name').focus();
+});
+
+document.getElementById('new-folder-btn').addEventListener('click', () => {
+    document.getElementById('new-folder-modal').classList.add('modal-open');
+    document.getElementById('new-folder-name').focus();
+});
+
+document.getElementById('refresh-files-btn').addEventListener('click', () => {
+    loadFileTree(currentBrowsePath);
+});
+
+// Modal handlers
+document.getElementById('create-file-btn').addEventListener('click', () => {
+    const fileName = document.getElementById('new-file-name').value.trim();
+    if (fileName) {
+        createNewFile(fileName);
+        document.getElementById('new-file-modal').classList.remove('modal-open');
+        document.getElementById('new-file-name').value = '';
+    }
+});
+
+document.getElementById('create-folder-btn').addEventListener('click', () => {
+    const folderName = document.getElementById('new-folder-name').value.trim();
+    if (folderName) {
+        createNewFolder(folderName);
+        document.getElementById('new-folder-modal').classList.remove('modal-open');
+        document.getElementById('new-folder-name').value = '';
+    }
+});
+
+// Enter key in modals
+document.getElementById('new-file-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('create-file-btn').click();
+    }
+});
+
+document.getElementById('new-folder-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('create-folder-btn').click();
+    }
+});
+
+// Show file browser when a project is selected
+function showFileBrowserForProject() {
+    if (currentProject) {
+        const fileBrowser = document.getElementById('file-browser');
+        if (fileBrowser.classList.contains('hidden')) {
+            toggleFileBrowser();
+        } else {
+            loadFileTree();
+        }
+    }
 }
