@@ -10,9 +10,35 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-base-100 h-screen flex flex-col overflow-hidden">
-    <!-- Terminal Container -->
-    <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden">
-        <div id="terminal" class="w-full h-full"></div>
+    <!-- Main Content Area -->
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Directory Browser -->
+        <div id="directory-browser" class="w-64 bg-base-200 border-r border-base-300 flex flex-col">
+            <div class="p-2 border-b border-base-300">
+                <h3 class="text-sm font-semibold">Project Files</h3>
+                <button id="refresh-files" class="btn btn-xs btn-outline mt-1">Refresh</button>
+            </div>
+            <div id="file-tree" class="flex-1 overflow-y-auto p-2">
+                <!-- File tree will be populated here -->
+            </div>
+        </div>
+
+        <!-- Terminal Container -->
+        <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden">
+            <div id="terminal" class="w-full h-full"></div>
+        </div>
+
+        <!-- File Editor -->
+        <div id="file-editor" class="w-96 bg-base-100 border-l border-base-300 flex flex-col hidden">
+            <div class="p-2 border-b border-base-300 flex justify-between items-center">
+                <span id="editor-filename" class="text-sm font-semibold">No file selected</span>
+                <div class="flex gap-1">
+                    <button id="save-file" class="btn btn-xs btn-primary" disabled>Save</button>
+                    <button id="close-editor" class="btn btn-xs btn-outline">Close</button>
+                </div>
+            </div>
+            <textarea id="file-content" class="flex-1 p-2 bg-base-100 font-mono text-sm resize-none border-none outline-none" placeholder="Select a file to edit..."></textarea>
+        </div>
     </div>
 
     <!-- Command Input and Virtual Keyboard Section -->
