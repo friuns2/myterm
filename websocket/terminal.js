@@ -78,12 +78,9 @@ function setupWebSocketServer(server) {
             }));
 
             // Set up PTY event handlers only for new sessions
-            // Capture sessionID in closure to prevent interference between sessions
-            const currentSessionID = sessionID;
-            
             // Send PTY output to WebSocket and buffer it
             ptyProcess.onData((data) => {
-                const currentSession = sessions.get(currentSessionID);
+                const currentSession = sessions.get(sessionID);
                 if (currentSession) {
                     // Add data to buffer
                     currentSession.buffer += data;
@@ -107,7 +104,7 @@ function setupWebSocketServer(server) {
             // Handle PTY exit
             ptyProcess.onExit(({ exitCode, signal }) => {
                 console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
-                const currentSession = sessions.get(currentSessionID);
+                const currentSession = sessions.get(sessionID);
                 if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
                     currentSession.ws.send(JSON.stringify({
                         type: 'exit',
@@ -115,7 +112,7 @@ function setupWebSocketServer(server) {
                         signal
                     }));
                 }
-                sessions.delete(currentSessionID); // Clean up session on exit
+                sessions.delete(sessionID); // Clean up session on exit
             });
         }
 
@@ -185,4 +182,4 @@ module.exports = {
     setupWebSocketServer,
     getSessions,
     deleteSession
-};
+}; 
