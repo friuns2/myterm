@@ -101,6 +101,7 @@ function ansiToHtml(text) {
 let ws;
 let sessionID = getSessionIDFromURL(); // Get session ID from URL only
 let currentProject = getProjectFromURL() || null;
+let currentWorktree = getWorktreeFromURL() || null;
 let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -117,6 +118,11 @@ function getProjectFromURL() {
     return urlParams.get('project');
 }
 
+function getWorktreeFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('worktree');
+}
+
 // Function to update URL with session ID using pushState for navigation history
 function updateURLWithSession(sessionId, projectName = null) {
     const url = new URL(window.location);
@@ -131,7 +137,16 @@ function updateURLWithProject(projectName) {
     const url = new URL(window.location);
     url.searchParams.delete('session');
     url.searchParams.set('project', projectName);
+    url.searchParams.delete('worktree');
     window.history.pushState({ project: projectName }, '', url);
+}
+
+function updateURLWithWorktree(projectName, worktreeName) {
+    const url = new URL(window.location);
+    url.searchParams.set('project', projectName);
+    url.searchParams.set('worktree', worktreeName);
+    url.searchParams.delete('session');
+    window.history.pushState({}, '', url);
 }
 
 function clearURLParams() {
@@ -170,6 +185,9 @@ const connectWebSocket = () => {
     }
     if (currentProject) {
         params.append('projectName', currentProject);
+    }
+    if (currentWorktree) {
+        params.append('worktreeName', currentWorktree);
     }
     
     if (params.toString()) {
@@ -276,9 +294,14 @@ async function showProjectList() {
                                         <div class="cursor-pointer flex-1" onclick="selectProject('${project}')">
                                             <h2 class="card-title text-sm">${project}</h2>
                                         </div>
-                                        <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
-                                            Open
-                                        </button>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-secondary btn-sm" onclick="createWorktree('${project}')">
+                                                Create Worktree
+                                            </button>
+                                            <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
+                                                Open
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -333,8 +356,13 @@ function selectProject(projectName) {
 
 async function showProjectSessions(projectName) {
     try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`);
-        const sessions = await response.json();
+        const [sessionsResponse, worktreesResponse] = await Promise.all([
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`),
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`)
+        ]);
+        
+        const sessions = await sessionsResponse.json();
+        const worktrees = await worktreesResponse.json();
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
@@ -343,40 +371,78 @@ async function showProjectSessions(projectName) {
                     <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
                 </div>
                 <h1 class="text-2xl font-bold mb-6 text-center">Sessions for Project: ${projectName}</h1>
-                <div class="grid gap-4 mb-6">
-                    ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
-                        sessions.map(session => `
-                            <div class="card bg-base-200 shadow-xl">
-                                <div class="card-body p-4">
-                                    <div class="flex justify-between items-start">
-                                        <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
-                                            <h2 class="card-title text-sm">${session.id}</h2>
-                                            <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
-                                            <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
-                                                Connect
-                                            </button>
-                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
-                                                Kill
-                                            </button>
+                
+                <!-- Sessions Section -->
+                <div class="mb-8">
+                    <h2 class="text-lg font-semibold mb-4">Active Sessions</h2>
+                    <div class="grid gap-4 mb-6">
+                        ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
+                            sessions.map(session => `
+                                <div class="card bg-base-200 shadow-xl">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                <h2 class="card-title text-sm">${session.id}</h2>
+                                                <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                    Connect
+                                                </button>
+                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                    Kill
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        `).join('')
-                    }
+                            `).join('')
+                        }
+                    </div>
+                    <div class="text-center">
+                        <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
+                    </div>
                 </div>
-                <div class="text-center">
-                    <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
+                
+                <!-- Worktrees Section -->
+                <div class="mb-8">
+                    <h2 class="text-lg font-semibold mb-4">Sessions for Worktrees</h2>
+                    <div class="grid gap-4 mb-6">
+                        ${worktrees.length === 0 ? '<p class="text-center opacity-70">No worktrees for this project</p>' : 
+                            worktrees.map(worktree => `
+                                <div class="card bg-base-300 shadow-xl">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="cursor-pointer flex-1" onclick="openWorktreeSession('${projectName}', '${worktree.name}')">
+                                                <h2 class="card-title text-sm">${worktree.name}</h2>
+                                                <p class="text-xs opacity-70">Branch: ${worktree.branch}</p>
+                                                <p class="text-xs opacity-70">Status: <span class="${worktree.status === 'clean' ? 'text-success' : 'text-warning'}">${worktree.status}</span></p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="openWorktreeSession('${projectName}', '${worktree.name}')">
+                                                    Open
+                                                </button>
+                                                <button class="btn btn-success btn-sm" onclick="mergeWorktree('${projectName}', '${worktree.name}')">
+                                                    Merge Back
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                    <div class="text-center">
+                        <button class="btn btn-secondary" onclick="createWorktree('${projectName}')">Create New Worktree</button>
+                    </div>
                 </div>
             </div>
         `;
     } catch (error) {
-        console.error('Error fetching sessions:', error);
+        console.error('Error fetching sessions and worktrees:', error);
         const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading sessions</div>';
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading sessions and worktrees</div>';
     }
 }
 
@@ -418,6 +484,79 @@ function createNewSessionForProject(projectName) {
     currentProject = projectName;
     updateURLWithProject(projectName);
     initializeTerminal();
+}
+
+// Function to create a new worktree
+async function createWorktree(projectName) {
+    const branchName = prompt('Enter branch name for the worktree:');
+    if (!branchName || branchName.trim() === '') {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ branchName: branchName.trim() })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(`Worktree '${result.name}' created successfully for branch '${result.branch}'`);
+            // Refresh the current view
+            if (currentProject === projectName) {
+                showProjectSessions(projectName);
+            } else {
+                showProjectList();
+            }
+        } else {
+            alert(result.error || 'Failed to create worktree');
+        }
+    } catch (error) {
+        console.error('Error creating worktree:', error);
+        alert('Error creating worktree');
+    }
+}
+
+// Function to open a session in a worktree
+function openWorktreeSession(projectName, worktreeName) {
+    sessionID = null;
+    currentProject = projectName;
+    currentWorktree = worktreeName;
+    updateURLWithWorktree(projectName, worktreeName);
+    initializeTerminal();
+}
+
+// Function to merge worktree back to main
+async function mergeWorktree(projectName, worktreeName) {
+    if (!confirm(`Are you sure you want to merge worktree '${worktreeName}' back to main and delete it?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(worktreeName)}/merge`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Worktree merged and removed successfully');
+            // Refresh the sessions view
+            showProjectSessions(projectName);
+        } else {
+            alert(result.error || 'Failed to merge worktree');
+        }
+    } catch (error) {
+        console.error('Error merging worktree:', error);
+        alert('Error merging worktree');
+    }
 }
 
 // Function to initialize terminal
@@ -543,77 +682,6 @@ if (customCommandInput && sendCommandButton) {
     customCommandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             sendCommand();
-        }
-    });
-}
-
-// Git Worktree Management
-const branchNameInput = document.getElementById('branch-name-input');
-const createWorktreeButton = document.getElementById('create-worktree-button');
-const mergeWorktreeButton = document.getElementById('merge-worktree-button');
-const listWorktreesButton = document.getElementById('list-worktrees-button');
-
-if (createWorktreeButton) {
-    createWorktreeButton.addEventListener('click', () => {
-        const branchName = branchNameInput.value.trim();
-        if (!branchName) {
-            alert('Please enter a branch name');
-            return;
-        }
-        
-        // Create worktree in ../projectname/worktrees/branchname-w1 format
-        const worktreePath = `../myshell6/worktrees/${branchName}-w1`;
-        const command = `git worktree add ${worktreePath} -b ${branchName}`;
-        
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'input',
-                data: command + '\r'
-            }));
-            branchNameInput.value = '';
-        }
-    });
-}
-
-if (mergeWorktreeButton) {
-    mergeWorktreeButton.addEventListener('click', () => {
-        const branchName = branchNameInput.value.trim();
-        if (!branchName) {
-            alert('Please enter the branch name to merge');
-            return;
-        }
-        
-        // Merge the branch back to main and remove worktree
-        const commands = [
-            `git checkout main`,
-            `git merge ${branchName}`,
-            `git worktree remove ../myshell6/worktrees/${branchName}-w1`,
-            `git branch -d ${branchName}`
-        ];
-        
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            commands.forEach((command, index) => {
-                setTimeout(() => {
-                    ws.send(JSON.stringify({
-                        type: 'input',
-                        data: command + '\r'
-                    }));
-                }, index * 1000); // Delay each command by 1 second
-            });
-            branchNameInput.value = '';
-        }
-    });
-}
-
-if (listWorktreesButton) {
-    listWorktreesButton.addEventListener('click', () => {
-        const command = 'git worktree list';
-        
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'input',
-                data: command + '\r'
-            }));
         }
     });
 }
