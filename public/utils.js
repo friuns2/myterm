@@ -1,13 +1,20 @@
-// Utility functions for the web terminal application
+// Utility functions for text processing and common operations
 
-// Function to strip ANSI escape sequences from text
-function stripAnsiCodes(text) {
-    // Remove ANSI escape sequences
+/**
+ * Strip ANSI escape sequences from text
+ * @param {string} text - Text containing ANSI codes
+ * @returns {string} - Clean text without ANSI codes
+ */
+export function stripAnsiCodes(text) {
     return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
 }
 
-// Function to convert ANSI escape sequences to HTML
-function ansiToHtml(text) {
+/**
+ * Convert ANSI escape sequences to HTML
+ * @param {string} text - Text containing ANSI codes
+ * @returns {string} - HTML formatted text
+ */
+export function ansiToHtml(text) {
     // Basic ANSI color codes mapping
     const ansiColors = {
         '30': 'color: #000000', // black
@@ -61,37 +68,72 @@ function ansiToHtml(text) {
     return result;
 }
 
-// Function to get session ID from URL parameters
-function getSessionIDFromURL() {
+/**
+ * Get URL parameter value
+ * @param {string} param - Parameter name
+ * @returns {string|null} - Parameter value or null
+ */
+export function getURLParameter(param) {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('session');
+    return urlParams.get(param);
 }
 
-function getProjectFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('project');
-}
-
-// Function to update URL with session ID using pushState for navigation history
-function updateURLWithSession(sessionId, projectName = null) {
+/**
+ * Update URL parameters without page reload
+ * @param {Object} params - Object with parameter key-value pairs
+ */
+export function updateURLParameters(params) {
     const url = new URL(window.location);
-    url.searchParams.set('session', sessionId);
-    if (projectName) {
-        url.searchParams.set('project', projectName);
+    
+    // Clear existing parameters if params is null
+    if (params === null) {
+        url.search = '';
+    } else {
+        Object.entries(params).forEach(([key, value]) => {
+            if (value === null || value === undefined) {
+                url.searchParams.delete(key);
+            } else {
+                url.searchParams.set(key, value);
+            }
+        });
     }
-    window.history.pushState({ sessionId: sessionId }, '', url);
-}
-
-function updateURLWithProject(projectName) {
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    url.searchParams.set('project', projectName);
-    window.history.pushState({ project: projectName }, '', url);
-}
-
-function clearURLParams() {
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    url.searchParams.delete('project');
+    
     window.history.pushState({}, '', url);
+}
+
+/**
+ * Show loading state on a button
+ * @param {HTMLElement} button - Button element
+ * @param {string} loadingText - Text to show while loading
+ * @returns {Function} - Function to restore original state
+ */
+export function setButtonLoading(button, loadingText = 'Loading...') {
+    const originalText = button.textContent;
+    const originalDisabled = button.disabled;
+    
+    button.textContent = loadingText;
+    button.disabled = true;
+    
+    return () => {
+        button.textContent = originalText;
+        button.disabled = originalDisabled;
+    };
+}
+
+/**
+ * Debounce function to limit rapid function calls
+ * @param {Function} func - Function to debounce
+ * @param {number} wait - Wait time in milliseconds
+ * @returns {Function} - Debounced function
+ */
+export function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 } 

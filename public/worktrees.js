@@ -1,7 +1,15 @@
-// Worktree management functions
+// Worktrees management module
 
-function createWorktreeModal(projectName) {
-    const modal = document.getElementById('new-worktree-modal');
+import { showSessionsAndProjectsList } from './sessions.js';
+import { setCurrentProject, updateURLWithProject } from './websocket.js';
+
+/**
+ * Create worktree modal
+ * @param {string} projectName - Name of the project
+ */
+export function createWorktreeModal(projectName) {
+    let modal = document.getElementById('new-worktree-modal');
+    
     if (!modal) {
         // Create the modal if it doesn't exist
         const modalHTML = `
@@ -45,34 +53,62 @@ function createWorktreeModal(projectName) {
             document.getElementById('new-worktree-modal').close();
         });
         
-        const worktreeNameInput = document.getElementById('new-worktree-name');
-        const worktreeBranchInput = document.getElementById('new-worktree-branch');
+        setupWorktreeModalKeyListeners(projectName);
         
+        modal = document.getElementById('new-worktree-modal');
+    }
+    
+    // Clear inputs and show modal
+    const nameInput = document.getElementById('new-worktree-name');
+    const branchInput = document.getElementById('new-worktree-branch');
+    
+    if (nameInput) nameInput.value = '';
+    if (branchInput) branchInput.value = '';
+    
+    modal.showModal();
+    if (nameInput) nameInput.focus();
+}
+
+/**
+ * Setup keyboard listeners for worktree modal
+ * @param {string} projectName - Project name
+ */
+function setupWorktreeModalKeyListeners(projectName) {
+    const worktreeNameInput = document.getElementById('new-worktree-name');
+    const worktreeBranchInput = document.getElementById('new-worktree-branch');
+    
+    if (worktreeNameInput) {
         worktreeNameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleWorktreeCreation(projectName);
-            }
-        });
-        
-        worktreeBranchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 handleWorktreeCreation(projectName);
             }
         });
     }
     
-    // Clear inputs and show modal
-    document.getElementById('new-worktree-name').value = '';
-    document.getElementById('new-worktree-branch').value = '';
-    document.getElementById('new-worktree-modal').showModal();
-    document.getElementById('new-worktree-name').focus();
+    if (worktreeBranchInput) {
+        worktreeBranchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleWorktreeCreation(projectName);
+            }
+        });
+    }
 }
 
-async function handleWorktreeCreation(projectName) {
+/**
+ * Handle worktree creation
+ * @param {string} projectName - Project name
+ */
+export async function handleWorktreeCreation(projectName) {
     const nameInput = document.getElementById('new-worktree-name');
     const branchInput = document.getElementById('new-worktree-branch');
+    
+    if (!nameInput) {
+        console.error('Worktree name input not found');
+        return;
+    }
+    
     const name = nameInput.value.trim();
-    const branch = branchInput.value.trim();
+    const branch = branchInput ? branchInput.value.trim() : '';
     
     if (!name) {
         await Swal.fire({
@@ -95,7 +131,19 @@ async function handleWorktreeCreation(projectName) {
         const result = await response.json();
         
         if (response.ok) {
-            document.getElementById('new-worktree-modal').close();
+            const modal = document.getElementById('new-worktree-modal');
+            if (modal) {
+                modal.close();
+            }
+            
+            await Swal.fire({
+                title: 'Success!',
+                text: result.message || 'Worktree created successfully',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+            
             // Go back to dashboard
             showSessionsAndProjectsList();
         } else {
@@ -109,29 +157,44 @@ async function handleWorktreeCreation(projectName) {
         console.error('Error creating worktree:', error);
         await Swal.fire({
             title: 'Error',
-            text: 'Error creating worktree',
+            text: 'Error creating worktree: ' + error.message,
             icon: 'error'
         });
     }
 }
 
-function openWorktree(projectName, worktreeName) {
+/**
+ * Open worktree in terminal
+ * @param {string} projectName - Project name
+ * @param {string} worktreeName - Worktree name
+ */
+export function openWorktree(projectName, worktreeName) {
     // Open a new terminal session in the worktree directory
-    sessionID = null;
-    currentProject = `${projectName}/worktrees/${worktreeName}`;
-    updateURLWithProject(currentProject);
-    initializeTerminal();
+    const worktreeProject = `${projectName}/worktrees/${worktreeName}`;
+    setCurrentProject(worktreeProject);
+    updateURLWithProject(worktreeProject);
+    
+    // Import and initialize terminal here to avoid circular dependency
+    import('./main.js').then(main => {
+        main.initializeTerminal();
+    });
 }
 
-async function mergeWorktree(projectName, worktreeName) {
+/**
+ * Merge worktree
+ * @param {string} projectName - Project name
+ * @param {string} worktreeName - Worktree name
+ */
+export async function mergeWorktree(projectName, worktreeName) {
     const { value: targetBranch } = await Swal.fire({
         title: 'Enter target branch',
         input: 'text',
         inputLabel: 'Target branch to merge into',
         inputValue: 'main',
         showCancelButton: true,
+        confirmButtonText: 'Continue',
         inputValidator: (value) => {
-            if (!value) {
+            if (!value || !value.trim()) {
                 return 'You need to enter a branch name!';
             }
         }
@@ -141,7 +204,7 @@ async function mergeWorktree(projectName, worktreeName) {
     
     const confirmResult = await Swal.fire({
         title: 'Confirm merge',
-        text: `Are you sure you want to merge worktree "${worktreeName}" into "${targetBranch}"? This will also delete the worktree.`,
+        html: `Are you sure you want to merge worktree <strong>"${worktreeName}"</strong> into <strong>"${targetBranch}"</strong>?<br><br><em>This will also delete the worktree after merging.</em>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -157,7 +220,7 @@ async function mergeWorktree(projectName, worktreeName) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ targetBranch: targetBranch || 'main' })
+            body: JSON.stringify({ targetBranch: targetBranch.trim() })
         });
         
         const result = await response.json();
@@ -181,16 +244,21 @@ async function mergeWorktree(projectName, worktreeName) {
         console.error('Error merging worktree:', error);
         await Swal.fire({
             title: 'Error',
-            text: 'Error merging worktree',
+            text: 'Error merging worktree: ' + error.message,
             icon: 'error'
         });
     }
 }
 
-async function deleteWorktree(projectName, worktreeName) {
+/**
+ * Delete worktree
+ * @param {string} projectName - Project name
+ * @param {string} worktreeName - Worktree name
+ */
+export async function deleteWorktree(projectName, worktreeName) {
     const confirmResult = await Swal.fire({
         title: 'Delete Worktree',
-        text: `Are you sure you want to delete worktree "${worktreeName}"? This action cannot be undone.`,
+        html: `Are you sure you want to delete worktree <strong>"${worktreeName}"</strong>?<br><br><em>This action cannot be undone.</em>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
@@ -212,7 +280,9 @@ async function deleteWorktree(projectName, worktreeName) {
             await Swal.fire({
                 title: 'Success!',
                 text: result.message || 'Worktree deleted successfully',
-                icon: 'success'
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
             });
             // Go back to dashboard
             showSessionsAndProjectsList();
@@ -227,7 +297,7 @@ async function deleteWorktree(projectName, worktreeName) {
         console.error('Error deleting worktree:', error);
         await Swal.fire({
             title: 'Error',
-            text: 'Error deleting worktree',
+            text: 'Error deleting worktree: ' + error.message,
             icon: 'error'
         });
     }

@@ -1,32 +1,65 @@
-// File browser and editor functionality
+// File browser module
 
-// File browser and editor state
+import { getCurrentProject } from './websocket.js';
+
+// File browser state
 let currentBrowserPath = null;
-let currentEditingFile = null;
 let isFileBrowserOpen = false;
-let isFileEditorOpen = false;
 
-async function toggleFileBrowser() {
+/**
+ * Toggle file browser visibility
+ */
+export async function toggleFileBrowser() {
     const fileBrowser = document.getElementById('file-browser');
+    if (!fileBrowser) {
+        console.error('File browser element not found');
+        return;
+    }
     
     if (isFileBrowserOpen) {
-        fileBrowser.classList.add('hidden');
-        fileBrowser.classList.remove('flex', 'fullscreen');
-        isFileBrowserOpen = false;
+        closeBrowser();
     } else {
-        fileBrowser.classList.remove('hidden');
-        fileBrowser.classList.add('flex', 'fullscreen');
-        isFileBrowserOpen = true;
-        
-        // Load initial directory (project directory or home)
-        const initialPath = currentProject ? 
-            `../projects/${currentProject}` : 
-            process.env.HOME || '~';
-        await loadDirectory(initialPath);
+        await openBrowser();
     }
 }
 
-async function loadDirectory(dirPath) {
+/**
+ * Open file browser
+ */
+async function openBrowser() {
+    const fileBrowser = document.getElementById('file-browser');
+    if (!fileBrowser) return;
+    
+    fileBrowser.classList.remove('hidden');
+    fileBrowser.classList.add('flex', 'fullscreen');
+    isFileBrowserOpen = true;
+    
+    // Load initial directory (project directory or home)
+    const currentProject = getCurrentProject();
+    const initialPath = currentProject ? 
+        `../projects/${currentProject}` : 
+        (process.env.HOME || '~');
+    
+    await loadDirectory(initialPath);
+}
+
+/**
+ * Close file browser
+ */
+function closeBrowser() {
+    const fileBrowser = document.getElementById('file-browser');
+    if (!fileBrowser) return;
+    
+    fileBrowser.classList.add('hidden');
+    fileBrowser.classList.remove('flex', 'fullscreen');
+    isFileBrowserOpen = false;
+}
+
+/**
+ * Load directory contents
+ * @param {string} dirPath - Directory path to load
+ */
+export async function loadDirectory(dirPath) {
     try {
         const response = await fetch(`/api/browse?path=${encodeURIComponent(dirPath)}`);
         const data = await response.json();
@@ -53,9 +86,16 @@ async function loadDirectory(dirPath) {
     }
 }
 
+/**
+ * Display directory contents in the file list
+ * @param {Object} data - Directory data from server
+ */
 function displayDirectoryContents(data) {
     const fileList = document.getElementById('file-list');
-    if (!fileList) return;
+    if (!fileList) {
+        console.error('File list element not found');
+        return;
+    }
     
     fileList.innerHTML = '';
     
@@ -76,9 +116,14 @@ function displayDirectoryContents(data) {
     });
 }
 
+/**
+ * Create a file item element
+ * @param {Object} item - File/directory item data
+ * @returns {HTMLElement} - File item element
+ */
 function createFileItem(item) {
     const div = document.createElement('div');
-    div.className = 'file-item p-2 rounded cursor-pointer flex items-center gap-2 text-sm';
+    div.className = 'file-item p-2 rounded cursor-pointer flex items-center gap-2 text-sm hover:bg-base-300 transition-colors';
     
     const icon = item.type === 'directory' ? '📁' : '📄';
     const name = item.name.length > 25 ? item.name.substring(0, 22) + '...' : item.name;
@@ -92,141 +137,58 @@ function createFileItem(item) {
         if (item.type === 'directory') {
             loadDirectory(item.path);
         } else {
-            openFileInEditor(item.path);
+            // Import file editor to avoid circular dependency
+            import('./fileEditor.js').then(fileEditor => {
+                fileEditor.openFileInEditor(item.path);
+            });
         }
     });
     
     return div;
 }
 
-async function openFileInEditor(filePath) {
-    try {
-        const response = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to load file');
-        }
-        
-        currentEditingFile = data.path;
-        
-        // Show editor panel in fullscreen
-        const fileEditor = document.getElementById('file-editor');
-        fileEditor.classList.remove('hidden');
-        fileEditor.classList.add('flex', 'fullscreen');
-        isFileEditorOpen = true;
-        
-        // Update editor content
-        const fileContent = document.getElementById('file-content');
-        const editorFilename = document.getElementById('editor-filename');
-        
-        if (fileContent) {
-            fileContent.value = data.content;
-        }
-        
-        if (editorFilename) {
-            const filename = filePath.split('/').pop();
-            editorFilename.textContent = filename;
-        }
-        
-    } catch (error) {
-        console.error('Error opening file:', error);
-        await Swal.fire({
-            title: 'Error',
-            text: 'Failed to open file: ' + error.message,
-            icon: 'error'
-        });
-    }
-}
-
-async function saveCurrentFile() {
-    if (!currentEditingFile) {
-        await Swal.fire({
-            title: 'Warning',
-            text: 'No file is currently being edited',
-            icon: 'warning'
-        });
+/**
+ * Create new file
+ */
+export function createNewFile() {
+    const modal = document.getElementById('new-file-modal');
+    const input = document.getElementById('new-file-name');
+    if (!modal || !input) {
+        console.error('New file modal elements not found');
         return;
     }
     
-    try {
-        const fileContent = document.getElementById('file-content');
-        const content = fileContent ? fileContent.value : '';
-        
-        const response = await fetch('/api/file', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                path: currentEditingFile,
-                content: content
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to save file');
-        }
-        
-        // Show success feedback
-        const saveButton = document.getElementById('save-file');
-        if (saveButton) {
-            const originalText = saveButton.textContent;
-            saveButton.textContent = 'Saved!';
-            saveButton.classList.add('btn-success');
-            setTimeout(() => {
-                saveButton.textContent = originalText;
-            }, 1000);
-        }
-        
-    } catch (error) {
-        console.error('Error saving file:', error);
-        await Swal.fire({
-            title: 'Error',
-            text: 'Failed to save file: ' + error.message,
-            icon: 'error'
-        });
-    }
-}
-
-function closeFileEditor() {
-    const fileEditor = document.getElementById('file-editor');
-    fileEditor.classList.add('hidden');
-    fileEditor.classList.remove('flex', 'fullscreen');
-    isFileEditorOpen = false;
-    currentEditingFile = null;
-}
-
-function closeFileBrowser() {
-    const fileBrowser = document.getElementById('file-browser');
-    fileBrowser.classList.add('hidden');
-    fileBrowser.classList.remove('flex', 'fullscreen');
-    isFileBrowserOpen = false;
-}
-
-// Create new file function
-function createNewFile() {
-    const modal = document.getElementById('new-file-modal');
-    const input = document.getElementById('new-file-name');
     input.value = '';
     modal.showModal();
     input.focus();
 }
 
-// Create new folder function
-function createNewFolder() {
+/**
+ * Create new folder
+ */
+export function createNewFolder() {
     const modal = document.getElementById('new-folder-modal');
     const input = document.getElementById('new-folder-name');
+    if (!modal || !input) {
+        console.error('New folder modal elements not found');
+        return;
+    }
+    
     input.value = '';
     modal.showModal();
     input.focus();
 }
 
-// Handle file creation
-async function handleFileCreation() {
+/**
+ * Handle file creation
+ */
+export async function handleFileCreation() {
     const input = document.getElementById('new-file-name');
+    if (!input) {
+        console.error('New file name input not found');
+        return;
+    }
+    
     const fileName = input.value.trim();
     if (!fileName) return;
     
@@ -263,9 +225,14 @@ async function handleFileCreation() {
         await loadDirectory(currentBrowserPath);
         
         // Open the new file in editor
-        await openFileInEditor(filePath);
+        import('./fileEditor.js').then(fileEditor => {
+            fileEditor.openFileInEditor(filePath);
+        });
         
-        document.getElementById('new-file-modal').close();
+        const modal = document.getElementById('new-file-modal');
+        if (modal) {
+            modal.close();
+        }
         
     } catch (error) {
         console.error('Error creating file:', error);
@@ -277,9 +244,16 @@ async function handleFileCreation() {
     }
 }
 
-// Handle folder creation
-async function handleFolderCreation() {
+/**
+ * Handle folder creation
+ */
+export async function handleFolderCreation() {
     const input = document.getElementById('new-folder-name');
+    if (!input) {
+        console.error('New folder name input not found');
+        return;
+    }
+    
     const folderName = input.value.trim();
     if (!folderName) return;
     
@@ -312,7 +286,10 @@ async function handleFolderCreation() {
         // Refresh directory listing
         await loadDirectory(currentBrowserPath);
         
-        document.getElementById('new-folder-modal').close();
+        const modal = document.getElementById('new-folder-modal');
+        if (modal) {
+            modal.close();
+        }
         
     } catch (error) {
         console.error('Error creating folder:', error);
@@ -322,4 +299,27 @@ async function handleFolderCreation() {
             icon: 'error'
         });
     }
+}
+
+/**
+ * Close file browser
+ */
+export function closeFileBrowser() {
+    closeBrowser();
+}
+
+/**
+ * Check if file browser is open
+ * @returns {boolean} - Browser open status
+ */
+export function getFileBrowserOpenStatus() {
+    return isFileBrowserOpen;
+}
+
+/**
+ * Get current browser path
+ * @returns {string|null} - Current browser path
+ */
+export function getCurrentBrowserPath() {
+    return currentBrowserPath;
 } 

@@ -1,26 +1,22 @@
-// Terminal management functionality
+// Terminal management module using xterm.js
 
-// Initialize xterm.js terminal
-const { Terminal } = window;
-const { FitAddon } = window.FitAddon;
+import { debounce } from './utils.js';
 
-// Global variables for current terminal instance
+// Terminal state
 let terminal = null;
 let fitAddon = null;
-let ws;
-let isConnected = false;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_BASE_DELAY = 1000; // 1 second
 
-// Function to create a new terminal instance
-function createNewTerminal() {
+/**
+ * Create a new terminal instance with proper configuration
+ * @returns {Terminal} - New terminal instance
+ */
+export function createNewTerminal() {
     // Dispose of existing terminal if it exists
     if (terminal) {
         terminal.dispose();
     }
     
-    // Create new terminal instance
+    // Create new terminal instance with improved configuration
     terminal = new Terminal({
         cursorBlink: true,
         fontFamily: 'Courier New, monospace',
@@ -32,7 +28,9 @@ function createNewTerminal() {
             cursorAccent: '#000000',
             selection: 'rgba(0, 255, 0, 0.3)'
         },
-        allowTransparency: false
+        allowTransparency: false,
+        scrollback: 10000, // Increased scrollback for better history
+        tabStopWidth: 4
     });
     
     // Create new fit addon
@@ -42,163 +40,171 @@ function createNewTerminal() {
     return terminal;
 }
 
-const connectWebSocket = () => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let url = `${protocol}//${window.location.host}`;
-    
-    const params = new URLSearchParams();
-    if (sessionID) {
-        params.append('sessionID', sessionID);
+/**
+ * Get the current terminal instance
+ * @returns {Terminal|null} - Current terminal instance
+ */
+export function getCurrentTerminal() {
+    return terminal;
+}
+
+/**
+ * Get the fit addon instance
+ * @returns {FitAddon|null} - Current fit addon instance
+ */
+export function getFitAddon() {
+    return fitAddon;
+}
+
+/**
+ * Initialize terminal in the DOM
+ * @param {string} containerId - ID of the container element
+ * @param {Function} onDataCallback - Callback for terminal data
+ */
+export function initializeTerminalInDOM(containerId, onDataCallback) {
+    const terminalContainer = document.getElementById(containerId);
+    if (!terminalContainer) {
+        console.error(`Terminal container not found: ${containerId}`);
+        return;
     }
-    if (currentProject) {
-        params.append('projectName', currentProject);
-    }
     
-    if (params.toString()) {
-        url += `?${params.toString()}`;
-    }
-    
-    ws = new WebSocket(url);
-
-    ws.onopen = () => {
-        console.log('Connected to terminal');
-        isConnected = true;
-        reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-        
-        // Force screen refresh on reconnection
-        if (sessionID) {
-            // Clear texture atlas to force redraw
-            terminal.clearTextureAtlas();
-            // Refresh the entire terminal display
-            terminal.refresh(0, terminal.rows - 1);
-        }
-        
-        // Send initial terminal size
-        ws.send(JSON.stringify({
-            type: 'resize',
-            cols: terminal.cols,
-            rows: terminal.rows
-        }));
-    };
-
-    ws.onmessage = (event) => {
-        try {
-            const message = JSON.parse(event.data);
-            
-            switch (message.type) {
-                case 'output':
-                    // Write PTY output to terminal
-                    terminal.write(message.data);
-                    break;
-                
-                case 'sessionID':
-                    // Store session ID received from server
-                    sessionID = message.sessionID;
-                    updateURLWithSession(sessionID, currentProject);
-                    console.log(`Received new session ID: ${sessionID}`);
-                    break;
-                    
-                case 'exit':
-                    terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
-                    terminal.write('Connection closed. Go back to session list.\r\n');
-                    isConnected = false;
-                    break;
-                    
-                default:
-                    console.log('Unknown message type:', message.type);
-            }
-        } catch (error) {
-            console.error('Error parsing message:', error);
-        }
-    };
-
-    ws.onclose = () => {
-        console.log('WebSocket connection closed');
-        isConnected = false;
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts);
-            reconnectAttempts++;
-            console.log(`Attempting to reconnect in ${delay / 1000} seconds... (Attempt ${reconnectAttempts})`);
-            terminal.write(`\r\nConnection lost. Attempting to reconnect...\r\n`);
-            setTimeout(connectWebSocket, delay);
-        } else {
-            terminal.write('\r\nConnection lost. Max reconnect attempts reached. Go back to session list.\r\n');
-        }
-    };
-
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        terminal.write('\r\nWebSocket error occurred. Attempting to reconnect.\r\n');
-        ws.close(); // Force close to trigger onclose and reconnect logic
-    };
-};
-
-// Function to initialize terminal
-function initializeTerminal() {
-    const terminalContainer = document.getElementById('terminal-container');
     terminalContainer.innerHTML = `
         <div class="flex flex-col h-full">
             <div id="terminal" class="flex-1"></div>
         </div>
     `;
     
-    // Create a new terminal instance instead of reusing the old one
+    // Create a new terminal instance
     createNewTerminal();
     
-    // Mount new terminal to DOM element
-    const newTerminalElement = document.getElementById('terminal');
-    terminal.open(newTerminalElement);
-    fitAddon.fit();
-    
-    // Set up terminal data handler for the new instance
-    terminal.onData((data) => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'input',
-                data: data
-            }));
+    // Mount terminal to DOM element
+    const terminalElement = document.getElementById('terminal');
+    if (terminalElement) {
+        terminal.open(terminalElement);
+        fitAddon.fit();
+        
+        // Set up terminal data handler
+        if (onDataCallback) {
+            terminal.onData(onDataCallback);
         }
-    });
-    
-    // Focus the new terminal instance
-    terminal.focus();
-    
-    // Connect WebSocket
-    connectWebSocket();
-    
-    // Show navigation bar when terminal is active
-    showNavigationBar();
+        
+        // Focus the terminal
+        terminal.focus();
+        
+        // Set up resize handler
+        setupResizeHandler();
+    }
 }
 
-// Handle terminal resize
-const handleResize = () => {
+/**
+ * Write data to the terminal
+ * @param {string} data - Data to write
+ */
+export function writeToTerminal(data) {
+    if (terminal) {
+        terminal.write(data);
+    }
+}
+
+/**
+ * Focus the terminal
+ */
+export function focusTerminal() {
+    if (terminal) {
+        terminal.focus();
+    }
+}
+
+/**
+ * Dispose of the current terminal
+ */
+export function disposeTerminal() {
+    if (terminal) {
+        terminal.dispose();
+        terminal = null;
+        fitAddon = null;
+    }
+}
+
+/**
+ * Refresh terminal display
+ */
+export function refreshTerminal() {
+    if (terminal) {
+        // Clear texture atlas to force redraw
+        terminal.clearTextureAtlas();
+        // Refresh the entire terminal display
+        terminal.refresh(0, terminal.rows - 1);
+    }
+}
+
+/**
+ * Get terminal dimensions
+ * @returns {Object} - Terminal dimensions {cols, rows}
+ */
+export function getTerminalDimensions() {
+    if (terminal) {
+        return {
+            cols: terminal.cols,
+            rows: terminal.rows
+        };
+    }
+    return { cols: 80, rows: 24 }; // Default dimensions
+}
+
+/**
+ * Fit terminal to container
+ */
+export function fitTerminal() {
     if (fitAddon) {
         fitAddon.fit();
     }
-    if (isConnected && terminal) {
-        ws.send(JSON.stringify({
-            type: 'resize',
-            cols: terminal.cols,
-            rows: terminal.rows
-        }));
-    }
-};
+}
 
-// Resize terminal when window resizes
-window.addEventListener('resize', handleResize);
+/**
+ * Set up terminal resize handler
+ */
+function setupResizeHandler() {
+    const debouncedResize = debounce(() => {
+        fitTerminal();
+    }, 100);
+    
+    window.addEventListener('resize', debouncedResize);
+    
+    // Handle visibility change (focus/blur)
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && terminal) {
+            terminal.focus();
+        }
+    });
+}
 
-// Handle visibility change (focus/blur)
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && terminal) {
-        terminal.focus();
-    }
-});
-
-// Focus terminal when clicking anywhere
-document.addEventListener('click', (event) => {
-    // Only focus terminal if the click is not inside the custom input container
-    const customInputContainer = document.getElementById('custom-input-container');
-    if (customInputContainer && !customInputContainer.contains(event.target) && terminal) {
-        terminal.focus();
-    }
-}); 
+/**
+ * Setup terminal keyboard shortcuts
+ */
+export function setupTerminalShortcuts() {
+    document.addEventListener('keydown', (event) => {
+        // Only handle shortcuts when terminal is focused
+        if (!terminal || !terminal.element?.contains(document.activeElement)) {
+            return;
+        }
+        
+        // Ctrl+Shift+C - Copy
+        if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+            event.preventDefault();
+            if (terminal.hasSelection()) {
+                navigator.clipboard.writeText(terminal.getSelection());
+            }
+        }
+        
+        // Ctrl+Shift+V - Paste
+        if (event.ctrlKey && event.shiftKey && event.key === 'V') {
+            event.preventDefault();
+            navigator.clipboard.readText().then(text => {
+                terminal.paste(text);
+            }).catch(err => {
+                console.error('Failed to read clipboard:', err);
+            });
+        }
+    });
+} 
