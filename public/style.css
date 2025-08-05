@@ -48,6 +48,69 @@
     }
 }
 
+/* Session list styles */
+.session-item {
+    @apply bg-base-200 p-4 rounded-lg border border-base-300 flex justify-between items-center hover:bg-base-300 transition-colors;
+}
+
+.session-info {
+    @apply flex flex-col;
+}
+
+.session-id {
+    @apply font-mono text-sm text-primary;
+}
+
+.session-status {
+    @apply text-xs text-base-content opacity-70 mt-1;
+}
+
+/* Connection status styles */
+#connection-status {
+    @apply px-2 py-1 rounded text-xs font-medium;
+}
+
+#connection-status.connected {
+    @apply bg-success text-success-content;
+}
+
+#connection-status.disconnected {
+    @apply bg-error text-error-content;
+}
+
+/* Notification styles */
+.notification {
+    @apply fixed top-4 right-4 px-4 py-2 rounded-lg text-white font-medium z-50 shadow-lg;
+    animation: slideIn 0.3s ease-out;
+}
+
+.notification.info {
+    @apply bg-info;
+}
+
+.notification.success {
+    @apply bg-success;
+}
+
+.notification.error {
+    @apply bg-error;
+}
+
+.notification.warning {
+    @apply bg-warning;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
 @media (max-width: 480px) {
     .xterm {
         font-size: 10px !important;

@@ -10,8 +10,25 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-base-100 h-screen flex flex-col overflow-hidden">
+    <!-- Session List Container -->
+    <div id="session-list" class="flex-1 p-4" style="display: none;">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold">Terminal Sessions</h1>
+                <button onclick="window.sessionManager.createNewSession()" class="btn btn-primary">New Session</button>
+            </div>
+            <div id="sessions" class="space-y-2">
+                <!-- Session items will be populated here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Terminal Container -->
-    <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden">
+    <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden" style="display: none;">
+        <div class="flex justify-between items-center p-2 bg-base-300">
+            <button onclick="window.sessionManager.goBackToSessionList()" class="btn btn-sm btn-outline">← Back to Sessions</button>
+            <div id="connection-status" class="text-sm">Connecting...</div>
+        </div>
         <div id="terminal" class="w-full h-full"></div>
     </div>
 
@@ -28,17 +45,26 @@
     <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300 lg:hidden">
         <!-- All Keys in One Row -->
         <div class="flex gap-1 justify-center flex-wrap">
-            <button class="btn btn-xs btn-outline" data-key-code="27">Esc</button>
-            <button class="btn btn-xs btn-outline" data-key-code="9">Tab</button>
-            <button class="btn btn-xs btn-outline" data-key-code="17">Ctrl</button>
-            <button class="btn btn-xs btn-outline" data-key-code="38">↑</button>
-            <button class="btn btn-xs btn-outline" data-key-code="37">←</button>
-            <button class="btn btn-xs btn-outline" data-key-code="40">↓</button>
-            <button class="btn btn-xs btn-outline" data-key-code="39">→</button>
+            <button class="btn btn-xs btn-outline key" data-key="Escape">Esc</button>
+            <button class="btn btn-xs btn-outline key" data-key="Tab">Tab</button>
+            <button class="btn btn-xs btn-outline key" data-key="Ctrl+C">Ctrl+C</button>
+            <button class="btn btn-xs btn-outline key" data-key="Ctrl+D">Ctrl+D</button>
+            <button class="btn btn-xs btn-outline key" data-key="Ctrl+Z">Ctrl+Z</button>
+            <button class="btn btn-xs btn-outline key" data-key="Up">↑</button>
+            <button class="btn btn-xs btn-outline key" data-key="Left">←</button>
+            <button class="btn btn-xs btn-outline key" data-key="Down">↓</button>
+            <button class="btn btn-xs btn-outline key" data-key="Right">→</button>
+            <button class="btn btn-xs btn-outline key" data-key="Enter">Enter</button>
+            <button class="btn btn-xs btn-outline key" data-key="Backspace">⌫</button>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
-    <script src="script.js"></script>
+    <!-- Load modular JavaScript files -->
+    <script src="js/terminal.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/session.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
