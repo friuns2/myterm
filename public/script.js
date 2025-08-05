@@ -363,6 +363,9 @@ function initializeTerminal() {
         </div>
     `;
     
+    // Clear terminal content from previous sessions
+    terminal.clear();
+    
     // Re-mount terminal to new DOM element
     const newTerminalElement = document.getElementById('terminal');
     terminal.open(newTerminalElement);
