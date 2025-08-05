@@ -522,9 +522,8 @@ document.addEventListener('click', (event) => {
 
 // Custom input field handling
 const customCommandInput = document.getElementById('custom-command-input');
-const sendCommandButton = document.getElementById('send-command-button');
 
-if (customCommandInput && sendCommandButton) {
+if (customCommandInput) {
     const sendCommand = () => {
         const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
         if (isConnected) {
@@ -536,7 +535,6 @@ if (customCommandInput && sendCommandButton) {
         }
     };
 
-    sendCommandButton.addEventListener('click', sendCommand);
     customCommandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             sendCommand();
