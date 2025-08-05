@@ -9,113 +9,110 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-base-100">
-    <div id="app" v-scope="AppScope()" @vue:mounted="mounted">
-        <div class="h-screen flex flex-col overflow-hidden">
-            <!-- Loading View -->
-            <div v-if="currentView === 'loading'" class="flex-1 flex items-center justify-center">
-                <div class="text-center">
-                    <div class="loading loading-spinner loading-lg"></div>
-                    <p class="mt-4">{{ isLoading ? 'Loading sessions...' : 'Initializing...' }}</p>
-                    <p v-if="error" class="text-error mt-2">{{ error }}</p>
+<body class="bg-base-100 h-screen flex flex-col overflow-hidden">
+    <div id="app" class="h-full flex flex-col">
+        <!-- Session List View -->
+        <div v-if="showSessionList" class="flex-1 p-4 overflow-auto">
+            <div class="max-w-4xl mx-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-3xl font-bold text-primary">Terminal Sessions</h1>
+                    <button @click="createNewSession" class="btn btn-primary">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        New Session
+                    </button>
                 </div>
-            </div>
-
-            <!-- Session List View -->
-            <div v-else-if="currentView === 'sessionList'" class="flex-1 p-6 overflow-auto">
-                <div class="max-w-4xl mx-auto">
-                    <h1 class="text-2xl font-bold mb-6 text-center">Terminal Sessions</h1>
-                    
-                    <div class="grid gap-4 mb-6">
-                        <div v-for="session in sessions" :key="session.id" class="card bg-base-200 shadow-xl">
-                            <div class="card-body p-4">
-                                <div class="flex justify-between items-start">
-                                    <div class="cursor-pointer flex-1" @click="connectToSession(session.id)">
-                                        <h2 class="card-title text-sm">{{ session.id }}</h2>
-                                        <p class="text-xs opacity-70">Status: {{ session.status }}</p>
-                                        <p class="text-xs opacity-50">Created: {{ formatDate(session.created) }}</p>
-                                    </div>
-                                    <button class="btn btn-error btn-sm ml-2" @click="killSession(session.id)">
+                
+                <!-- Loading State -->
+                <div v-if="isLoading" class="flex justify-center items-center py-8">
+                    <span class="loading loading-spinner loading-lg text-primary"></span>
+                </div>
+                
+                <!-- Sessions List -->
+                <div v-else-if="hasActiveSessions" class="grid gap-4">
+                    <div v-for="session in sessions" :key="session.id" 
+                         class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow">
+                        <div class="card-body">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h3 class="card-title text-lg font-mono">{{ session.id }}</h3>
+                                    <p class="text-sm text-base-content/70 mt-1">{{ session.status }}</p>
+                                    <p class="text-xs text-base-content/50 mt-2">Created: {{ formatDate(session.created) }}</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button @click="connectToSession(session.id)" 
+                                            class="btn btn-primary btn-sm">
+                                        Connect
+                                    </button>
+                                    <button @click="killSession(session.id)" 
+                                            class="btn btn-error btn-sm">
                                         Kill
                                     </button>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div v-if="sessions.length === 0" class="text-center py-8">
-                            <p class="text-base-content/70">No active sessions</p>
-                        </div>
                     </div>
-                    
-                    <div class="text-center">
-                        <button class="btn btn-primary" @click="createNewSession()">
-                            Create New Session
-                        </button>
-                    </div>
+                </div>
+                
+                <!-- Empty State -->
+                <div v-else class="text-center py-12">
+                    <div class="text-6xl mb-4">🖥️</div>
+                    <h2 class="text-2xl font-bold mb-2">No Active Sessions</h2>
+                    <p class="text-base-content/70 mb-6">Create a new terminal session to get started</p>
+                    <button @click="createNewSession" class="btn btn-primary btn-lg">
+                        Create First Session
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Terminal View -->
+        <div v-else class="flex-1 flex flex-col">
+            <!-- Terminal Header -->
+            <div class="bg-base-200 p-2 border-b border-base-300 flex justify-between items-center">
+                <button @click="goBackToSessionList" class="btn btn-ghost btn-sm">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                    Back to Sessions
+                </button>
+                <span class="text-sm font-mono text-base-content/70">{{ currentSessionId }}</span>
+            </div>
+            
+            <!-- Terminal Container -->
+            <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden">
+                <div id="terminal" class="w-full h-full"></div>
+            </div>
+
+            <!-- Command Input Section -->
+            <div class="bg-base-200 p-2 border-t border-base-300">
+                <div class="flex gap-2 items-center">
+                    <input type="text" id="custom-command-input" placeholder="Enter command..." 
+                           class="input input-bordered input-sm flex-1 bg-base-100 text-sm" />
+                    <button id="send-command-button" class="btn btn-primary btn-sm">Send</button>
                 </div>
             </div>
 
-            <!-- Terminal View -->
-            <div v-else-if="currentView === 'terminal'" class="flex-1 flex flex-col overflow-hidden">
-                <!-- Terminal Header -->
-                <div class="bg-base-200 p-2 border-b border-base-300">
-                    <button class="btn btn-sm btn-outline" @click="goBackToSessionList()">
-                        ← Back to Sessions
-                    </button>
-                    <span v-if="currentSessionID" class="ml-4 text-sm opacity-70">
-                        Session: {{ currentSessionID }}
-                    </span>
-                </div>
-                
-                <!-- Terminal Container -->
-                <div class="flex-1 bg-black p-2 overflow-hidden">
-                    <div id="terminal" class="w-full h-full"></div>
-                </div>
-                
-                <!-- Command Input Section -->
-                <div class="bg-base-200 p-2 border-t border-base-300">
-                    <div class="flex gap-2 items-center">
-                        <input type="text" id="custom-command-input" placeholder="Enter command..." 
-                               class="input input-bordered input-sm flex-1 bg-base-100 text-sm" />
-                        <button id="send-command-button" class="btn btn-primary btn-sm">Send</button>
-                    </div>
-                </div>
-                
-                <!-- Virtual Keyboard for Mobile -->
-                <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300 lg:hidden">
-                    <div class="flex gap-1 justify-center flex-wrap">
-                        <button class="btn btn-xs btn-outline" data-key-code="27">Esc</button>
-                        <button class="btn btn-xs btn-outline" data-key-code="9">Tab</button>
-                        <button class="btn btn-xs btn-outline" data-key-code="17">Ctrl</button>
-                        <button class="btn btn-xs btn-outline" data-key-code="38">↑</button>
-                        <button class="btn btn-xs btn-outline" data-key-code="37">←</button>
-                        <button class="btn btn-xs btn-outline" data-key-code="40">↓</button>
-                        <button class="btn btn-xs btn-outline" data-key-code="39">→</button>
-                    </div>
+            <!-- Virtual Keyboard for Mobile -->
+            <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300 lg:hidden">
+                <div class="flex gap-1 justify-center flex-wrap">
+                    <button class="btn btn-xs btn-outline" data-key-code="27">Esc</button>
+                    <button class="btn btn-xs btn-outline" data-key-code="9">Tab</button>
+                    <button class="btn btn-xs btn-outline" data-key-code="17">Ctrl</button>
+                    <button class="btn btn-xs btn-outline" data-key-code="38">↑</button>
+                    <button class="btn btn-xs btn-outline" data-key-code="37">←</button>
+                    <button class="btn btn-xs btn-outline" data-key-code="40">↓</button>
+                    <button class="btn btn-xs btn-outline" data-key-code="39">→</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- External Libraries -->
-    <script src="https://unpkg.com/petite-vue"></script>
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
-    
-    <!-- Application Modules -->
-    <script src="js/terminal.js"></script>
-    <script src="js/websocket.js"></script>
-    <script src="js/session.js"></script>
-    <script src="js/ui.js"></script>
-    
-    <!-- Main Application -->
-    <script src="app.js"></script>
-    
-    <!-- Initialize Petite Vue -->
-     <script>
-         PetiteVue.createApp({
-             AppScope
-         }).mount();
-     </script>
+    <script src="https://unpkg.com/petite-vue"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>

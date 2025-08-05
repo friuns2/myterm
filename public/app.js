@@ -1,117 +1,140 @@
-// Main Petite Vue application
-function AppScope() {
+// Main Vue.js application using Vue Petite
+import { TerminalManager } from './js/terminal.js';
+import { SessionManager } from './js/sessionManager.js';
+import { VirtualKeyboard } from './js/virtualKeyboard.js';
+
+// Create the main Vue application
+function createTerminalApp() {
     return {
-        currentView: 'loading', // 'loading', 'sessionList', 'terminal'
+        // Reactive data
         sessions: [],
-        currentSessionID: null,
-        isConnected: false,
+        currentSessionId: null,
+        showSessionList: false,
         isLoading: false,
-        error: null,
-        terminalManager: null,
-        webSocketManager: null,
-        sessionManager: null,
-        uiManager: null,
         
-        mounted() {
-            this.initializeManagers();
-            this.setupBrowserNavigation();
-            this.determineInitialView();
+        // Managers
+        terminalManager: null,
+        sessionManager: null,
+        virtualKeyboard: null,
+
+        // Computed properties
+        get hasActiveSessions() {
+            return this.sessions.length > 0;
         },
         
-        initializeManagers() {
-            // Initialize all manager classes
+        // Initialize the application
+        async init() {
             this.terminalManager = new TerminalManager();
             this.sessionManager = new SessionManager();
-            this.webSocketManager = new WebSocketManager(this.terminalManager);
-            this.uiManager = new UIManager(this.terminalManager, this.webSocketManager);
+            this.virtualKeyboard = new VirtualKeyboard(this.terminalManager);
             
-            // Set up WebSocket callbacks
-            this.webSocketManager.setSessionIDCallback((sessionID) => {
-                this.currentSessionID = sessionID;
-                this.sessionManager.setCurrentSessionID(sessionID);
-            });
-        },
-        
-        setupBrowserNavigation() {
-            window.addEventListener('popstate', (event) => {
-                const newSessionID = this.sessionManager.getSessionIDFromURL();
-                if (newSessionID) {
-                    this.currentSessionID = newSessionID;
-                    this.showTerminal();
-                } else {
-                    this.currentSessionID = null;
-                    this.showSessionList();
-                }
-            });
-        },
-        
-        determineInitialView() {
-            const sessionID = this.sessionManager.getSessionIDFromURL();
-            if (sessionID) {
-                this.currentSessionID = sessionID;
-                this.showTerminal();
+            // Get session ID from URL
+            this.currentSessionId = this.sessionManager.getSessionIDFromURL();
+            
+            // Setup browser navigation
+            this.setupNavigation();
+            
+            if (!this.currentSessionId) {
+                await this.displaySessionList();
             } else {
-                this.showSessionList();
+                this.initializeTerminalSession();
             }
         },
         
-        async showSessionList() {
-            this.currentView = 'loading';
+        // Initialize terminal for a specific session
+        initializeTerminalSession() {
+            this.showSessionList = false;
+            this.terminalManager.initialize();
+            this.virtualKeyboard.initialize();
+            this.terminalManager.connectWebSocket(this.currentSessionId);
+        },
+        
+        // Display session list
+        async displaySessionList() {
+            this.showSessionList = true;
             this.isLoading = true;
-            this.error = null;
             
             try {
-                this.sessions = await this.sessionManager.getSessions();
-                this.currentView = 'sessionList';
+                this.sessions = await this.sessionManager.fetchSessions();
             } catch (error) {
-                console.error('Failed to fetch sessions:', error);
-                this.error = 'Failed to load sessions';
+                console.error('Error loading sessions:', error);
             } finally {
                 this.isLoading = false;
             }
         },
         
-        showTerminal() {
-            this.currentView = 'terminal';
-            setTimeout(() => {
-                this.initializeTerminal();
-            }, 0);
-        },
-        
-        initializeTerminal() {
-            this.terminalManager.mount('terminal');
-            this.uiManager.initializeUIComponents();
-            this.webSocketManager.connect(this.currentSessionID);
-        },
-        
+        // Connect to an existing session
         connectToSession(sessionId) {
+            this.currentSessionId = sessionId;
             this.sessionManager.updateURLWithSession(sessionId);
-            this.showTerminal();
+            this.initializeTerminalSession();
         },
         
+        // Create a new session
+        createNewSession() {
+            const newSessionId = this.sessionManager.generateSessionId();
+            this.connectToSession(newSessionId);
+        },
+        
+        // Kill a session
         async killSession(sessionId) {
+            this.isLoading = true;
+            
             try {
-                await this.sessionManager.killSession(sessionId);
-                this.sessions = this.sessions.filter(session => session.id !== sessionId);
+                const success = await this.sessionManager.killSession(sessionId);
+                if (success) {
+                    // Refresh session list
+                    this.sessions = await this.sessionManager.fetchSessions();
+                    
+                    // If we killed the current session, go back to session list
+                    if (sessionId === this.currentSessionId) {
+                        this.goBackToSessionList();
+                    }
+                }
             } catch (error) {
-                console.error('Failed to kill session:', error);
+                console.error('Error killing session:', error);
+            } finally {
+                this.isLoading = false;
             }
         },
         
-        createNewSession() {
-            this.sessionManager.removeSessionFromURL();
-            this.showTerminal();
-        },
-        
+        // Navigate back to session list
         goBackToSessionList() {
-            this.webSocketManager.disconnect();
-            this.sessionManager.removeSessionFromURL();
-            this.currentSessionID = null;
-            this.showSessionList();
+            this.currentSessionId = null;
+            this.sessionManager.navigateToSessionList();
+            this.displaySessionList();
         },
         
+        // Setup browser navigation handling
+        setupNavigation() {
+            window.addEventListener('popstate', (event) => {
+                const sessionId = this.sessionManager.getSessionIDFromURL();
+                if (sessionId !== this.currentSessionId) {
+                    this.currentSessionId = sessionId;
+                    if (sessionId) {
+                        this.initializeTerminalSession();
+                    } else {
+                        this.displaySessionList();
+                    }
+                }
+            });
+        },
+        
+        // Format date for display
         formatDate(dateString) {
             return new Date(dateString).toLocaleString();
+        },
+        
+        // Vue lifecycle - called when component is mounted
+        mounted() {
+            this.init();
         }
     };
 }
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    const { createApp } = window.PetiteVue;
+    const app = createApp(createTerminalApp());
+    app.mount('#app');
+});

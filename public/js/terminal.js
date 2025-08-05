@@ -1,14 +1,17 @@
-// Terminal initialization and configuration
-class TerminalManager {
+// Terminal management module
+export class TerminalManager {
     constructor() {
         this.terminal = null;
         this.fitAddon = null;
-        this.isInitialized = false;
+        this.ws = null;
+        this.sessionID = null;
+        this.isConnected = false;
+        this.reconnectAttempts = 0;
+        this.MAX_RECONNECT_ATTEMPTS = 10;
+        this.RECONNECT_BASE_DELAY = 1000;
     }
 
-    init() {
-        if (this.isInitialized) return this.terminal;
-
+    initialize() {
         const { Terminal } = window;
         const { FitAddon } = window.FitAddon;
 
@@ -28,30 +31,92 @@ class TerminalManager {
 
         this.fitAddon = new FitAddon();
         this.terminal.loadAddon(this.fitAddon);
-        this.isInitialized = true;
 
-        return this.terminal;
+        const terminalContainer = document.getElementById('terminal');
+        this.terminal.open(terminalContainer);
+        this.fitAddon.fit();
+
+        this.setupEventListeners();
     }
 
-    mount(containerId) {
-        if (!this.terminal) this.init();
+    setupEventListeners() {
+        this.terminal.onData((data) => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({
+                    type: 'input',
+                    data: data
+                }));
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            if (this.fitAddon) {
+                setTimeout(() => {
+                    this.fitAddon.fit();
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({
+                            type: 'resize',
+                            cols: this.terminal.cols,
+                            rows: this.terminal.rows
+                        }));
+                    }
+                }, 100);
+            }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && this.terminal) {
+                this.terminal.focus();
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (event.target.closest('#terminal') && this.terminal) {
+                this.terminal.focus();
+            }
+        });
+    }
+
+    connectWebSocket(sessionId) {
+        this.sessionID = sessionId;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}?session=${sessionId}`;
         
-        const container = document.getElementById(containerId);
-        if (container) {
-            this.terminal.open(container);
-            this.fitAddon.fit();
-        }
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            this.isConnected = true;
+            this.reconnectAttempts = 0;
+            this.terminal.focus();
+        };
+        
+        this.ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === 'output') {
+                this.terminal.write(message.data);
+            }
+        };
+        
+        this.ws.onclose = () => {
+            this.isConnected = false;
+            if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+                this.reconnectAttempts++;
+                const delay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts - 1);
+                setTimeout(() => this.connectWebSocket(sessionId), delay);
+            }
+        };
+        
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
     }
 
-    fit() {
-        if (this.fitAddon) {
-            this.fitAddon.fit();
-        }
-    }
-
-    write(data) {
-        if (this.terminal) {
-            this.terminal.write(data);
+    sendCommand(command) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: 'input',
+                data: command + '\r'
+            }));
         }
     }
 
@@ -61,32 +126,9 @@ class TerminalManager {
         }
     }
 
-    onData(callback) {
-        if (this.terminal) {
-            this.terminal.onData(callback);
+    resize() {
+        if (this.fitAddon) {
+            this.fitAddon.fit();
         }
-    }
-
-    clearTextureAtlas() {
-        if (this.terminal) {
-            this.terminal.clearTextureAtlas();
-        }
-    }
-
-    refresh() {
-        if (this.terminal) {
-            this.terminal.refresh(0, this.terminal.rows - 1);
-        }
-    }
-
-    get cols() {
-        return this.terminal ? this.terminal.cols : 0;
-    }
-
-    get rows() {
-        return this.terminal ? this.terminal.rows : 0;
     }
 }
-
-// Export for use in other modules
-window.TerminalManager = TerminalManager;
