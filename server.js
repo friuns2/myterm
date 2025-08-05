@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid'); // Import uuid
 const { spawn, exec } = require('child_process');
 
 const app = express();
-const port = 3111;
+const port = 3211;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -654,20 +654,28 @@ wss.on('connection', (ws, req) => {
     // Set up PTY event handlers only for new sessions
     // Send PTY output to WebSocket and buffer it
     ptyProcess.onData((data) => {
-      const currentSession = sessions.get(sessionID);
-      if (currentSession) {
+      // Find the session that owns this PTY process
+      let targetSession = null;
+      for (const [id, session] of sessions.entries()) {
+        if (session.ptyProcess === ptyProcess) {
+          targetSession = session;
+          break;
+        }
+      }
+      
+      if (targetSession) {
         // Add data to buffer
-        currentSession.buffer += data;
+        targetSession.buffer += data;
         
         // Trim buffer if it exceeds maximum size
-        if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+        if (targetSession.buffer.length > MAX_BUFFER_SIZE) {
           // Keep only the last MAX_BUFFER_SIZE characters
-          currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+          targetSession.buffer = targetSession.buffer.slice(-MAX_BUFFER_SIZE);
         }
         
         // Send data to connected client if WebSocket is open
-        if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-          currentSession.ws.send(JSON.stringify({
+        if (targetSession.ws && targetSession.ws.readyState === WebSocket.OPEN) {
+          targetSession.ws.send(JSON.stringify({
             type: 'output',
             data: data
           }));
@@ -678,15 +686,24 @@ wss.on('connection', (ws, req) => {
     // Handle PTY exit
     ptyProcess.onExit(({ exitCode, signal }) => {
       console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
-      const currentSession = sessions.get(sessionID);
-      if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-        currentSession.ws.send(JSON.stringify({
-          type: 'exit',
-          exitCode,
-          signal
-        }));
+      // Find the session that owns this PTY process
+      let targetSessionId = null;
+      for (const [id, session] of sessions.entries()) {
+        if (session.ptyProcess === ptyProcess) {
+          targetSessionId = id;
+          if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(JSON.stringify({
+              type: 'exit',
+              exitCode,
+              signal
+            }));
+          }
+          break;
+        }
       }
-      sessions.delete(sessionID); // Clean up session on exit
+      if (targetSessionId) {
+        sessions.delete(targetSessionId); // Clean up session on exit
+      }
     });
   }
 
