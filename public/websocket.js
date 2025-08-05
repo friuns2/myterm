@@ -170,13 +170,6 @@ export function updateURLWithProject(project) {
     updateURLParameters({ project: project, session: null });
 }
 
-/**
- * Clear URL parameters
- */
-export function clearURLParams() {
-    updateURLParameters(null);
-}
-
 // WebSocket event handlers
 
 function handleWebSocketOpen() {

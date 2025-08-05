@@ -136,4 +136,10 @@ export function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+export function clearURLParams() {
+    const url = new URL(window.location);
+    url.search = '';
+    window.history.pushState({}, '', url);
 } 
