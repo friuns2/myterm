@@ -2,30 +2,40 @@
 const { Terminal } = window;
 const { FitAddon } = window.FitAddon;
 
-const terminal = new Terminal({
-    cursorBlink: true,
-    fontFamily: 'Courier New, monospace',
-    fontSize: 14,
-    theme: {
-        background: '#000000',
-        foreground: '#00ff00',
-        cursor: '#00ff00',
-        cursorAccent: '#000000',
-        selection: 'rgba(0, 255, 0, 0.3)'
-    },
-    allowTransparency: false
-});
+// Global variables for current terminal instance
+let terminal = null;
+let fitAddon = null;
 
-// Add fit addon for responsive sizing
-const fitAddon = new FitAddon();
-terminal.loadAddon(fitAddon);
+// Function to create a new terminal instance
+function createNewTerminal() {
+    // Dispose of existing terminal if it exists
+    if (terminal) {
+        terminal.dispose();
+    }
+    
+    // Create new terminal instance
+    terminal = new Terminal({
+        cursorBlink: true,
+        fontFamily: 'Courier New, monospace',
+        fontSize: 14,
+        theme: {
+            background: '#000000',
+            foreground: '#00ff00',
+            cursor: '#00ff00',
+            cursorAccent: '#000000',
+            selection: 'rgba(0, 255, 0, 0.3)'
+        },
+        allowTransparency: false
+    });
+    
+    // Create new fit addon
+    fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    
+    return terminal;
+}
 
-// Mount terminal to DOM
-const terminalContainer = document.getElementById('terminal');
-terminal.open(terminalContainer);
-
-// Fit terminal to container
-fitAddon.fit();
+// Initial terminal instance will be created when needed
 
 let ws;
 let sessionID = getSessionIDFromURL(); // Get session ID from URL only
@@ -363,13 +373,26 @@ function initializeTerminal() {
         </div>
     `;
     
-    // Clear terminal content from previous sessions
-    terminal.clear();
+    // Create a new terminal instance instead of reusing the old one
+    createNewTerminal();
     
-    // Re-mount terminal to new DOM element
+    // Mount new terminal to DOM element
     const newTerminalElement = document.getElementById('terminal');
     terminal.open(newTerminalElement);
     fitAddon.fit();
+    
+    // Set up terminal data handler for the new instance
+    terminal.onData((data) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'input',
+                data: data
+            }));
+        }
+    });
+    
+    // Focus the new terminal instance
+    terminal.focus();
     
     // Connect WebSocket
     connectWebSocket();
@@ -401,15 +424,7 @@ if (sessionID) {
     showProjectList();
 }
 
-// Handle terminal input
-terminal.onData((data) => {
-    if (isConnected) {
-        ws.send(JSON.stringify({
-            type: 'input',
-            data: data
-        }));
-    }
-});
+// Terminal input handler is now set up in initializeTerminal() for each new instance
 
 // Handle terminal resize
 const handleResize = () => {
@@ -441,9 +456,6 @@ document.addEventListener('click', (event) => {
         terminal.focus();
     }
 });
-
-// Initial focus
-terminal.focus();
 
 // Custom input field handling
 const customCommandInput = document.getElementById('custom-command-input');

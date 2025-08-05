@@ -208,23 +208,19 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
     try {
       const msg = JSON.parse(message);
-      const session = sessions.get(sessionID);
-      
-      if (!session) {
-        console.error(`Session ${sessionID} not found`);
-        return;
-      }
 
       switch (msg.type) {
         case 'input':
-          // Send input to the correct PTY process for this session
-          session.ptyProcess.write(msg.data);
+          // Send input to PTY
+          ptyProcess.write(msg.data);
           break;
 
         case 'resize':
-          // Resize the correct PTY process for this session
-          session.ptyProcess.resize(msg.cols, msg.rows);
+          // Resize PTY
+          ptyProcess.resize(msg.cols, msg.rows);
           break;
+
+
 
         default:
           console.log('Unknown message type:', msg.type);
