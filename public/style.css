@@ -177,37 +177,56 @@
     }
 }
 
-/* Prevent overlap between terminal and virtual keyboard on mobile */
+/* Prevent overlap between terminal and virtual keyboard */
+#virtual-keyboard {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background-color: hsl(var(--b2));
+    border-top: 1px solid hsl(var(--b3));
+}
+
+/* Adjust main content to account for virtual keyboard */
+body {
+    padding-bottom: 60px; /* Height of virtual keyboard */
+}
+
+/* Ensure main flex container accounts for virtual keyboard */
+.flex-1.flex {
+    height: calc(100vh - 60px); /* Subtract virtual keyboard height */
+}
+
+/* Ensure terminal container doesn't overlap with virtual keyboard */
+#terminal-container {
+    margin-bottom: 0;
+    min-height: 0; /* Allow flex shrinking */
+}
+
+/* Mobile specific adjustments */
 @media (max-width: 768px) {
-    /* Add bottom padding to terminal container to account for virtual keyboard */
-    #terminal-container {
-        padding-bottom: 70px;
-    }
-    
-    /* Ensure virtual keyboard stays at bottom */
-    #virtual-keyboard {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 1000;
-        background-color: var(--b2);
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* Adjust body to account for fixed virtual keyboard */
+    /* Increase padding for mobile devices */
     body {
         padding-bottom: 70px;
     }
     
-    /* Ensure xterm viewport doesn't extend under the keyboard */
-    .xterm-viewport {
-        overflow-y: auto !important;
-        padding-bottom: 70px !important;
+    /* Adjust main flex container for mobile */
+    .flex-1.flex {
+        height: calc(100vh - 70px);
     }
     
-    /* Adjust terminal size to prevent content from being hidden under keyboard */
-    #terminal {
-        margin-bottom: 70px;
+    /* Ensure virtual keyboard is properly sized on mobile */
+    #virtual-keyboard {
+        padding: 8px;
+    }
+    
+    #virtual-keyboard .flex {
+        gap: 4px;
+    }
+    
+    #virtual-keyboard button {
+        min-width: 40px;
+        height: 32px;
     }
 }

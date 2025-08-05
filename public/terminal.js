@@ -189,46 +189,50 @@ function initializeTerminal() {
     
     // Connect WebSocket
     connectWebSocket();
-
-    // Dynamic padding for virtual keyboard
-    const vk = document.getElementById('virtual-keyboard');
-    let basePadding = 0;
-    if (vk) {
-      basePadding = vk.clientHeight;
-    }
-    if ('visualViewport' in window) {
-      const viewport = window.visualViewport;
-      const updatePadding = () => {
-        const keyboardHeight = window.innerHeight - viewport.height;
-        const totalPadding = basePadding + keyboardHeight;
-        document.getElementById('terminal-container').style.paddingBottom = `${totalPadding}px`;
-        handleResize();
-      };
-      updatePadding();
-      viewport.addEventListener('resize', updatePadding);
-      viewport.addEventListener('scroll', updatePadding);
-    }
     
     // Show navigation bar when terminal is active
     showNavigationBar();
 }
 
-// Handle terminal resize
+// Handle terminal resize with virtual keyboard consideration
 const handleResize = () => {
-    if (fitAddon) {
-        fitAddon.fit();
+    if (fitAddon && terminal) {
+        // Small delay to ensure DOM has updated
+        setTimeout(() => {
+            fitAddon.fit();
+            if (isConnected) {
+                ws.send(JSON.stringify({
+                    type: 'resize',
+                    cols: terminal.cols,
+                    rows: terminal.rows
+                }));
+            }
+        }, 100);
     }
-    if (isConnected && terminal) {
-        ws.send(JSON.stringify({
-            type: 'resize',
-            cols: terminal.cols,
-            rows: terminal.rows
-        }));
+};
+
+// Handle virtual keyboard visibility changes
+const handleVirtualKeyboardResize = () => {
+    // Force terminal to recalculate its size when virtual keyboard appears/disappears
+    if (terminal && fitAddon) {
+        setTimeout(() => {
+            fitAddon.fit();
+        }, 200);
     }
 };
 
 // Resize terminal when window resizes
 window.addEventListener('resize', handleResize);
+
+// Handle visual viewport changes (for virtual keyboards on mobile)
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleVirtualKeyboardResize);
+}
+
+// Additional mobile keyboard detection
+window.addEventListener('orientationchange', () => {
+    setTimeout(handleResize, 500);
+});
 
 // Handle visibility change (focus/blur)
 document.addEventListener('visibilitychange', () => {
