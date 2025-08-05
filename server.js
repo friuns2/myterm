@@ -208,6 +208,36 @@ app.post('/api/file', express.json(), (req, res) => {
   }
 });
 
+// API endpoint to create folder
+app.post('/api/folder', express.json(), (req, res) => {
+  const { path: folderPath } = req.body;
+  
+  if (!folderPath) {
+    return res.status(400).json({ error: 'Folder path is required' });
+  }
+  
+  try {
+    const resolvedPath = path.resolve(folderPath);
+    const projectsPath = path.resolve(PROJECTS_DIR);
+    const homePath = path.resolve(os.homedir());
+    
+    if (!resolvedPath.startsWith(projectsPath) && !resolvedPath.startsWith(homePath)) {
+      return res.status(403).json({ error: 'Access denied to this location' });
+    }
+    
+    if (fs.existsSync(resolvedPath)) {
+      return res.status(409).json({ error: 'Folder already exists' });
+    }
+    
+    fs.mkdirSync(resolvedPath, { recursive: true });
+    res.json({ success: true, path: resolvedPath });
+  } catch (error) {
+    console.error('Error creating folder:', error);
+    res.status(500).json({ error: 'Failed to create folder' });
+  }
+});
+
+
 const server = app.listen(port, () => {
   console.log(`Web Terminal running at http://localhost:${port}`);
 });

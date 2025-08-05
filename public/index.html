@@ -34,9 +34,9 @@
                     <button id="close-browser" class="btn btn-xs btn-ghost">✕</button>
                 </div>
                 <div class="flex gap-1">
-                    <button id="browser-back" class="btn btn-xs btn-outline">←</button>
                     <input id="current-dir" class="input input-xs flex-1" readonly>
                     <button id="new-file" class="btn btn-xs btn-primary">+ File</button>
+                    <button id="new-folder" class="btn btn-xs btn-secondary">+ Folder</button>
                 </div>
             </div>
             <div id="file-list" class="flex-1 overflow-y-auto p-2"></div>
@@ -56,6 +56,41 @@
             <textarea id="file-content" class="flex-1 p-3 bg-base-100 font-mono text-sm resize-none border-none outline-none"></textarea>
         </div>
     </div>
+
+    <!-- Modals -->
+    <!-- New File Modal -->
+    <dialog id="new-file-modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Create New File</h3>
+            <div class="py-4">
+                <input type="text" id="new-file-name" placeholder="Enter file name..." class="input input-bordered w-full" />
+            </div>
+            <div class="modal-action">
+                <button id="create-file-btn" class="btn btn-primary">Create</button>
+                <button id="cancel-file-btn" class="btn">Cancel</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
+    <!-- New Folder Modal -->
+    <dialog id="new-folder-modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Create New Folder</h3>
+            <div class="py-4">
+                <input type="text" id="new-folder-name" placeholder="Enter folder name..." class="input input-bordered w-full" />
+            </div>
+            <div class="modal-action">
+                <button id="create-folder-btn" class="btn btn-secondary">Create</button>
+                <button id="cancel-folder-btn" class="btn">Cancel</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
 
     <!-- Command Input and Virtual Keyboard Section -->
     <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300">

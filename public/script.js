@@ -679,8 +679,28 @@ function closeFileBrowser() {
     isFileBrowserOpen = false;
 }
 
-async function createNewFile() {
-    const fileName = prompt('Enter file name:');
+// Create new file function
+function createNewFile() {
+    const modal = document.getElementById('new-file-modal');
+    const input = document.getElementById('new-file-name');
+    input.value = '';
+    modal.showModal();
+    input.focus();
+}
+
+// Create new folder function
+function createNewFolder() {
+    const modal = document.getElementById('new-folder-modal');
+    const input = document.getElementById('new-folder-name');
+    input.value = '';
+    modal.showModal();
+    input.focus();
+}
+
+// Handle file creation
+async function handleFileCreation() {
+    const input = document.getElementById('new-file-name');
+    const fileName = input.value.trim();
     if (!fileName) return;
     
     if (!currentBrowserPath) {
@@ -714,18 +734,54 @@ async function createNewFile() {
         // Open the new file in editor
         await openFileInEditor(filePath);
         
+        document.getElementById('new-file-modal').close();
+        
     } catch (error) {
         console.error('Error creating file:', error);
         alert('Failed to create file: ' + error.message);
     }
 }
 
-function goBackInBrowser() {
-    if (currentBrowserPath) {
-        const parentPath = currentBrowserPath.split('/').slice(0, -1).join('/') || '/';
-        loadDirectory(parentPath);
+// Handle folder creation
+async function handleFolderCreation() {
+    const input = document.getElementById('new-folder-name');
+    const folderName = input.value.trim();
+    if (!folderName) return;
+    
+    if (!currentBrowserPath) {
+        alert('No directory selected');
+        return;
+    }
+    
+    const folderPath = `${currentBrowserPath}/${folderName}`;
+    
+    try {
+        const response = await fetch('/api/folder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ path: folderPath })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to create folder');
+        }
+        
+        // Refresh directory listing
+        await loadDirectory(currentBrowserPath);
+        
+        document.getElementById('new-folder-modal').close();
+        
+    } catch (error) {
+        console.error('Error creating folder:', error);
+        alert('Failed to create folder: ' + error.message);
     }
 }
+
+
 
 // Handle browser navigation (back/forward buttons)
 window.addEventListener('popstate', (event) => {
@@ -778,14 +834,58 @@ document.addEventListener('DOMContentLoaded', () => {
         closeBrowserBtn.addEventListener('click', closeFileBrowser);
     }
     
-    const browserBackBtn = document.getElementById('browser-back');
-    if (browserBackBtn) {
-        browserBackBtn.addEventListener('click', goBackInBrowser);
+    const newFolderBtn = document.getElementById('new-folder');
+    if (newFolderBtn) {
+        newFolderBtn.addEventListener('click', createNewFolder);
     }
     
     const newFileBtn = document.getElementById('new-file');
     if (newFileBtn) {
         newFileBtn.addEventListener('click', createNewFile);
+    }
+    
+    // Modal event listeners
+    const createFileBtn = document.getElementById('create-file-btn');
+    if (createFileBtn) {
+        createFileBtn.addEventListener('click', handleFileCreation);
+    }
+    
+    const cancelFileBtn = document.getElementById('cancel-file-btn');
+    if (cancelFileBtn) {
+        cancelFileBtn.addEventListener('click', () => {
+            document.getElementById('new-file-modal').close();
+        });
+    }
+    
+    const createFolderBtn = document.getElementById('create-folder-btn');
+    if (createFolderBtn) {
+        createFolderBtn.addEventListener('click', handleFolderCreation);
+    }
+    
+    const cancelFolderBtn = document.getElementById('cancel-folder-btn');
+    if (cancelFolderBtn) {
+        cancelFolderBtn.addEventListener('click', () => {
+            document.getElementById('new-folder-modal').close();
+        });
+    }
+    
+    // Enter key handling for modal inputs
+    const newFileNameInput = document.getElementById('new-file-name');
+    if (newFileNameInput) {
+        newFileNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleFileCreation();
+            }
+        });
+    }
+    
+    const newFolderNameInput = document.getElementById('new-folder-name');
+    if (newFolderNameInput) {
+        newFolderNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleFolderCreation();
+            }
+        });
     }
     
     // File editor event listeners
