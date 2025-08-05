@@ -102,6 +102,13 @@ export function updateURLParameters(params) {
 }
 
 /**
+ * Clear all URL parameters
+ */
+export function clearURLParams() {
+    updateURLParameters(null);
+}
+
+/**
  * Show loading state on a button
  * @param {HTMLElement} button - Button element
  * @param {string} loadingText - Text to show while loading
@@ -136,4 +143,4 @@ export function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
-} 
+}
