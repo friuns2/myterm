@@ -53,3 +53,25 @@
         font-size: 10px !important;
     }
 }
+
+/* Prevent overlap between back button and virtual keyboard on mobile */
+@media (max-width: 768px) {
+    /* Add bottom padding to terminal container to account for virtual keyboard */
+    #terminal-container {
+        padding-bottom: 70px;
+    }
+    
+    /* Ensure virtual keyboard stays at bottom */
+    #virtual-keyboard {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+    }
+    
+    /* Adjust body to account for fixed virtual keyboard */
+    body {
+        padding-bottom: 70px;
+    }
+}

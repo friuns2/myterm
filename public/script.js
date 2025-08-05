@@ -489,8 +489,10 @@ if (sessionID) {
 
 // Handle terminal resize
 const handleResize = () => {
-    fitAddon.fit();
-    if (isConnected) {
+    if (fitAddon) {
+        fitAddon.fit();
+    }
+    if (isConnected && terminal) {
         ws.send(JSON.stringify({
             type: 'resize',
             cols: terminal.cols,
@@ -504,7 +506,7 @@ window.addEventListener('resize', handleResize);
 
 // Handle visibility change (focus/blur)
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
+    if (!document.hidden && terminal) {
         terminal.focus();
     }
 });
@@ -513,16 +515,15 @@ document.addEventListener('visibilitychange', () => {
 document.addEventListener('click', (event) => {
     // Only focus terminal if the click is not inside the custom input container
     const customInputContainer = document.getElementById('custom-input-container');
-    if (customInputContainer && !customInputContainer.contains(event.target)) {
+    if (customInputContainer && !customInputContainer.contains(event.target) && terminal) {
         terminal.focus();
     }
 });
 
 // Custom input field handling
 const customCommandInput = document.getElementById('custom-command-input');
-const sendCommandButton = document.getElementById('send-command-button');
 
-if (customCommandInput && sendCommandButton) {
+if (customCommandInput) {
     const sendCommand = () => {
         // Focus terminal first to ensure it's active
         if (terminal) {
@@ -559,7 +560,6 @@ if (customCommandInput && sendCommandButton) {
         }
     };
 
-    sendCommandButton.addEventListener('click', sendCommand);
     customCommandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault(); // Prevent default Enter behavior

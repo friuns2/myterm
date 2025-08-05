@@ -7,7 +7,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid'); // Import uuid
 
 const app = express();
-const port = 3019;
+const port = 3012;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
