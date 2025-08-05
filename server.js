@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid'); // Import uuid
 const { spawn, exec } = require('child_process');
 
 const app = express();
-const port = 3111;
+const port = 3144;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -590,17 +590,27 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
   console.log('Terminal connected');
-  
+
   // Parse session ID and project name from query parameters
   const url = new URL(req.url, `http://${req.headers.host}`);
   let sessionID = url.searchParams.get('sessionID');
   const projectName = url.searchParams.get('projectName');
   let ptyProcess;
+  let session; // Declare session here
 
   if (sessionID && sessions.has(sessionID)) {
     // Reconnect to existing session
-    const session = sessions.get(sessionID);
+    session = sessions.get(sessionID);
     ptyProcess = session.ptyProcess;
+    
+    // Dispose of existing listeners before reattaching to prevent duplicates
+    if (session.onDataDisposable) {
+      session.onDataDisposable.dispose();
+    }
+    if (session.onExitDisposable) {
+      session.onExitDisposable.dispose();
+    }
+
     // Clear previous timeout for this session
     clearTimeout(session.timeoutId);
     // Update WebSocket instance
@@ -641,7 +651,7 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
+    session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null, onDataDisposable: null, onExitDisposable: null };
     sessions.set(sessionID, session);
     console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
@@ -650,45 +660,49 @@ wss.on('connection', (ws, req) => {
       type: 'sessionID',
       sessionID: sessionID
     }));
-
-    // Set up PTY event handlers only for new sessions
-    // Send PTY output to WebSocket and buffer it
-    ptyProcess.onData((data) => {
-      const currentSession = sessions.get(sessionID);
-      if (currentSession) {
-        // Add data to buffer
-        currentSession.buffer += data;
-        
-        // Trim buffer if it exceeds maximum size
-        if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
-          // Keep only the last MAX_BUFFER_SIZE characters
-          currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
-        }
-        
-        // Send data to connected client if WebSocket is open
-        if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-          currentSession.ws.send(JSON.stringify({
-            type: 'output',
-            data: data
-          }));
-        }
-      }
-    });
-
-    // Handle PTY exit
-    ptyProcess.onExit(({ exitCode, signal }) => {
-      console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
-      const currentSession = sessions.get(sessionID);
-      if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-        currentSession.ws.send(JSON.stringify({
-          type: 'exit',
-          exitCode,
-          signal
-        }));
-      }
-      sessions.delete(sessionID); // Clean up session on exit
-    });
   }
+
+  // Set up PTY event handlers for new and reconnected sessions
+  session.onDataDisposable = ptyProcess.onData((data) => {
+    const currentSession = sessions.get(sessionID);
+    if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+      // Add data to buffer
+      currentSession.buffer += data;
+      
+      // Trim buffer if it exceeds maximum size
+      if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+        // Keep only the last MAX_BUFFER_SIZE characters
+        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+      }
+      
+      // Send data to connected client if WebSocket is open
+      currentSession.ws.send(JSON.stringify({
+        type: 'output',
+        data: data
+      }));
+    }
+  });
+
+  // Handle PTY exit
+  session.onExitDisposable = ptyProcess.onExit(({ exitCode, signal }) => {
+    console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
+    const currentSession = sessions.get(sessionID);
+    if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+      currentSession.ws.send(JSON.stringify({
+        type: 'exit',
+        exitCode,
+        signal
+      }));
+    }
+    // Clean up session on exit, dispose of listeners
+    if (session.onDataDisposable) {
+      session.onDataDisposable.dispose();
+    }
+    if (session.onExitDisposable) {
+      session.onExitDisposable.dispose();
+    }
+    sessions.delete(sessionID); // Clean up session on exit
+  });
 
   // Handle WebSocket messages
   ws.on('message', (message) => {
@@ -724,6 +738,13 @@ wss.on('connection', (ws, req) => {
       session.timeoutId = setTimeout(() => {
         console.log(`Session ${sessionID} timed out. Killing process.`);
         session.ptyProcess.kill();
+        // Dispose of listeners here if session is cleaned up due to timeout
+        if (session.onDataDisposable) {
+          session.onDataDisposable.dispose();
+        }
+        if (session.onExitDisposable) {
+          session.onExitDisposable.dispose();
+        }
         sessions.delete(sessionID);
       }, SESSION_TIMEOUT);
     }
@@ -737,6 +758,13 @@ wss.on('connection', (ws, req) => {
       session.timeoutId = setTimeout(() => {
         console.log(`Session ${sessionID} timed out due to error. Killing process.`);
         session.ptyProcess.kill();
+        // Dispose of listeners here if session is cleaned up due to error
+        if (session.onDataDisposable) {
+          session.onDataDisposable.dispose();
+        }
+        if (session.onExitDisposable) {
+          session.onExitDisposable.dispose();
+        }
         sessions.delete(sessionID);
       }, SESSION_TIMEOUT);
     }
