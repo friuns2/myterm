@@ -1104,8 +1104,8 @@ async function handleWorktreeCreation(projectName) {
         
         if (response.ok) {
             document.getElementById('new-worktree-modal').close();
-            // Refresh the project sessions view
-            showProjectSessions(projectName);
+            // Go back to dashboard
+            showSessionsAndProjectsList();
         } else {
             await Swal.fire({
                 title: 'Error',
@@ -1176,8 +1176,8 @@ async function mergeWorktree(projectName, worktreeName) {
                 text: result.message || 'Worktree merged successfully',
                 icon: 'success'
             });
-            // Refresh the project sessions view
-            showProjectSessions(projectName);
+            // Go back to dashboard
+            showSessionsAndProjectsList();
         } else {
             await Swal.fire({
                 title: 'Error',
@@ -1222,8 +1222,8 @@ async function deleteWorktree(projectName, worktreeName) {
                 text: result.message || 'Worktree deleted successfully',
                 icon: 'success'
             });
-            // Refresh the project sessions view
-            showProjectSessions(projectName);
+            // Go back to dashboard
+            showSessionsAndProjectsList();
         } else {
             await Swal.fire({
                 title: 'Error',
