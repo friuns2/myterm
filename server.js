@@ -261,6 +261,92 @@ app.delete('/api/projects/:projectName/worktrees/:worktreeName', (req, res) => {
   });
 });
 
+// API endpoint to get all sessions
+app.get('/api/sessions', (req, res) => {
+  const allSessions = [];
+  sessions.forEach((session, sessionID) => {
+    const lines = session.buffer.split('\n');
+    const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
+    allSessions.push({
+      id: sessionID,
+      status: lastLine.trim() || 'Active session',
+      created: session.created || new Date().toISOString(),
+      projectName: session.projectName || 'N/A' // Include project name for global list
+    });
+  });
+  res.json(allSessions);
+});
+
+// API endpoint to get all worktrees across all projects
+app.get('/api/worktrees', async (req, res) => {
+  try {
+    if (!fs.existsSync(PROJECTS_DIR)) {
+      fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+    }
+    const projectNames = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+
+    let allWorktrees = [];
+
+    for (const projectName of projectNames) {
+      const projectPath = path.join(PROJECTS_DIR, projectName);
+      const gitPath = path.join(projectPath, '.git');
+      
+      if (fs.existsSync(gitPath)) {
+        // Get list of worktrees using git worktree list
+        const { stdout, stderr } = await new Promise((resolve, reject) => {
+          exec('git worktree list --porcelain', { cwd: projectPath }, (error, stdout, stderr) => {
+            if (error) reject(error);
+            resolve({ stdout, stderr });
+          });
+        });
+
+        const worktrees = [];
+        const lines = stdout.split('\n');
+        let currentWorktree = {};
+
+        for (const line of lines) {
+          if (line.startsWith('worktree ')) {
+            if (currentWorktree.path) {
+              worktrees.push(currentWorktree);
+            }
+            currentWorktree = { path: line.replace('worktree ', '') };
+          } else if (line.startsWith('HEAD ')) {
+            currentWorktree.commit = line.replace('HEAD ', '');
+          } else if (line.startsWith('branch ')) {
+            currentWorktree.branch = line.replace('branch refs/heads/', '');
+          } else if (line.startsWith('bare')) {
+            currentWorktree.bare = true;
+          } else if (line.startsWith('detached')) {
+            currentWorktree.detached = true;
+          }
+        }
+
+        if (currentWorktree.path) {
+          worktrees.push(currentWorktree);
+        }
+
+        const filteredWorktrees = worktrees.filter(wt => {
+          const wtPath = wt.path;
+          const worktreesDir = path.join(projectPath, 'worktrees');
+          return wtPath.startsWith(worktreesDir);
+        }).map(wt => ({
+          ...wt,
+          projectName: projectName,
+          name: path.basename(wt.path),
+          relativePath: path.relative(projectPath, wt.path)
+        }));
+        allWorktrees = allWorktrees.concat(filteredWorktrees);
+      }
+    }
+    res.json(allWorktrees);
+  } catch (error) {
+    console.error('Error listing all worktrees:', error);
+    res.status(500).json({ error: 'Failed to list all worktrees' });
+  }
+});
+
 // API endpoint to get session list for a project
 app.get('/api/projects/:projectName/sessions', (req, res) => {
   const projectName = req.params.projectName;

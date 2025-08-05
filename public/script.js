@@ -263,12 +263,85 @@ async function showProjectList() {
     hideNavigationBar();
     
     try {
-        const response = await fetch('/api/projects');
-        const projects = await response.json();
+        const [projectsResponse, allSessionsResponse, allWorktreesResponse] = await Promise.all([
+            fetch('/api/projects'),
+            fetch('/api/sessions'),
+            fetch('/api/worktrees')
+        ]);
+
+        const projects = await projectsResponse.json();
+        const allSessions = await allSessionsResponse.json();
+        const allWorktrees = await allWorktreesResponse.json();
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
             <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
+                <h1 class="text-2xl font-bold mb-6 text-center">Welcome to Web Terminal</h1>
+                
+                <!-- Global Sessions Section -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4">All Active Sessions</h2>
+                    <div class="grid gap-4 mb-6">
+                        ${allSessions.length === 0 ? '<p class="text-center opacity-70">No active sessions</p>' : 
+                            allSessions.map(session => `
+                                <div class="card bg-base-200 shadow-xl">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                                <h2 class="card-title text-sm">${session.id}</h2>
+                                                <p class="text-xs opacity-70 line-clamp-5 break-all">Project: ${session.projectName} | Status: <span>${ansiToHtml(session.status)}</span></p>
+                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                                    Connect
+                                                </button>
+                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                    Kill
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+
+                <!-- Global Worktrees Section -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4">All Active Worktrees</h2>
+                    <div class="grid gap-4 mb-6">
+                        ${allWorktrees.length === 0 ? '<p class="text-center opacity-70">No active worktrees</p>' : 
+                            allWorktrees.map(worktree => `
+                                <div class="card bg-base-300 shadow-xl">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="cursor-pointer flex-1" onclick="openWorktree('${worktree.projectName}', '${worktree.name}')">
+                                                <h2 class="card-title text-sm">🌿 ${worktree.name}</h2>
+                                                <p class="text-xs opacity-70">Project: ${worktree.projectName} | Branch: ${worktree.branch || 'detached'}</p>
+                                                <p class="text-xs opacity-50">Path: ${worktree.relativePath}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="openWorktree('${worktree.projectName}', '${worktree.name}')">
+                                                    Open
+                                                </button>
+                                                <button class="btn btn-success btn-sm" onclick="mergeWorktree('${worktree.projectName}', '${worktree.name}')">
+                                                    Merge
+                                                </button>
+                                                <button class="btn btn-error btn-sm" onclick="deleteWorktree('${worktree.projectName}', '${worktree.name}')">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+                
+                <!-- Projects Section -->
                 <h1 class="text-2xl font-bold mb-6 text-center">Projects</h1>
                 <div class="mb-6">
                     <div class="flex gap-2">
@@ -302,9 +375,9 @@ async function showProjectList() {
             </div>
         `;
     } catch (error) {
-        console.error('Failed to load projects:', error);
+        console.error('Failed to load projects and sessions:', error);
         const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading projects</div>';
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading data</div>';
     }
 }
 
