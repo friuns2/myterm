@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid'); // Import uuid
 const { spawn, exec } = require('child_process');
 
 const app = express();
-const port = 3111;
+const port = 3110;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -278,6 +278,24 @@ app.get('/api/projects/:projectName/sessions', (req, res) => {
         projectName: session.projectName
       });
     }
+  });
+  res.json(sessionList);
+});
+
+// API endpoint to get all sessions across all projects
+app.get('/api/sessions', (req, res) => {
+  const sessionList = [];
+  sessions.forEach((session, sessionID) => {
+    // Get last line from buffer for status
+    const lines = session.buffer.split('\n');
+    const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
+    
+    sessionList.push({
+      id: sessionID,
+      status: lastLine.trim() || 'Active session',
+      created: session.created || new Date().toISOString(),
+      projectName: session.projectName || 'Unknown'
+    });
   });
   res.json(sessionList);
 });
