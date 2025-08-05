@@ -4,8 +4,7 @@
   "description": "Web-based terminal emulator with PTY support for nano, tmux, etc.",
   "main": "shell-executor.js",
   "scripts": {
-    "start": "node server.js",
-    "shell": "node shell-executor.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "ws": "^8.14.2",

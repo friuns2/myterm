@@ -5,7 +5,7 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid'); // Import uuid
 
 const app = express();
-const port = 3000;
+const port = 3007;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer }
@@ -30,6 +30,26 @@ app.get('/api/sessions', (req, res) => {
     });
   });
   res.json(sessionList);
+});
+
+// API endpoint to kill a session
+app.delete('/api/sessions/:sessionId', (req, res) => {
+  const sessionId = req.params.sessionId;
+  const session = sessions.get(sessionId);
+  
+  if (session) {
+    // Kill the PTY process
+    session.ptyProcess.kill();
+    // Clear timeout if exists
+    if (session.timeoutId) {
+      clearTimeout(session.timeoutId);
+    }
+    // Remove from sessions map
+    sessions.delete(sessionId);
+    res.json({ success: true, message: 'Session killed successfully' });
+  } else {
+    res.status(404).json({ success: false, message: 'Session not found' });
+  }
 });
 
 const server = app.listen(port, () => {
