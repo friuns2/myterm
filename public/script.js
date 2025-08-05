@@ -554,8 +554,17 @@ if (customCommandInput && sendCommandButton) {
     sendCommandButton.addEventListener('click', sendCommand);
     customCommandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
-            event.preventDefault(); // Prevent default Enter behavior
-            sendCommand();
+            // Focus terminal first to ensure it's active
+            if (terminal) {
+                terminal.focus();
+                // Add small delay to ensure focus is properly set
+                setTimeout(() => {
+                    sendCommand();
+                }, 50); // 50ms delay
+            } else {
+                // If no terminal, send immediately
+                sendCommand();
+            }
         }
     });
 }
