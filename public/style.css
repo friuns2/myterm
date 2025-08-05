@@ -58,7 +58,7 @@
 @media (max-width: 768px) {
     /* Add bottom padding to terminal container to account for virtual keyboard */
     #terminal-container {
-        padding-bottom: 120px;
+        padding-bottom: 70px;
     }
     
     /* Ensure virtual keyboard stays at bottom */
@@ -70,17 +70,8 @@
         z-index: 1000;
     }
     
-    /* Position input field above virtual keyboard */
-    .bg-base-200:has(#custom-command-input) {
-        position: fixed;
-        bottom: 60px;
-        left: 0;
-        right: 0;
-        z-index: 999;
-    }
-    
-    /* Adjust body to account for fixed elements */
+    /* Adjust body to account for fixed virtual keyboard */
     body {
-        padding-bottom: 120px;
+        padding-bottom: 70px;
     }
 }
