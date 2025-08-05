@@ -10,79 +10,35 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-base-100 h-screen flex flex-col overflow-hidden">
-    <div id="app">
-        <!-- Session List Container -->
-        <div v-show="currentView === 'sessionList'" class="flex-1 p-4">
-            <div class="max-w-4xl mx-auto">
-                <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-3xl font-bold">Terminal Sessions</h1>
-                    <button @click="createNewSession" class="btn btn-primary">New Session</button>
-                </div>
-                <div class="space-y-2">
-                    <div v-for="session in sessions" :key="session.id" class="session-item">
-                        <div class="session-info">
-                            <div class="session-id">{{ session.id }}</div>
-                            <div class="session-status">{{ session.status }}</div>
-                        </div>
-                        <button @click="connectToSession(session.id)" class="btn btn-sm btn-primary">Connect</button>
-                    </div>
-                    <div v-if="sessions.length === 0" class="text-center py-8 text-base-content opacity-60">
-                        No active sessions. Create a new session to get started.
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- Terminal Container -->
+    <div id="terminal-container" class="flex-1 bg-black p-2 overflow-hidden">
+        <div id="terminal" class="w-full h-full"></div>
+    </div>
 
-        <!-- Terminal Container -->
-        <div v-show="currentView === 'terminal'" class="flex-1 bg-black p-2 overflow-hidden">
-            <div class="flex justify-between items-center p-2 bg-base-300">
-                <button @click="goBackToSessionList" class="btn btn-sm btn-outline">← Back to Sessions</button>
-                <div :class="connectionStatusClass" class="text-sm px-2 py-1 rounded">{{ connectionStatus }}</div>
-            </div>
-            <div id="terminal" class="w-full h-full"></div>
-        </div>
-
-        <!-- Command Input Section -->
-        <div v-show="currentView === 'terminal'" class="bg-base-200 p-2 border-t border-base-300">
-            <div class="flex gap-2 items-center">
-                <input 
-                    v-model="customCommand" 
-                    @keydown.enter="sendCustomCommand"
-                    type="text" 
-                    placeholder="Enter command..." 
-                    class="input input-bordered input-sm flex-1 bg-base-100 text-sm" 
-                />
-                <button @click="sendCustomCommand" class="btn btn-primary btn-sm">Send</button>
-            </div>
-        </div>
-
-        <!-- Virtual Keyboard for Mobile -->
-        <div v-show="currentView === 'terminal'" class="bg-base-200 p-2 border-t border-base-300 lg:hidden">
-            <div class="flex gap-1 justify-center flex-wrap">
-                <button 
-                    v-for="key in virtualKeys" 
-                    :key="key.key"
-                    @click="sendVirtualKey(key.key)"
-                    class="btn btn-xs btn-outline"
-                >
-                    {{ key.label }}
-                </button>
-            </div>
-        </div>
-
-        <!-- Notifications -->
-        <div v-for="notification in notifications" :key="notification.id" 
-             :class="['notification', notification.type]">
-            {{ notification.message }}
+    <!-- Command Input Section -->
+    <div class="bg-base-200 p-2 border-t border-base-300">
+        <div class="flex gap-2 items-center">
+            <input type="text" id="custom-command-input" placeholder="Enter command..." 
+                   class="input input-bordered input-sm flex-1 bg-base-100 text-sm" />
+            <button id="send-command-button" class="btn btn-primary btn-sm">Send</button>
         </div>
     </div>
 
-    <!-- External Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <!-- Virtual Keyboard for Mobile -->
+    <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300 lg:hidden">
+        <!-- All Keys in One Row -->
+        <div class="flex gap-1 justify-center flex-wrap">
+            <button class="btn btn-xs btn-outline" data-key-code="27">Esc</button>
+            <button class="btn btn-xs btn-outline" data-key-code="9">Tab</button>
+            <button class="btn btn-xs btn-outline" data-key-code="17">Ctrl</button>
+            <button class="btn btn-xs btn-outline" data-key-code="38">↑</button>
+            <button class="btn btn-xs btn-outline" data-key-code="37">←</button>
+            <button class="btn btn-xs btn-outline" data-key-code="40">↓</button>
+            <button class="btn btn-xs btn-outline" data-key-code="39">→</button>
+        </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
-    
-    <!-- Vue Application -->
-    <script src="js/vue-app.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
