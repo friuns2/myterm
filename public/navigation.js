@@ -1,6 +1,7 @@
 // Navigation and URL handling module
 
-import { getURLParameter, clearURLParams } from './utils.js';
+import { getURLParameter } from './utils.js';
+import { clearURLParams } from './websocket.js';
 import { getSessionID, getCurrentProject, setCurrentProject } from './websocket.js';
 import { showSessionsAndProjectsList, showProjectSessions } from './sessions.js';
 
@@ -139,4 +140,4 @@ export function setupNavigationListeners() {
             });
         });
     }
-} 
+}
