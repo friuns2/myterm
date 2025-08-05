@@ -194,45 +194,22 @@ function initializeTerminal() {
     showNavigationBar();
 }
 
-// Handle terminal resize with virtual keyboard consideration
+// Handle terminal resize
 const handleResize = () => {
-    if (fitAddon && terminal) {
-        // Small delay to ensure DOM has updated
-        setTimeout(() => {
-            fitAddon.fit();
-            if (isConnected) {
-                ws.send(JSON.stringify({
-                    type: 'resize',
-                    cols: terminal.cols,
-                    rows: terminal.rows
-                }));
-            }
-        }, 100);
+    if (fitAddon) {
+        fitAddon.fit();
     }
-};
-
-// Handle virtual keyboard visibility changes
-const handleVirtualKeyboardResize = () => {
-    // Force terminal to recalculate its size when virtual keyboard appears/disappears
-    if (terminal && fitAddon) {
-        setTimeout(() => {
-            fitAddon.fit();
-        }, 200);
+    if (isConnected && terminal) {
+        ws.send(JSON.stringify({
+            type: 'resize',
+            cols: terminal.cols,
+            rows: terminal.rows
+        }));
     }
 };
 
 // Resize terminal when window resizes
 window.addEventListener('resize', handleResize);
-
-// Handle visual viewport changes (for virtual keyboards on mobile)
-if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', handleVirtualKeyboardResize);
-}
-
-// Additional mobile keyboard detection
-window.addEventListener('orientationchange', () => {
-    setTimeout(handleResize, 500);
-});
 
 // Handle visibility change (focus/blur)
 document.addEventListener('visibilitychange', () => {
@@ -273,6 +250,22 @@ function cleanupTerminal() {
     if (fitAddon) {
         fitAddon = null;
     }
+}
+
+// Handle virtual keyboard geometry changes for better mobile experience
+if ("virtualKeyboard" in navigator) {
+    navigator.virtualKeyboard.addEventListener('geometrychange', (event) => {
+        const { height } = event.target.boundingRect;
+        console.log(`Virtual keyboard height changed: ${height}px`);
+        
+        // Trigger terminal resize after a short delay to ensure layout has updated
+        setTimeout(() => {
+            if (fitAddon && terminal) {
+                fitAddon.fit();
+                console.log('Terminal resized for virtual keyboard');
+            }
+        }, 100);
+    });
 }
 
 // Ensure cleanup on page unload

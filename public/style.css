@@ -177,56 +177,33 @@
     }
 }
 
-/* Prevent overlap between terminal and virtual keyboard */
+/* Modern virtual keyboard handling using VirtualKeyboard API */
+/* Ensure virtual keyboard stays at bottom */
 #virtual-keyboard {
     position: fixed;
-    bottom: 0;
+    bottom: env(keyboard-inset-height, 0px);
     left: 0;
     right: 0;
     z-index: 1000;
-    background-color: hsl(var(--b2));
-    border-top: 1px solid hsl(var(--b3));
+    transition: bottom 0.3s ease;
 }
 
-/* Adjust main content to account for virtual keyboard */
-body {
-    padding-bottom: 60px; /* Height of virtual keyboard */
-}
-
-/* Ensure main flex container accounts for virtual keyboard */
-.flex-1.flex {
-    height: calc(100vh - 60px); /* Subtract virtual keyboard height */
-}
-
-/* Ensure terminal container doesn't overlap with virtual keyboard */
+/* Adjust terminal container to account for both custom virtual keyboard and system virtual keyboard */
 #terminal-container {
-    margin-bottom: 0;
-    min-height: 0; /* Allow flex shrinking */
+    padding-bottom: calc(70px + env(keyboard-inset-height, 0px));
+    transition: padding-bottom 0.3s ease;
 }
 
-/* Mobile specific adjustments */
+/* Adjust body to account for custom virtual keyboard */
+body {
+    padding-bottom: 70px;
+}
+
+/* Fallback for older browsers without VirtualKeyboard API support */
 @media (max-width: 768px) {
-    /* Increase padding for mobile devices */
-    body {
-        padding-bottom: 70px;
-    }
-    
-    /* Adjust main flex container for mobile */
-    .flex-1.flex {
-        height: calc(100vh - 70px);
-    }
-    
-    /* Ensure virtual keyboard is properly sized on mobile */
-    #virtual-keyboard {
-        padding: 8px;
-    }
-    
-    #virtual-keyboard .flex {
-        gap: 4px;
-    }
-    
-    #virtual-keyboard button {
-        min-width: 40px;
-        height: 32px;
+    /* Additional mobile-specific adjustments if needed */
+    .xterm {
+        /* Ensure terminal text remains readable on small screens */
+        line-height: 1.2;
     }
 }
