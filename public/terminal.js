@@ -13,6 +13,26 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_BASE_DELAY = 1000; // 1 second
 
+// Function to properly cleanup existing WebSocket connection
+function cleanupWebSocket() {
+    if (ws) {
+        console.log('Cleaning up existing WebSocket connection');
+        // Remove event listeners to prevent interference
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        
+        // Close the WebSocket if it's still open
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+        }
+        ws = null;
+    }
+    isConnected = false;
+    reconnectAttempts = 0;
+}
+
 // Function to create a new terminal instance
 function createNewTerminal() {
     // Dispose of existing terminal if it exists
@@ -43,6 +63,9 @@ function createNewTerminal() {
 }
 
 const connectWebSocket = () => {
+    // First, cleanup any existing WebSocket connection
+    cleanupWebSocket();
+    
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let url = `${protocol}//${window.location.host}`;
     
@@ -58,6 +81,7 @@ const connectWebSocket = () => {
         url += `?${params.toString()}`;
     }
     
+    console.log(`Connecting to WebSocket: ${url}`);
     ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -191,6 +215,19 @@ window.addEventListener('resize', handleResize);
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden && terminal) {
         terminal.focus();
+        
+        // If we have a terminal but no connection, try to reconnect
+        if (!isConnected) {
+            console.log('Page visible again, reconnecting');
+            connectWebSocket();
+        }
+    } else if (document.hidden) {
+        // Page is being hidden, but don't cleanup completely
+        // Just close WebSocket to free up resources on mobile/background tabs
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            console.log('Page hidden, closing WebSocket');
+            ws.close();
+        }
     }
 });
 
@@ -201,4 +238,21 @@ document.addEventListener('click', (event) => {
     if (customInputContainer && !customInputContainer.contains(event.target) && terminal) {
         terminal.focus();
     }
+});
+
+// Cleanup function to be called when navigating away from terminal
+function cleanupTerminal() {
+    cleanupWebSocket();
+    if (terminal) {
+        terminal.dispose();
+        terminal = null;
+    }
+    if (fitAddon) {
+        fitAddon = null;
+    }
+}
+
+// Ensure cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    cleanupTerminal();
 }); 

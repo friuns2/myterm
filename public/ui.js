@@ -26,6 +26,11 @@ window.addEventListener('popstate', (event) => {
     const newSessionID = getSessionIDFromURL();
     const newProject = getProjectFromURL();
     
+    // Cleanup existing terminal if we're navigating away from a session
+    if (sessionID && sessionID !== newSessionID && typeof cleanupTerminal === 'function') {
+        cleanupTerminal();
+    }
+    
     sessionID = newSessionID;
     currentProject = newProject;
     
@@ -44,6 +49,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const backToSessionsBtn = document.getElementById('back-to-sessions');
     if (backToSessionsBtn) {
         backToSessionsBtn.addEventListener('click', () => {
+            // Cleanup terminal before navigating away
+            if (typeof cleanupTerminal === 'function') {
+                cleanupTerminal();
+            }
+            
             if (currentProject) {
                 goBackToProjectList();
             } else {

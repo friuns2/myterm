@@ -27,8 +27,19 @@ function setupWebSocketServer(server) {
             // Reconnect to existing session
             const session = sessions.get(sessionID);
             ptyProcess = session.ptyProcess;
+            
             // Clear previous timeout for this session
-            clearTimeout(session.timeoutId);
+            if (session.timeoutId) {
+                clearTimeout(session.timeoutId);
+                session.timeoutId = null;
+            }
+            
+            // Close any existing WebSocket connection for this session
+            if (session.ws && session.ws !== ws && session.ws.readyState === WebSocket.OPEN) {
+                console.log(`Closing previous WebSocket connection for session: ${sessionID}`);
+                session.ws.close(1000, 'New connection established');
+            }
+            
             // Update WebSocket instance
             session.ws = ws;
             console.log(`Reconnected to session: ${sessionID}`);
@@ -93,10 +104,19 @@ function setupWebSocketServer(server) {
                     
                     // Send data to connected client if WebSocket is open
                     if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                        currentSession.ws.send(JSON.stringify({
-                            type: 'output',
-                            data: data
-                        }));
+                        try {
+                            currentSession.ws.send(JSON.stringify({
+                                type: 'output',
+                                data: data
+                            }));
+                        } catch (error) {
+                            console.error(`Error sending data to session ${sessionID}:`, error);
+                            // If there's an error sending, the WebSocket is likely closed
+                            // Don't try to use it anymore
+                            if (currentSession.ws.readyState !== WebSocket.OPEN) {
+                                console.log(`WebSocket for session ${sessionID} is no longer open`);
+                            }
+                        }
                     }
                 }
             });
@@ -106,11 +126,15 @@ function setupWebSocketServer(server) {
                 console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
                 const currentSession = sessions.get(sessionID);
                 if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                    currentSession.ws.send(JSON.stringify({
-                        type: 'exit',
-                        exitCode,
-                        signal
-                    }));
+                    try {
+                        currentSession.ws.send(JSON.stringify({
+                            type: 'exit',
+                            exitCode,
+                            signal
+                        }));
+                    } catch (error) {
+                        console.error(`Error sending exit message to session ${sessionID}:`, error);
+                    }
                 }
                 sessions.delete(sessionID); // Clean up session on exit
             });
@@ -121,15 +145,26 @@ function setupWebSocketServer(server) {
             try {
                 const msg = JSON.parse(message);
 
+                // Validate that this WebSocket is still the active one for this session
+                const currentSession = sessions.get(sessionID);
+                if (!currentSession || currentSession.ws !== ws) {
+                    console.warn(`Received message from inactive WebSocket for session ${sessionID}`);
+                    return;
+                }
+
                 switch (msg.type) {
                     case 'input':
                         // Send input to PTY
-                        ptyProcess.write(msg.data);
+                        if (ptyProcess && !ptyProcess.killed) {
+                            ptyProcess.write(msg.data);
+                        }
                         break;
 
                     case 'resize':
                         // Resize PTY
-                        ptyProcess.resize(msg.cols, msg.rows);
+                        if (ptyProcess && !ptyProcess.killed) {
+                            ptyProcess.resize(msg.cols, msg.rows);
+                        }
                         break;
 
                     default:
@@ -142,12 +177,15 @@ function setupWebSocketServer(server) {
 
         // Clean up on WebSocket close
         ws.on('close', () => {
-            console.log('Terminal disconnected');
+            console.log(`Terminal disconnected for session: ${sessionID}`);
             const session = sessions.get(sessionID);
-            if (session) {
+            if (session && session.ws === ws) {
+                // Only set timeout if this is the active WebSocket for the session
                 session.timeoutId = setTimeout(() => {
                     console.log(`Session ${sessionID} timed out. Killing process.`);
-                    session.ptyProcess.kill();
+                    if (session.ptyProcess && !session.ptyProcess.killed) {
+                        session.ptyProcess.kill();
+                    }
                     sessions.delete(sessionID);
                 }, SESSION_TIMEOUT);
             }
@@ -155,12 +193,15 @@ function setupWebSocketServer(server) {
 
         // Handle WebSocket errors
         ws.on('error', (error) => {
-            console.error('WebSocket error:', error);
+            console.error(`WebSocket error for session ${sessionID}:`, error);
             const session = sessions.get(sessionID);
-            if (session) {
+            if (session && session.ws === ws) {
+                // Only set timeout if this is the active WebSocket for the session
                 session.timeoutId = setTimeout(() => {
                     console.log(`Session ${sessionID} timed out due to error. Killing process.`);
-                    session.ptyProcess.kill();
+                    if (session.ptyProcess && !session.ptyProcess.killed) {
+                        session.ptyProcess.kill();
+                    }
                     sessions.delete(sessionID);
                 }, SESSION_TIMEOUT);
             }
@@ -175,6 +216,19 @@ function getSessions() {
 }
 
 function deleteSession(sessionId) {
+    const session = sessions.get(sessionId);
+    if (session) {
+        // Clean up properly
+        if (session.timeoutId) {
+            clearTimeout(session.timeoutId);
+        }
+        if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+            session.ws.close();
+        }
+        if (session.ptyProcess && !session.ptyProcess.killed) {
+            session.ptyProcess.kill();
+        }
+    }
     sessions.delete(sessionId);
 }
 

@@ -2,20 +2,25 @@
 
 // Function to navigate back to session list
 function goBackToSessionList() {
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    window.history.pushState({ sessionList: true }, '', url);
-    if (currentProject) {
-        showProjectSessions(currentProject);
-    } else {
-        showSessionsAndProjectsList();
+    // Cleanup terminal before navigating away
+    if (typeof cleanupTerminal === 'function') {
+        cleanupTerminal();
     }
+    
+    sessionID = null;
+    currentProject = null;
+    updateURLWithoutSession();
+    showSessionsAndProjectsList();
 }
 
 function goBackToProjectList() {
-    clearURLParams();
-    currentProject = null;
+    // Cleanup terminal before navigating away
+    if (typeof cleanupTerminal === 'function') {
+        cleanupTerminal();
+    }
+    
     sessionID = null;
+    updateURLWithProject(currentProject);
     showSessionsAndProjectsList();
 }
 
@@ -349,6 +354,11 @@ async function showProjectSessions(projectName) {
 
 // Function to connect to existing session
 function connectToSession(sessionId, projectName = null) {
+    // Cleanup existing terminal before connecting to new session
+    if (typeof cleanupTerminal === 'function') {
+        cleanupTerminal();
+    }
+    
     sessionID = sessionId;
     currentProject = projectName || currentProject;
     updateURLWithSession(sessionID, currentProject);
@@ -385,6 +395,11 @@ async function killSession(sessionId) {
 
 // Function to create new session for project
 function createNewSessionForProject(projectName) {
+    // Cleanup existing terminal before creating new session
+    if (typeof cleanupTerminal === 'function') {
+        cleanupTerminal();
+    }
+    
     sessionID = null;
     currentProject = projectName;
     updateURLWithProject(projectName);
