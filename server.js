@@ -4,8 +4,10 @@ const pty = require('node-pty');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
-const { execSync, exec } = require('child_process');
 const { v4: uuidv4 } = require('uuid'); // Import uuid
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 const app = express();
 const port = 3019;
@@ -18,9 +20,6 @@ const PROJECTS_DIR = path.join(__dirname, '..', 'projects');
 
 // Serve static files
 app.use(express.static('public'));
-
-// Parse JSON bodies
-app.use(express.json());
 
 // API endpoint to get projects list
 app.get('/api/projects', (req, res) => {
@@ -38,47 +37,8 @@ app.get('/api/projects', (req, res) => {
   }
 });
 
-// API endpoint to delete a project
-app.delete('/api/projects/:projectName', (req, res) => {
-  const { projectName } = req.params;
-  const projectPath = path.join(PROJECTS_DIR, projectName);
-  
-  try {
-    if (!fs.existsSync(projectPath)) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-    
-    // Kill any active sessions for this project
-    const sessionsToKill = [];
-    sessions.forEach((session, sessionID) => {
-      if (session.projectName === projectName) {
-        sessionsToKill.push(sessionID);
-      }
-    });
-    
-    sessionsToKill.forEach(sessionID => {
-      const session = sessions.get(sessionID);
-      if (session) {
-        session.ptyProcess.kill();
-        if (session.timeoutId) {
-          clearTimeout(session.timeoutId);
-        }
-        sessions.delete(sessionID);
-      }
-    });
-    
-    // Remove project directory recursively
-    fs.rmSync(projectPath, { recursive: true, force: true });
-    
-    res.json({ success: true, message: `Project '${projectName}' deleted successfully` });
-  } catch (error) {
-    console.error('Error deleting project:', error);
-    res.status(500).json({ error: 'Failed to delete project: ' + error.message });
-  }
-});
-
 // API endpoint to create a new project
-app.post('/api/projects', (req, res) => {
+app.post('/api/projects', express.json(), async (req, res) => {
   const { name } = req.body;
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return res.status(400).json({ error: 'Project name is required' });
@@ -91,17 +51,13 @@ app.post('/api/projects', (req, res) => {
     }
     fs.mkdirSync(projectPath, { recursive: true });
     
-    // Initialize git repository with initial commit
+    // Initialize git repository
     try {
-      execSync('git init', { cwd: projectPath, stdio: 'pipe' });
-      // Create initial README file
-      fs.writeFileSync(path.join(projectPath, 'README.md'), `# ${name.trim()}\n\nProject created on ${new Date().toISOString()}\n`);
-      // Add and commit initial file
-      execSync('git add README.md', { cwd: projectPath, stdio: 'pipe' });
-      execSync('git commit -m "Initial commit"', { cwd: projectPath, stdio: 'pipe' });
-      console.log(`Git repository initialized with initial commit for project: ${name.trim()}`);
+      await execAsync('git init', { cwd: projectPath });
+      console.log(`Git repository initialized for project: ${name.trim()}`);
     } catch (gitError) {
-      console.warn('Failed to initialize git repository:', gitError.message);
+      console.warn(`Failed to initialize git for project ${name.trim()}:`, gitError.message);
+      // Don't fail project creation if git init fails
     }
     
     res.json({ success: true, name: name.trim() });
@@ -152,90 +108,26 @@ app.delete('/api/sessions/:sessionId', (req, res) => {
   }
 });
 
-// API endpoint to create a worktree
-app.post('/api/projects/:projectName/worktrees', (req, res) => {
-  const { projectName } = req.params;
-  const { branchName } = req.body;
-  
-  if (!branchName || typeof branchName !== 'string' || branchName.trim() === '') {
-    return res.status(400).json({ error: 'Branch name is required' });
-  }
-  
-  const projectPath = path.join(PROJECTS_DIR, projectName);
-  const worktreesDir = path.join(projectPath, 'worktrees');
-  const worktreePath = path.join(worktreesDir, branchName.trim());
-  
-  try {
-    if (!fs.existsSync(projectPath)) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-    
-    // Check if it's a git repository
-    if (!fs.existsSync(path.join(projectPath, '.git'))) {
-      return res.status(400).json({ error: 'Project is not a git repository' });
-    }
-    
-    // Check if repository has any commits, if not create initial commit
-    try {
-      execSync('git log --oneline -1', { cwd: projectPath, stdio: 'pipe' });
-    } catch (logError) {
-      // No commits exist, create initial commit
-      try {
-        if (!fs.existsSync(path.join(projectPath, 'README.md'))) {
-          fs.writeFileSync(path.join(projectPath, 'README.md'), `# ${projectName}\n\nProject created on ${new Date().toISOString()}\n`);
-        }
-        execSync('git add .', { cwd: projectPath, stdio: 'pipe' });
-        execSync('git commit -m "Initial commit"', { cwd: projectPath, stdio: 'pipe' });
-      } catch (commitError) {
-        return res.status(500).json({ error: 'Failed to create initial commit: ' + commitError.message });
-      }
-    }
-    
-    // Create worktrees directory if it doesn't exist
-    if (!fs.existsSync(worktreesDir)) {
-      fs.mkdirSync(worktreesDir, { recursive: true });
-    }
-    
-    if (fs.existsSync(worktreePath)) {
-      return res.status(409).json({ error: 'Worktree already exists' });
-    }
-    
-    // Create worktree
-    execSync(`git worktree add worktrees/${branchName.trim()} -b ${branchName.trim()}`, { 
-      cwd: projectPath, 
-      stdio: 'pipe' 
-    });
-    
-    res.json({ success: true, branchName: branchName.trim(), path: worktreePath });
-  } catch (error) {
-    console.error('Error creating worktree:', error);
-    res.status(500).json({ error: 'Failed to create worktree: ' + error.message });
-  }
-});
-
 // API endpoint to get worktrees for a project
-app.get('/api/projects/:projectName/worktrees', (req, res) => {
-  const { projectName } = req.params;
+app.get('/api/projects/:projectName/worktrees', async (req, res) => {
+  const projectName = req.params.projectName;
   const projectPath = path.join(PROJECTS_DIR, projectName);
   
+  if (!fs.existsSync(projectPath)) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+  
   try {
-    if (!fs.existsSync(projectPath)) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-    
     // Check if it's a git repository
-    if (!fs.existsSync(path.join(projectPath, '.git'))) {
+    const gitDir = path.join(projectPath, '.git');
+    if (!fs.existsSync(gitDir)) {
       return res.json([]);
     }
     
-    // Get worktree list
-    const worktreeOutput = execSync('git worktree list --porcelain', { 
-      cwd: projectPath, 
-      encoding: 'utf8' 
-    });
-    
+    // List worktrees
+    const { stdout } = await execAsync('git worktree list --porcelain', { cwd: projectPath });
     const worktrees = [];
-    const lines = worktreeOutput.split('\n');
+    const lines = stdout.split('\n');
     let currentWorktree = {};
     
     for (const line of lines) {
@@ -246,113 +138,161 @@ app.get('/api/projects/:projectName/worktrees', (req, res) => {
         currentWorktree = { path: line.substring(9) };
       } else if (line.startsWith('branch ')) {
         currentWorktree.branch = line.substring(7);
-      } else if (line === '') {
-        if (currentWorktree.path) {
-          worktrees.push(currentWorktree);
-          currentWorktree = {};
-        }
+      } else if (line.startsWith('HEAD ')) {
+        currentWorktree.head = line.substring(5);
       }
     }
     
-    // Filter only worktrees in the worktrees subdirectory
-    const projectWorktrees = worktrees.filter(wt => 
-      wt.path.includes('/worktrees/') && wt.branch
-    ).map(wt => ({
-      branch: wt.branch,
-      path: wt.path,
-      name: path.basename(wt.path)
-    }));
+    if (currentWorktree.path) {
+      worktrees.push(currentWorktree);
+    }
     
-    res.json(projectWorktrees);
+    // Filter out the main worktree and only show ones in worktrees directory
+    const worktreesDir = path.join(projectPath, 'worktrees');
+    const filteredWorktrees = worktrees
+      .filter(wt => wt.path.startsWith(worktreesDir))
+      .map(wt => ({
+        ...wt,
+        name: path.basename(wt.path),
+        relativePath: path.relative(projectPath, wt.path)
+      }));
+    
+    res.json(filteredWorktrees);
   } catch (error) {
-    console.error('Error getting worktrees:', error);
-    res.status(500).json({ error: 'Failed to get worktrees: ' + error.message });
+    console.error('Error listing worktrees:', error);
+    res.status(500).json({ error: 'Failed to list worktrees' });
   }
 });
 
-// API endpoint to merge worktree back
-app.post('/api/projects/:projectName/worktrees/:branchName/merge', (req, res) => {
-  const { projectName, branchName } = req.params;
-  const { targetBranch = 'main' } = req.body;
+// API endpoint to create a worktree
+app.post('/api/projects/:projectName/worktrees', express.json(), async (req, res) => {
+  const projectName = req.params.projectName;
+  const { name, branch } = req.body;
+  
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'Worktree name is required' });
+  }
   
   const projectPath = path.join(PROJECTS_DIR, projectName);
-  const worktreePath = path.join(projectPath, 'worktrees', branchName);
+  const worktreesDir = path.join(projectPath, 'worktrees');
+  const worktreePath = path.join(worktreesDir, name.trim());
+  
+  if (!fs.existsSync(projectPath)) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
   
   try {
-    if (!fs.existsSync(projectPath)) {
-      return res.status(404).json({ error: 'Project not found' });
+    // Check if it's a git repository
+    const gitDir = path.join(projectPath, '.git');
+    if (!fs.existsSync(gitDir)) {
+      return res.status(400).json({ error: 'Project is not a git repository' });
     }
     
-    if (!fs.existsSync(worktreePath)) {
-      return res.status(404).json({ error: 'Worktree not found' });
+    // Create worktrees directory if it doesn't exist
+    if (!fs.existsSync(worktreesDir)) {
+      fs.mkdirSync(worktreesDir, { recursive: true });
     }
     
-    // Switch to target branch and merge
-    execSync(`git checkout ${targetBranch}`, { cwd: projectPath, stdio: 'pipe' });
-    execSync(`git merge ${branchName}`, { cwd: projectPath, stdio: 'pipe' });
+    // Check if worktree already exists
+    if (fs.existsSync(worktreePath)) {
+      return res.status(409).json({ error: 'Worktree already exists' });
+    }
     
-    // Remove worktree
-    execSync(`git worktree remove worktrees/${branchName}`, { cwd: projectPath, stdio: 'pipe' });
+    // Create the worktree
+    const branchName = branch && branch.trim() ? branch.trim() : name.trim();
+    const command = `git worktree add worktrees/${name.trim()} -b ${branchName}`;
+    
+    await execAsync(command, { cwd: projectPath });
+    
+    res.json({ success: true, name: name.trim(), branch: branchName, path: worktreePath });
+  } catch (error) {
+    console.error('Error creating worktree:', error);
+    res.status(500).json({ error: 'Failed to create worktree: ' + error.message });
+  }
+});
+
+// API endpoint to merge worktree back to main
+app.post('/api/projects/:projectName/worktrees/:worktreeName/merge', async (req, res) => {
+  const projectName = req.params.projectName;
+  const worktreeName = req.params.worktreeName;
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreePath = path.join(projectPath, 'worktrees', worktreeName);
+  
+  if (!fs.existsSync(projectPath)) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+  
+  if (!fs.existsSync(worktreePath)) {
+    return res.status(404).json({ error: 'Worktree not found' });
+  }
+  
+  try {
+    // Get the branch name of the worktree
+    const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: worktreePath });
+    const branchName = branchOutput.trim();
+    
+    if (!branchName) {
+      return res.status(400).json({ error: 'Could not determine worktree branch' });
+    }
+    
+    // Switch to main branch in main worktree
+    await execAsync('git checkout main || git checkout master', { cwd: projectPath });
+    
+    // Merge the worktree branch
+    await execAsync(`git merge ${branchName}`, { cwd: projectPath });
+    
+    // Remove the worktree
+    await execAsync(`git worktree remove worktrees/${worktreeName}`, { cwd: projectPath });
     
     // Delete the branch
-    execSync(`git branch -d ${branchName}`, { cwd: projectPath, stdio: 'pipe' });
+    await execAsync(`git branch -d ${branchName}`, { cwd: projectPath });
     
-    res.json({ success: true, message: `Worktree ${branchName} merged into ${targetBranch} and removed` });
+    res.json({ success: true, message: `Worktree ${worktreeName} merged and removed successfully` });
   } catch (error) {
     console.error('Error merging worktree:', error);
     res.status(500).json({ error: 'Failed to merge worktree: ' + error.message });
   }
 });
 
-// API endpoint to delete worktree
-app.delete('/api/projects/:projectName/worktrees/:branchName', (req, res) => {
-  const { projectName, branchName } = req.params;
+// API endpoint to delete a worktree
+app.delete('/api/projects/:projectName/worktrees/:worktreeName', async (req, res) => {
+  const projectName = req.params.projectName;
+  const worktreeName = req.params.worktreeName;
+  
   const projectPath = path.join(PROJECTS_DIR, projectName);
-  const worktreePath = path.join(projectPath, 'worktrees', branchName);
+  const worktreePath = path.join(projectPath, 'worktrees', worktreeName);
+  
+  if (!fs.existsSync(projectPath)) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+  
+  if (!fs.existsSync(worktreePath)) {
+    return res.status(404).json({ error: 'Worktree not found' });
+  }
   
   try {
-    if (!fs.existsSync(projectPath)) {
-      return res.status(404).json({ error: 'Project not found' });
+    // Get the branch name of the worktree
+    const { stdout: branchOutput } = await execAsync('git branch --show-current', { cwd: worktreePath });
+    const branchName = branchOutput.trim();
+    
+    // Remove the worktree
+    await execAsync(`git worktree remove worktrees/${worktreeName}`, { cwd: projectPath });
+    
+    // Delete the branch if it exists
+    if (branchName) {
+      try {
+        await execAsync(`git branch -D ${branchName}`, { cwd: projectPath });
+      } catch (branchError) {
+        console.warn('Could not delete branch:', branchError.message);
+      }
     }
     
-    if (!fs.existsSync(worktreePath)) {
-      return res.status(404).json({ error: 'Worktree not found' });
-    }
-    
-    // Remove worktree
-    execSync(`git worktree remove worktrees/${branchName}`, { cwd: projectPath, stdio: 'pipe' });
-    
-    // Delete the branch
-    try {
-      execSync(`git branch -D ${branchName}`, { cwd: projectPath, stdio: 'pipe' });
-    } catch (branchError) {
-      console.warn('Could not delete branch:', branchError.message);
-    }
-    
-    res.json({ success: true, message: `Worktree ${branchName} removed` });
-   } catch (error) {
-     console.error('Error removing worktree:', error);
-     res.status(500).json({ error: 'Failed to remove worktree: ' + error.message });
-   }
- });
-
-// API endpoint to get sessions for a specific worktree
-app.get('/api/projects/:projectName/worktrees/:branchName/sessions', (req, res) => {
-  const { projectName, branchName } = req.params;
-  const sessionList = [];
-  
-  sessions.forEach((session, sessionId) => {
-    if (session.projectName === projectName && session.worktreeName === branchName) {
-      sessionList.push({
-        id: sessionId,
-        status: session.buffer || 'Ready',
-        created: session.created || new Date().toISOString(),
-        projectName: session.projectName,
-        worktreeName: session.worktreeName
-      });
-    }
-  });
-  res.json(sessionList);
+    res.json({ success: true, message: `Worktree ${worktreeName} removed successfully` });
+  } catch (error) {
+    console.error('Error removing worktree:', error);
+    res.status(500).json({ error: 'Failed to remove worktree: ' + error.message });
+  }
 });
 
 const server = app.listen(port, () => {
@@ -365,11 +305,10 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws, req) => {
   console.log('Terminal connected');
   
-  // Parse session ID, project name, and worktree name from query parameters
+  // Parse session ID and project name from query parameters
   const url = new URL(req.url, `http://${req.headers.host}`);
   let sessionID = url.searchParams.get('sessionID');
   const projectName = url.searchParams.get('projectName');
-  const worktreeName = url.searchParams.get('worktreeName');
   let ptyProcess;
 
   if (sessionID && sessions.has(sessionID)) {
@@ -398,21 +337,13 @@ wss.on('connection', (ws, req) => {
     // Determine working directory
     let cwd = process.cwd();
     if (projectName) {
-      let targetPath;
-      if (worktreeName) {
-        // Use worktree path if worktree is specified
-        targetPath = path.join(PROJECTS_DIR, projectName, 'worktrees', worktreeName);
+      const projectPath = path.join(PROJECTS_DIR, projectName);
+      if (fs.existsSync(projectPath)) {
+        cwd = projectPath;
       } else {
-        // Use main project path
-        targetPath = path.join(PROJECTS_DIR, projectName);
-      }
-      
-      if (fs.existsSync(targetPath)) {
-        cwd = targetPath;
-      } else if (!worktreeName) {
-        // Create project directory if it doesn't exist (only for main project, not worktrees)
-        fs.mkdirSync(targetPath, { recursive: true });
-        cwd = targetPath;
+        // Create project directory if it doesn't exist
+        fs.mkdirSync(projectPath, { recursive: true });
+        cwd = projectPath;
       }
     }
     
@@ -424,9 +355,9 @@ wss.on('connection', (ws, req) => {
       env: process.env
     });
 
-    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null, worktreeName: worktreeName || null };
+    const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
     sessions.set(sessionID, session);
-    console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}${worktreeName ? ` (worktree: ${worktreeName})` : ''}`);
+    console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
     // Send session ID to client
     ws.send(JSON.stringify({

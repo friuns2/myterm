@@ -101,7 +101,6 @@ function ansiToHtml(text) {
 let ws;
 let sessionID = getSessionIDFromURL(); // Get session ID from URL only
 let currentProject = getProjectFromURL() || null;
-let currentWorktree = getWorktreeFromURL() || null;
 let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -118,11 +117,6 @@ function getProjectFromURL() {
     return urlParams.get('project');
 }
 
-function getWorktreeFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('worktree');
-}
-
 // Function to update URL with session ID using pushState for navigation history
 function updateURLWithSession(sessionId, projectName = null) {
     const url = new URL(window.location);
@@ -136,81 +130,14 @@ function updateURLWithSession(sessionId, projectName = null) {
 function updateURLWithProject(projectName) {
     const url = new URL(window.location);
     url.searchParams.delete('session');
-    url.searchParams.delete('worktree');
     url.searchParams.set('project', projectName);
     window.history.pushState({ project: projectName }, '', url);
 }
 
-function updateURLWithWorktree(projectName, worktreeName) {
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    url.searchParams.set('project', projectName);
-    url.searchParams.set('worktree', worktreeName);
-    window.history.pushState({ project: projectName, worktree: worktreeName }, '', url);
-}
-
-async function showWorktreeSessions(projectName, branchName) {
-    try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(branchName)}/sessions`);
-        const sessions = await response.json();
-        
-        const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = `
-            <div class="p-6 max-w-4xl mx-auto">
-                <div class="mb-6">
-                    <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
-                </div>
-                <h1 class="text-2xl font-bold mb-6 text-center">Sessions for Worktree: ${branchName}</h1>
-                <div class="grid gap-4 mb-6">
-                    ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this worktree</p>' : 
-                        sessions.map(session => `
-                            <div class="card bg-base-200 shadow-xl">
-                                <div class="card-body p-4">
-                                    <div class="flex justify-between items-start">
-                                        <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
-                                            <h2 class="card-title text-sm">${session.id}</h2>
-                                            <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
-                                            <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
-                                                Connect
-                                            </button>
-                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
-                                                Kill
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')
-                    }
-                </div>
-                <div class="text-center">
-                    <button class="btn btn-primary" onclick="createNewSessionForWorktree('${projectName}', '${branchName}')">Create New Session</button>
-                </div>
-            </div>
-        `;
-    } catch (error) {
-        console.error('Error fetching worktree sessions:', error);
-        const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading worktree sessions</div>';
-    }
-}
-
-function createNewSessionForWorktree(projectName, branchName) {
-    sessionID = null;
-    currentProject = projectName;
-    currentWorktree = branchName;
-    updateURLWithWorktree(projectName, branchName);
-    initializeTerminal();
-}
-
 function clearURLParams() {
     const url = new URL(window.location);
-    url.searchParams.delete('sessionID');
+    url.searchParams.delete('session');
     url.searchParams.delete('project');
-    url.searchParams.delete('worktree');
     window.history.pushState({}, '', url);
 }
 
@@ -229,7 +156,6 @@ function goBackToSessionList() {
 function goBackToProjectList() {
     clearURLParams();
     currentProject = null;
-    currentWorktree = null;
     sessionID = null;
     showProjectList();
 }
@@ -244,9 +170,6 @@ const connectWebSocket = () => {
     }
     if (currentProject) {
         params.append('projectName', currentProject);
-    }
-    if (currentWorktree) {
-        params.append('worktreeName', currentWorktree);
     }
     
     if (params.toString()) {
@@ -334,19 +257,6 @@ async function showProjectList() {
         const response = await fetch('/api/projects');
         const projects = await response.json();
         
-        // Get worktrees for each project
-        const projectsWithWorktrees = await Promise.all(
-            projects.map(async (project) => {
-                try {
-                    const worktreeResponse = await fetch(`/api/projects/${project}/worktrees`);
-                    const worktrees = await worktreeResponse.json();
-                    return { name: project, worktrees: Array.isArray(worktrees) ? worktrees : [] };
-                } catch (error) {
-                    return { name: project, worktrees: [] };
-                }
-            })
-        );
-        
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
             <div class="p-6 max-w-4xl mx-auto">
@@ -358,47 +268,18 @@ async function showProjectList() {
                     </div>
                 </div>
                 <div class="grid gap-4 mb-6">
-                    ${projectsWithWorktrees.length === 0 ? '<p class="text-center opacity-70">No projects found</p>' : 
-                        projectsWithWorktrees.map(project => `
+                    ${projects.length === 0 ? '<p class="text-center opacity-70">No projects found</p>' : 
+                        projects.map(project => `
                             <div class="card bg-base-200 shadow-xl">
                                 <div class="card-body p-4">
-                                    <div class="flex justify-between items-center mb-3">
-                                        <div class="cursor-pointer flex-1" onclick="selectProject('${project.name}')">
-                                            <h2 class="card-title text-sm">${project.name}</h2>
+                                    <div class="flex justify-between items-center">
+                                        <div class="cursor-pointer flex-1" onclick="selectProject('${project}')">
+                                            <h2 class="card-title text-sm">${project}</h2>
                                         </div>
-                                        <div class="flex gap-2">
-                                            <button class="btn btn-secondary btn-sm" onclick="createWorktree('${project.name}')">
-                                                + Worktree
-                                            </button>
-                                            <button class="btn btn-primary btn-sm" onclick="selectProject('${project.name}')">
-                                                Open
-                                            </button>
-                                            <button class="btn btn-error btn-sm" onclick="deleteProject('${project.name}')">
-                                                Delete
-                                            </button>
-                                        </div>
+                                        <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
+                                            Open
+                                        </button>
                                     </div>
-                                    ${project.worktrees.length > 0 ? `
-                                        <div class="mt-2">
-                                            <h3 class="text-xs font-semibold mb-2 opacity-70">Worktrees:</h3>
-                                            <div class="flex flex-wrap gap-1">
-                                                ${project.worktrees.map(worktree => `
-                                                    <div class="badge badge-outline badge-sm flex items-center gap-1">
-                                                        <span class="cursor-pointer" onclick="selectWorktree('${project.name}', '${worktree.branch}')" title="Open worktree">${worktree.branch}</span>
-                                                        <button class="btn btn-xs btn-ghost p-0 h-4 w-4" onclick="selectWorktree('${project.name}', '${worktree.branch}')" title="Open">
-                                                            📂
-                                                        </button>
-                                                        <button class="btn btn-xs btn-ghost p-0 h-4 w-4" onclick="mergeWorktree('${project.name}', '${worktree.branch}')" title="Merge back">
-                                                            ↩
-                                                        </button>
-                                                        <button class="btn btn-xs btn-ghost p-0 h-4 w-4" onclick="deleteWorktree('${project.name}', '${worktree.branch}')" title="Delete">
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                `).join('')}
-                                            </div>
-                                        </div>
-                                    ` : ''}
                                 </div>
                             </div>
                         `).join('')
@@ -450,17 +331,15 @@ function selectProject(projectName) {
     showProjectSessions(projectName);
 }
 
-function selectWorktree(projectName, branchName) {
-    currentProject = projectName;
-    currentWorktree = branchName;
-    updateURLWithWorktree(projectName, branchName);
-    showWorktreeSessions(projectName, branchName);
-}
-
 async function showProjectSessions(projectName) {
     try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`);
-        const sessions = await response.json();
+        const [sessionsResponse, worktreesResponse] = await Promise.all([
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`),
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`)
+        ]);
+        
+        const sessions = await sessionsResponse.json();
+        const worktrees = await worktreesResponse.json();
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
@@ -468,12 +347,49 @@ async function showProjectSessions(projectName) {
                 <div class="mb-6">
                     <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
                 </div>
-                <h1 class="text-2xl font-bold mb-6 text-center">Sessions for Project: ${projectName}</h1>
-                <div class="grid gap-4 mb-6">
-                    ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
-                        sessions.map(session => `
-                            <div class="card bg-base-200 shadow-xl">
-                                <div class="card-body p-4">
+                <h1 class="text-2xl font-bold mb-6 text-center">Project: ${projectName}</h1>
+                
+                <!-- Worktrees Section -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4">Git Worktrees</h2>
+                    <div class="mb-4">
+                        <div class="flex gap-2">
+                            <input type="text" id="worktree-name" placeholder="Worktree name" class="input input-bordered input-sm flex-1">
+                            <input type="text" id="worktree-branch" placeholder="Branch name (optional)" class="input input-bordered input-sm flex-1">
+                            <button class="btn btn-primary btn-sm" onclick="createWorktree('${projectName}')">Create Worktree</button>
+                        </div>
+                    </div>
+                    <div class="grid gap-2">
+                        ${worktrees.length === 0 ? '<p class="text-center opacity-70 text-sm">No worktrees found</p>' : 
+                            worktrees.map(worktree => `
+                                <div class="card bg-base-300 shadow-sm">
+                                    <div class="card-body p-3">
+                                        <div class="flex justify-between items-center">
+                                            <div class="cursor-pointer flex-1" onclick="selectWorktree('${projectName}', '${worktree.name}')">
+                                                <h3 class="font-medium text-sm">${worktree.name}</h3>
+                                                <p class="text-xs opacity-70">Branch: ${worktree.branch || 'N/A'}</p>
+                                            </div>
+                                            <div class="flex gap-1">
+                                                <button class="btn btn-primary btn-xs" onclick="selectWorktree('${projectName}', '${worktree.name}')">Open</button>
+                                                <button class="btn btn-success btn-xs" onclick="mergeWorktree('${projectName}', '${worktree.name}')">Merge</button>
+                                                <button class="btn btn-error btn-xs" onclick="deleteWorktree('${projectName}', '${worktree.name}')">Delete</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+                
+                <!-- Sessions Section -->
+                <div class="mb-6">
+                    <h2 class="text-xl font-semibold mb-4">Terminal Sessions</h2>
+                    <div class="grid gap-4 mb-6">
+                        ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
+                            sessions.map(session => `
+                                <div class="card bg-base-200 shadow-xl">
+                                    <div class="card-body p-4">
                                     <div class="flex justify-between items-start">
                                         <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
                                             <h2 class="card-title text-sm">${session.id}</h2>
@@ -493,10 +409,11 @@ async function showProjectSessions(projectName) {
                             </div>
                         `).join('')
                     }
-                </div>
-                <div class="text-center">
-                    <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
-                </div>
+                     </div>
+                     <div class="text-center">
+                         <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
+                     </div>
+                 </div>
             </div>
         `;
     } catch (error) {
@@ -546,6 +463,102 @@ function createNewSessionForProject(projectName) {
     initializeTerminal();
 }
 
+// Function to create a new worktree
+async function createWorktree(projectName) {
+    const nameInput = document.getElementById('worktree-name');
+    const branchInput = document.getElementById('worktree-branch');
+    
+    const name = nameInput.value.trim();
+    const branch = branchInput.value.trim();
+    
+    if (!name) {
+        alert('Please enter a worktree name');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name, branch })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            nameInput.value = '';
+            branchInput.value = '';
+            showProjectSessions(projectName); // Refresh the view
+        } else {
+            alert(result.error || 'Failed to create worktree');
+        }
+    } catch (error) {
+        console.error('Error creating worktree:', error);
+        alert('Error creating worktree');
+    }
+}
+
+// Function to select and open a worktree
+function selectWorktree(projectName, worktreeName) {
+    // Create a new session in the worktree directory
+    sessionID = null;
+    currentProject = `${projectName}/worktrees/${worktreeName}`;
+    updateURLWithProject(currentProject);
+    initializeTerminal();
+}
+
+// Function to merge a worktree back to main
+async function mergeWorktree(projectName, worktreeName) {
+    if (!confirm(`Are you sure you want to merge worktree '${worktreeName}' back to main? This will delete the worktree.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(worktreeName)}/merge`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(result.message);
+            showProjectSessions(projectName); // Refresh the view
+        } else {
+            alert(result.error || 'Failed to merge worktree');
+        }
+    } catch (error) {
+        console.error('Error merging worktree:', error);
+        alert('Error merging worktree');
+    }
+}
+
+// Function to delete a worktree
+async function deleteWorktree(projectName, worktreeName) {
+    if (!confirm(`Are you sure you want to delete worktree '${worktreeName}'? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees/${encodeURIComponent(worktreeName)}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(result.message);
+            showProjectSessions(projectName); // Refresh the view
+        } else {
+            alert(result.error || 'Failed to delete worktree');
+        }
+    } catch (error) {
+        console.error('Error deleting worktree:', error);
+        alert('Error deleting worktree');
+    }
+}
+
 // Function to initialize terminal
 function initializeTerminal() {
     const terminalContainer = document.getElementById('terminal-container');
@@ -589,16 +602,12 @@ function initializeTerminal() {
 window.addEventListener('popstate', (event) => {
     const newSessionID = getSessionIDFromURL();
     const newProject = getProjectFromURL();
-    const newWorktree = getWorktreeFromURL();
     
     sessionID = newSessionID;
     currentProject = newProject;
-    currentWorktree = newWorktree;
     
     if (sessionID) {
         initializeTerminal();
-    } else if (currentProject && currentWorktree) {
-        showWorktreeSessions(currentProject, currentWorktree);
     } else if (currentProject) {
         showProjectSessions(currentProject);
     } else {
@@ -609,8 +618,6 @@ window.addEventListener('popstate', (event) => {
 // Check URL parameters and show appropriate interface
 if (sessionID) {
     initializeTerminal();
-} else if (currentProject && currentWorktree) {
-    showWorktreeSessions(currentProject, currentWorktree);
 } else if (currentProject) {
     showProjectSessions(currentProject);
 } else {
@@ -636,7 +643,7 @@ window.addEventListener('resize', handleResize);
 
 // Handle visibility change (focus/blur)
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && terminal) {
+    if (!document.hidden) {
         terminal.focus();
     }
 });
@@ -645,7 +652,7 @@ document.addEventListener('visibilitychange', () => {
 document.addEventListener('click', (event) => {
     // Only focus terminal if the click is not inside the custom input container
     const customInputContainer = document.getElementById('custom-input-container');
-    if (customInputContainer && !customInputContainer.contains(event.target) && terminal) {
+    if (customInputContainer && !customInputContainer.contains(event.target)) {
         terminal.focus();
     }
 });
@@ -748,241 +755,4 @@ if (virtualKeyboard) {
             }
         }
     });
-}
-
-// Worktree management functions
-async function createWorktree(projectName) {
-    const { value: branchName } = await Swal.fire({
-        title: 'Create Worktree',
-        text: `Create a new worktree for project: ${projectName}`,
-        input: 'text',
-        inputLabel: 'Branch name',
-        inputPlaceholder: 'Enter branch name (e.g., feature/new-feature)',
-        showCancelButton: true,
-        confirmButtonText: 'Create',
-        cancelButtonText: 'Cancel',
-        inputValidator: (value) => {
-            if (!value || !value.trim()) {
-                return 'Branch name is required';
-            }
-            if (!/^[a-zA-Z0-9/_-]+$/.test(value.trim())) {
-                return 'Branch name can only contain letters, numbers, hyphens, underscores, and forward slashes';
-            }
-        }
-    });
-    
-    if (branchName) {
-        try {
-            const response = await fetch(`/api/projects/${projectName}/worktrees`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ branchName: branchName.trim() })
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-                await Swal.fire({
-                    title: 'Success!',
-                    text: `Worktree '${result.branchName}' created successfully`,
-                    icon: 'success',
-                    confirmButtonText: 'OK'
-                });
-                showProjectList(); // Refresh the project list
-            } else {
-                await Swal.fire({
-                    title: 'Error',
-                    text: result.error || 'Failed to create worktree',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-            }
-        } catch (error) {
-            console.error('Error creating worktree:', error);
-            await Swal.fire({
-                title: 'Error',
-                text: 'Failed to create worktree',
-                icon: 'error',
-                confirmButtonText: 'OK'
-            });
-        }
-    }
-}
-
-async function mergeWorktree(projectName, branchName) {
-    const { value: targetBranch } = await Swal.fire({
-        title: 'Merge Worktree',
-        text: `Merge worktree '${branchName}' back to main branch`,
-        input: 'text',
-        inputLabel: 'Target branch',
-        inputValue: 'main',
-        inputPlaceholder: 'Enter target branch name',
-        showCancelButton: true,
-        confirmButtonText: 'Merge',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#3085d6',
-        inputValidator: (value) => {
-            if (!value || !value.trim()) {
-                return 'Target branch name is required';
-            }
-        }
-    });
-    
-    if (targetBranch) {
-        // Show confirmation dialog
-        const confirmResult = await Swal.fire({
-            title: 'Are you sure?',
-            text: `This will merge '${branchName}' into '${targetBranch}' and remove the worktree. This action cannot be undone.`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Yes, merge it!',
-            cancelButtonText: 'Cancel'
-        });
-        
-        if (confirmResult.isConfirmed) {
-            try {
-                const response = await fetch(`/api/projects/${projectName}/worktrees/${branchName}/merge`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ targetBranch: targetBranch.trim() })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    await Swal.fire({
-                        title: 'Merged!',
-                        text: result.message,
-                        icon: 'success',
-                        confirmButtonText: 'OK'
-                    });
-                    showProjectList(); // Refresh the project list
-                } else {
-                    await Swal.fire({
-                        title: 'Error',
-                        text: result.error || 'Failed to merge worktree',
-                        icon: 'error',
-                        confirmButtonText: 'OK'
-                    });
-                }
-            } catch (error) {
-                console.error('Error merging worktree:', error);
-                await Swal.fire({
-                    title: 'Error',
-                    text: 'Failed to merge worktree',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-            }
-        }
-    }
-}
-
-async function deleteWorktree(projectName, branchName) {
-    const confirmResult = await Swal.fire({
-        title: 'Are you sure?',
-        text: `This will permanently delete the worktree '${branchName}' and its branch. This action cannot be undone.`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it!',
-        cancelButtonText: 'Cancel'
-    });
-    
-    if (confirmResult.isConfirmed) {
-        try {
-            const response = await fetch(`/api/projects/${projectName}/worktrees/${branchName}`, {
-                method: 'DELETE'
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-                await Swal.fire({
-                    title: 'Deleted!',
-                    text: result.message,
-                    icon: 'success',
-                    confirmButtonText: 'OK'
-                });
-                showProjectList(); // Refresh the project list
-            } else {
-                await Swal.fire({
-                    title: 'Error',
-                    text: result.error || 'Failed to delete worktree',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-            }
-        } catch (error) {
-            console.error('Error deleting worktree:', error);
-            await Swal.fire({
-                title: 'Error',
-                text: 'Failed to delete worktree',
-                icon: 'error',
-                confirmButtonText: 'OK'
-            });
-        }
-    }
-}
-
-async function deleteProject(projectName) {
-    const result = await Swal.fire({
-        title: 'Delete Project',
-        text: `Are you sure you want to delete the project '${projectName}'? This will permanently delete all files and cannot be undone.`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it!',
-        input: 'text',
-        inputPlaceholder: `Type '${projectName}' to confirm`,
-        inputValidator: (value) => {
-            if (value !== projectName) {
-                return 'Please type the project name exactly to confirm deletion';
-            }
-        }
-    });
-
-    if (result.isConfirmed) {
-        try {
-            const response = await fetch(`/api/projects/${projectName}`, {
-                method: 'DELETE'
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                await Swal.fire({
-                    title: 'Deleted!',
-                    text: data.message || 'Project has been deleted.',
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-                
-                // Refresh the project list
-                showProjectList();
-            } else {
-                await Swal.fire({
-                    title: 'Error',
-                    text: data.error || 'Failed to delete project',
-                    icon: 'error'
-                });
-            }
-        } catch (error) {
-            console.error('Error deleting project:', error);
-            await Swal.fire({
-                title: 'Error',
-                text: 'Failed to delete project: ' + error.message,
-                icon: 'error'
-            });
-        }
-    }
 }
