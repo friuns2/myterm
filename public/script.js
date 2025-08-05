@@ -527,15 +527,27 @@ if (customCommandInput && sendCommandButton) {
         // Focus terminal first to ensure it's active
         if (terminal) {
             terminal.focus();
-        }
-        
-        const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
-        if (isConnected) {
-            ws.send(JSON.stringify({
-                type: 'input',
-                data: command
-            }));
-            customCommandInput.value = ''; // Clear input after sending
+            // Add small delay to ensure focus is properly set
+            setTimeout(() => {
+                const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
+                if (isConnected) {
+                    ws.send(JSON.stringify({
+                        type: 'input',
+                        data: command
+                    }));
+                    customCommandInput.value = ''; // Clear input after sending
+                }
+            }, 50); // 50ms delay
+        } else {
+            // If no terminal, send immediately
+            const command = customCommandInput.value + '\r';
+            if (isConnected) {
+                ws.send(JSON.stringify({
+                    type: 'input',
+                    data: command
+                }));
+                customCommandInput.value = '';
+            }
         }
     };
 
@@ -607,12 +619,20 @@ if (virtualKeyboard) {
                 // Focus terminal first to ensure it's active
                 if (terminal) {
                     terminal.focus();
+                    // Add small delay to ensure focus is properly set
+                    setTimeout(() => {
+                        ws.send(JSON.stringify({
+                            type: 'input',
+                            data: data
+                        }));
+                    }, 50); // 50ms delay
+                } else {
+                    // If no terminal, send immediately
+                    ws.send(JSON.stringify({
+                        type: 'input',
+                        data: data
+                    }));
                 }
-                
-                ws.send(JSON.stringify({
-                    type: 'input',
-                    data: data
-                }));
             }
         }
     });
