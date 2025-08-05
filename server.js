@@ -19,6 +19,9 @@ const PROJECTS_DIR = path.join(__dirname, '..', 'projects');
 // Serve static files
 app.use(express.static('public'));
 
+// Parse JSON bodies
+app.use(express.json());
+
 // API endpoint to get projects list
 app.get('/api/projects', (req, res) => {
   try {
@@ -75,7 +78,7 @@ app.delete('/api/projects/:projectName', (req, res) => {
 });
 
 // API endpoint to create a new project
-app.post('/api/projects', express.json(), (req, res) => {
+app.post('/api/projects', (req, res) => {
   const { name } = req.body;
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return res.status(400).json({ error: 'Project name is required' });
@@ -150,7 +153,7 @@ app.delete('/api/sessions/:sessionId', (req, res) => {
 });
 
 // API endpoint to create a worktree
-app.post('/api/projects/:projectName/worktrees', express.json(), (req, res) => {
+app.post('/api/projects/:projectName/worktrees', (req, res) => {
   const { projectName } = req.params;
   const { branchName } = req.body;
   
@@ -268,7 +271,7 @@ app.get('/api/projects/:projectName/worktrees', (req, res) => {
 });
 
 // API endpoint to merge worktree back
-app.post('/api/projects/:projectName/worktrees/:branchName/merge', express.json(), (req, res) => {
+app.post('/api/projects/:projectName/worktrees/:branchName/merge', (req, res) => {
   const { projectName, branchName } = req.params;
   const { targetBranch = 'main' } = req.body;
   
