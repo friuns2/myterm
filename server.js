@@ -151,10 +151,17 @@ app.get('/api/projects-with-worktrees', (req, res) => {
             worktrees.push(currentWorktree);
           }
           
-          projectData.worktrees = worktrees.map(wt => ({
+          // Filter out the main repository and only show worktrees in the worktrees directory
+          const filteredWorktrees = worktrees.filter(wt => {
+            const wtPath = wt.path;
+            const worktreesDir = path.join(projectPath, 'worktrees');
+            return wtPath.startsWith(worktreesDir);
+          });
+          
+          projectData.worktrees = filteredWorktrees.map(wt => ({
             name: path.basename(wt.path),
             branch: wt.branch || (wt.detached ? 'detached' : 'main'),
-            relativePath: path.relative(projectPath, wt.path) || '.'
+            relativePath: path.relative(projectPath, wt.path)
           }));
         } catch (error) {
           // If git command fails, just set empty worktrees
@@ -368,6 +375,26 @@ app.delete('/api/projects/:projectName/worktrees/:worktreeName', (req, res) => {
     console.log(`Worktree removed: ${worktreePath}`);
     res.json({ success: true, message: `Worktree ${worktreeName} removed successfully` });
   });
+});
+
+// API endpoint to delete a project
+app.delete('/api/projects/:projectName', (req, res) => {
+  const projectName = req.params.projectName;
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+
+  if (!fs.existsSync(projectPath)) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  try {
+    // Remove the entire project directory
+    fs.rmSync(projectPath, { recursive: true, force: true });
+    console.log(`Project deleted: ${projectPath}`);
+    res.json({ success: true, message: `Project ${projectName} deleted successfully` });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ error: `Failed to delete project: ${error.message}` });
+  }
 });
 
 // API endpoint to get session list for a project

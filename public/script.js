@@ -339,6 +339,9 @@ async function showSessionsAndProjectsList() {
                                                 <button class="btn btn-secondary btn-sm" onclick="createWorktreeModal('${project.name}')">
                                                     + Worktree
                                                 </button>
+                                                <button class="btn btn-error btn-sm" onclick="deleteProject('${project.name}')">
+                                                    Delete
+                                                </button>
                                             </div>
                                         </div>
                                         
@@ -478,6 +481,51 @@ async function createNewProject() {
             text: 'Error creating project',
             icon: 'error'
         });
+    }
+}
+
+async function deleteProject(projectName) {
+    const result = await Swal.fire({
+        title: 'Delete Project?',
+        text: `Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}`, {
+                method: 'DELETE'
+            });
+            
+            const deleteResult = await response.json();
+            
+            if (response.ok) {
+                await Swal.fire({
+                    title: 'Deleted!',
+                    text: deleteResult.message || 'Project deleted successfully',
+                    icon: 'success'
+                });
+                // Refresh the projects list
+                showSessionsAndProjectsList();
+            } else {
+                await Swal.fire({
+                    title: 'Error',
+                    text: deleteResult.error || 'Failed to delete project',
+                    icon: 'error'
+                });
+            }
+        } catch (error) {
+            console.error('Error deleting project:', error);
+            await Swal.fire({
+                title: 'Error',
+                text: 'Error deleting project',
+                icon: 'error'
+            });
+        }
     }
 }
 
