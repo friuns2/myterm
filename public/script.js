@@ -529,12 +529,20 @@ if (customCommandInput && sendCommandButton) {
             terminal.focus();
             // Add small delay to ensure focus is properly set
             setTimeout(() => {
-                const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
+                const command = customCommandInput.value; // Add carriage return to simulate Enter
                 if (isConnected) {
                     ws.send(JSON.stringify({
                         type: 'input',
                         data: command
                     }));
+                    setTimeout(() => {
+
+                        ws.send(JSON.stringify({
+                            type: 'input',
+                            data: '\r'
+                        }));
+                    }, 50); // 50ms delay
+
                     customCommandInput.value = ''; // Clear input after sending
                 }
             }, 50); // 50ms delay
@@ -554,17 +562,8 @@ if (customCommandInput && sendCommandButton) {
     sendCommandButton.addEventListener('click', sendCommand);
     customCommandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
-            // Focus terminal first to ensure it's active
-            if (terminal) {
-                terminal.focus();
-                // Add small delay to ensure focus is properly set
-                setTimeout(() => {
-                    sendCommand();
-                }, 50); // 50ms delay
-            } else {
-                // If no terminal, send immediately
-                sendCommand();
-            }
+            event.preventDefault(); // Prevent default Enter behavior
+            sendCommand();
         }
     });
 }
