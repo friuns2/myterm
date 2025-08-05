@@ -119,6 +119,10 @@ function setupWebSocketServer(server) {
             });
         }
 
+        // Capture variables in local scope to avoid closure issues
+        const currentSessionID = sessionID;
+        const currentPtyProcess = ptyProcess;
+
         // Handle WebSocket messages
         ws.on('message', (message) => {
             try {
@@ -127,12 +131,12 @@ function setupWebSocketServer(server) {
                 switch (msg.type) {
                     case 'input':
                         // Send input to PTY
-                        ptyProcess.write(msg.data);
+                        currentPtyProcess.write(msg.data);
                         break;
 
                     case 'resize':
                         // Resize PTY
-                        ptyProcess.resize(msg.cols, msg.rows);
+                        currentPtyProcess.resize(msg.cols, msg.rows);
                         break;
 
                     default:
@@ -146,12 +150,12 @@ function setupWebSocketServer(server) {
         // Clean up on WebSocket close
         ws.on('close', () => {
             console.log('Terminal disconnected');
-            const session = sessions.get(sessionID);
+            const session = sessions.get(currentSessionID);
             if (session) {
                 session.timeoutId = setTimeout(() => {
-                    console.log(`Session ${sessionID} timed out. Killing process.`);
+                    console.log(`Session ${currentSessionID} timed out. Killing process.`);
                     session.ptyProcess.kill();
-                    sessions.delete(sessionID);
+                    sessions.delete(currentSessionID);
                 }, SESSION_TIMEOUT);
             }
         });
@@ -159,12 +163,12 @@ function setupWebSocketServer(server) {
         // Handle WebSocket errors
         ws.on('error', (error) => {
             console.error('WebSocket error:', error);
-            const session = sessions.get(sessionID);
+            const session = sessions.get(currentSessionID);
             if (session) {
                 session.timeoutId = setTimeout(() => {
-                    console.log(`Session ${sessionID} timed out due to error. Killing process.`);
+                    console.log(`Session ${currentSessionID} timed out due to error. Killing process.`);
                     session.ptyProcess.kill();
-                    sessions.delete(sessionID);
+                    sessions.delete(currentSessionID);
                 }, SESSION_TIMEOUT);
             }
         });
