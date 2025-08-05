@@ -6,11 +6,6 @@ const { FitAddon } = window.FitAddon;
 let terminal = null;
 let fitAddon = null;
 
-// Global variables for file browser and editor
-let currentEditingFile = null;
-let fileTreeData = {};
-let expandedDirectories = new Set();
-
 // Function to create a new terminal instance
 function createNewTerminal() {
     // Dispose of existing terminal if it exists
@@ -151,11 +146,7 @@ function goBackToSessionList() {
     const url = new URL(window.location);
     url.searchParams.delete('session');
     window.history.pushState({ sessionList: true }, '', url);
-    if (currentProject) {
-        showProjectSessions(currentProject);
-    } else {
-        showProjectList();
-    }
+    showProjectList();
 }
 
 function goBackToProjectList() {
@@ -256,11 +247,25 @@ const connectWebSocket = () => {
     };
 };
 
-// Function to show project list
+// Function to show project list with sessions inline
 async function showProjectList() {
     try {
         const response = await fetch('/api/projects');
         const projects = await response.json();
+        
+        // Fetch sessions for all projects
+        const projectsWithSessions = await Promise.all(
+            projects.map(async (project) => {
+                try {
+                    const sessionsResponse = await fetch(`/api/projects/${encodeURIComponent(project)}/sessions`);
+                    const sessions = await sessionsResponse.json();
+                    return { name: project, sessions };
+                } catch (error) {
+                    console.error(`Failed to load sessions for ${project}:`, error);
+                    return { name: project, sessions: [] };
+                }
+            })
+        );
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
@@ -272,18 +277,40 @@ async function showProjectList() {
                         <button class="btn btn-primary" onclick="createNewProject()">Create Project</button>
                     </div>
                 </div>
-                <div class="grid gap-4 mb-6">
-                    ${projects.length === 0 ? '<p class="text-center opacity-70">No projects found</p>' : 
-                        projects.map(project => `
+                <div class="grid gap-6 mb-6">
+                    ${projectsWithSessions.length === 0 ? '<p class="text-center opacity-70">No projects found</p>' : 
+                        projectsWithSessions.map(project => `
                             <div class="card bg-base-200 shadow-xl">
                                 <div class="card-body p-4">
-                                    <div class="flex justify-between items-center">
-                                        <div class="cursor-pointer flex-1" onclick="selectProject('${project}')">
-                                            <h2 class="card-title text-sm">${project}</h2>
-                                        </div>
-                                        <button class="btn btn-primary btn-sm" onclick="selectProject('${project}')">
-                                            Open
-                                        </button>
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h2 class="card-title text-lg">${project.name}</h2>
+                                        <button class="btn btn-primary btn-sm" onclick="createNewSessionForProject('${project.name}')">New Session</button>
+                                    </div>
+                                    <div class="grid gap-2">
+                                        ${project.sessions.length === 0 ? 
+                                            '<p class="text-sm opacity-70 text-center py-2">No active sessions</p>' : 
+                                            project.sessions.map(session => `
+                                                <div class="card bg-base-100 shadow-sm">
+                                                    <div class="card-body p-3">
+                                                        <div class="flex justify-between items-start">
+                                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${project.name}')">
+                                                                <h3 class="font-semibold text-sm">${session.id}</h3>
+                                                                <p class="text-xs opacity-70 line-clamp-3 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                                            </div>
+                                                            <div class="flex gap-1">
+                                                                <button class="btn btn-primary btn-xs" onclick="connectToSession('${session.id}', '${project.name}')">
+                                                                    Connect
+                                                                </button>
+                                                                <button class="btn btn-error btn-xs" onclick="killSession('${session.id}')">
+                                                                    Kill
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')
+                                        }
                                     </div>
                                 </div>
                             </div>
@@ -320,7 +347,9 @@ async function createNewProject() {
         const result = await response.json();
         
         if (response.ok) {
-            selectProject(result.name);
+            // Clear the input and refresh the project list
+            projectNameInput.value = '';
+            showProjectList();
         } else {
             alert(result.error || 'Failed to create project');
         }
@@ -328,13 +357,6 @@ async function createNewProject() {
         console.error('Error creating project:', error);
         alert('Error creating project');
     }
-}
-
-function selectProject(projectName) {
-    currentProject = projectName;
-    updateURLWithProject(projectName);
-    showProjectSessions(projectName);
-    loadFileTreeForProject();
 }
 
 async function showProjectSessions(projectName) {
@@ -403,12 +425,8 @@ async function killSession(sessionId) {
         const result = await response.json();
         
         if (result.success) {
-            // Refresh the appropriate list
-            if (currentProject) {
-                showProjectSessions(currentProject);
-            } else {
-                showProjectList();
-            }
+            // Refresh the project list to show updated sessions
+            showProjectList();
         } else {
             alert('Failed to kill session: ' + result.message);
         }
@@ -433,7 +451,7 @@ function initializeTerminal() {
         <div class="flex flex-col h-full">
             <div class="bg-base-200 p-2 border-b border-base-300">
                 <button class="btn btn-sm btn-outline" onclick="goBackToSessionList()">
-                    ← Back to Sessions
+                    ← Back to Projects
                 </button>
             </div>
             <div id="terminal" class="flex-1"></div>
@@ -485,8 +503,6 @@ window.addEventListener('popstate', (event) => {
 // Check URL parameters and show appropriate interface
 if (sessionID) {
     initializeTerminal();
-} else if (currentProject) {
-    showProjectSessions(currentProject);
 } else {
     showProjectList();
 }
@@ -651,219 +667,4 @@ if (virtualKeyboard) {
             }
         }
     });
-}
-
-// File Browser and Editor Functionality
-
-// Load file tree from server
-async function loadFileTree() {
-    if (!currentProject) return;
-    
-    try {
-        const response = await fetch(`/api/files/${currentProject}`);
-        if (response.ok) {
-            fileTreeData = await response.json();
-            renderFileTree();
-        } else {
-            console.error('Failed to load file tree');
-        }
-    } catch (error) {
-        console.error('Error loading file tree:', error);
-    }
-}
-
-// Render file tree in the UI
-function renderFileTree() {
-    const fileTreeElement = document.getElementById('file-tree');
-    if (!fileTreeElement) return;
-    
-    fileTreeElement.innerHTML = '';
-    
-    if (!fileTreeData.files || fileTreeData.files.length === 0) {
-        fileTreeElement.innerHTML = '<div class="text-gray-500 text-xs">No files found</div>';
-        return;
-    }
-    
-    renderFileTreeItems(fileTreeData.files, fileTreeElement, 0);
-}
-
-// Recursively render file tree items
-function renderFileTreeItems(items, container, depth) {
-    items.forEach(item => {
-        const itemElement = document.createElement('div');
-        itemElement.className = `file-item ${item.type}`;
-        
-        // Add indentation
-        const indent = ''.repeat(depth);
-        const indentSpan = document.createElement('span');
-        indentSpan.className = 'indent';
-        indentSpan.style.width = `${depth * 16}px`;
-        itemElement.appendChild(indentSpan);
-        
-        // Add file/folder name
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = item.name;
-        itemElement.appendChild(nameSpan);
-        
-        // Add click handler
-        if (item.type === 'directory') {
-            itemElement.addEventListener('click', () => toggleDirectory(item.path, itemElement));
-            if (expandedDirectories.has(item.path)) {
-                itemElement.classList.add('expanded');
-            }
-        } else {
-            itemElement.addEventListener('click', () => openFile(item.path));
-        }
-        
-        container.appendChild(itemElement);
-        
-        // Render children if directory is expanded
-        if (item.type === 'directory' && item.children && expandedDirectories.has(item.path)) {
-            renderFileTreeItems(item.children, container, depth + 1);
-        }
-    });
-}
-
-// Toggle directory expansion
-function toggleDirectory(path, element) {
-    if (expandedDirectories.has(path)) {
-        expandedDirectories.delete(path);
-        element.classList.remove('expanded');
-    } else {
-        expandedDirectories.add(path);
-        element.classList.add('expanded');
-    }
-    renderFileTree();
-}
-
-// Open file in editor
-async function openFile(filePath) {
-    if (!currentProject) return;
-    
-    try {
-        const response = await fetch(`/api/files/${currentProject}/${encodeURIComponent(filePath)}`);
-        if (response.ok) {
-            const fileContent = await response.text();
-            showFileEditor(filePath, fileContent);
-        } else {
-            console.error('Failed to load file content');
-        }
-    } catch (error) {
-        console.error('Error loading file:', error);
-    }
-}
-
-// Show file editor with content
-function showFileEditor(filePath, content) {
-    const fileEditor = document.getElementById('file-editor');
-    const editorFilename = document.getElementById('editor-filename');
-    const fileContentTextarea = document.getElementById('file-content');
-    const saveButton = document.getElementById('save-file');
-    
-    if (!fileEditor || !editorFilename || !fileContentTextarea || !saveButton) return;
-    
-    currentEditingFile = filePath;
-    editorFilename.textContent = filePath.split('/').pop();
-    fileContentTextarea.value = content;
-    saveButton.disabled = false;
-    
-    fileEditor.classList.remove('hidden');
-    
-    // Clear previous selection
-    document.querySelectorAll('.file-item.selected').forEach(item => {
-        item.classList.remove('selected');
-    });
-    
-    // Highlight selected file
-    document.querySelectorAll('.file-item.file').forEach(item => {
-        const nameSpan = item.querySelector('span:last-child');
-        if (nameSpan && filePath.endsWith(nameSpan.textContent)) {
-            item.classList.add('selected');
-        }
-    });
-}
-
-// Save file content
-async function saveFile() {
-    if (!currentEditingFile || !currentProject) return;
-    
-    const fileContentTextarea = document.getElementById('file-content');
-    if (!fileContentTextarea) return;
-    
-    try {
-        const response = await fetch(`/api/files/${currentProject}/${encodeURIComponent(currentEditingFile)}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'text/plain'
-            },
-            body: fileContentTextarea.value
-        });
-        
-        if (response.ok) {
-            console.log('File saved successfully');
-            // You could add a visual indicator here
-        } else {
-            console.error('Failed to save file');
-        }
-    } catch (error) {
-        console.error('Error saving file:', error);
-    }
-}
-
-// Close file editor
-function closeFileEditor() {
-    const fileEditor = document.getElementById('file-editor');
-    const editorFilename = document.getElementById('editor-filename');
-    const fileContentTextarea = document.getElementById('file-content');
-    const saveButton = document.getElementById('save-file');
-    
-    if (!fileEditor || !editorFilename || !fileContentTextarea || !saveButton) return;
-    
-    currentEditingFile = null;
-    editorFilename.textContent = 'No file selected';
-    fileContentTextarea.value = '';
-    saveButton.disabled = true;
-    
-    fileEditor.classList.add('hidden');
-    
-    // Clear selection
-    document.querySelectorAll('.file-item.selected').forEach(item => {
-        item.classList.remove('selected');
-    });
-}
-
-// Event listeners for file browser and editor
-document.addEventListener('DOMContentLoaded', () => {
-    // Refresh files button
-    const refreshButton = document.getElementById('refresh-files');
-    if (refreshButton) {
-        refreshButton.addEventListener('click', loadFileTree);
-    }
-    
-    // Save file button
-    const saveButton = document.getElementById('save-file');
-    if (saveButton) {
-        saveButton.addEventListener('click', saveFile);
-    }
-    
-    // Close editor button
-    const closeButton = document.getElementById('close-editor');
-    if (closeButton) {
-        closeButton.addEventListener('click', closeFileEditor);
-    }
-    
-    // Keyboard shortcut for saving (Ctrl+S)
-    document.addEventListener('keydown', (event) => {
-        if (event.ctrlKey && event.key === 's' && currentEditingFile) {
-            event.preventDefault();
-            saveFile();
-        }
-    });
-});
-
-// Load file tree when project is selected
-function loadFileTreeForProject() {
-    if (currentProject) {
-        loadFileTree();
-    }
 }
