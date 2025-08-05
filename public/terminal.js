@@ -17,7 +17,7 @@ export function createNewTerminal() {
     }
     
     // Create new terminal instance with improved configuration
-    terminal = new Terminal({
+    terminal = new window.Terminal({
         cursorBlink: true,
         fontFamily: 'Courier New, monospace',
         fontSize: 14,
@@ -34,7 +34,7 @@ export function createNewTerminal() {
     });
     
     // Create new fit addon
-    fitAddon = new FitAddon();
+    fitAddon = new window.FitAddon.FitAddon();
     terminal.loadAddon(fitAddon);
     
     return terminal;
@@ -207,4 +207,4 @@ export function setupTerminalShortcuts() {
             });
         }
     });
-} 
+}
