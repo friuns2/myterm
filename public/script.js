@@ -143,6 +143,12 @@ function clearURLParams() {
 
 // Function to navigate back to session list
 function goBackToSessionList() {
+    // Close existing WebSocket connection when going back
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+        isConnected = false;
+    }
+    
     const url = new URL(window.location);
     url.searchParams.delete('session');
     window.history.pushState({ sessionList: true }, '', url);
@@ -154,6 +160,12 @@ function goBackToSessionList() {
 }
 
 function goBackToProjectList() {
+    // Close existing WebSocket connection when going back
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+        isConnected = false;
+    }
+    
     clearURLParams();
     currentProject = null;
     sessionID = null;
@@ -161,6 +173,12 @@ function goBackToProjectList() {
 }
 
 const connectWebSocket = () => {
+    // Close existing WebSocket connection if it exists
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+        reconnectAttempts = 0; // Reset reconnect attempts
+    }
+    
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let url = `${protocol}//${window.location.host}`;
     
@@ -382,6 +400,12 @@ async function showProjectSessions(projectName) {
 
 // Function to connect to existing session
 function connectToSession(sessionId, projectName = null) {
+    // Close existing WebSocket connection before connecting to new session
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+        isConnected = false;
+    }
+    
     sessionID = sessionId;
     currentProject = projectName || currentProject;
     updateURLWithSession(sessionID, currentProject);
@@ -414,6 +438,12 @@ async function killSession(sessionId) {
 
 // Function to create new session for project
 function createNewSessionForProject(projectName) {
+    // Close existing WebSocket connection before creating new session
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+        isConnected = false;
+    }
+    
     sessionID = null;
     currentProject = projectName;
     updateURLWithProject(projectName);
