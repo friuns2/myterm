@@ -135,6 +135,7 @@
     
     #terminal-container {
         min-height: 30vh;
+        /* Virtual keyboard spacing handled in separate rule below */
     }
     
     /* Adjust navigation for mobile */
@@ -164,37 +165,54 @@
     
     #terminal-container {
         min-height: 25vh;
+        /* Virtual keyboard spacing handled in separate rule below */
     }
     
-    .xterm {
-        font-size: 11px !important;
-    }
-}
-
-@media (max-width: 480px) {
     .xterm {
         font-size: 10px !important;
     }
 }
 
-/* Prevent overlap between back button and virtual keyboard on mobile */
+/* Virtual keyboard positioning and overlap prevention */
+#virtual-keyboard {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background-color: hsl(var(--b2));
+    border-top: 1px solid hsl(var(--bc) / 0.2);
+}
+
+/* Ensure main content doesn't overlap with virtual keyboard */
+body {
+    padding-bottom: 80px; /* Height of virtual keyboard + some margin */
+}
+
+/* Adjust terminal container to account for virtual keyboard */
+#terminal-container {
+    margin-bottom: 0;
+    padding-bottom: 10px;
+}
+
+/* Additional mobile adjustments */
 @media (max-width: 768px) {
-    /* Add bottom padding to terminal container to account for virtual keyboard */
-    #terminal-container {
-        padding-bottom: 70px;
-    }
-    
-    /* Ensure virtual keyboard stays at bottom */
-    #virtual-keyboard {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 1000;
-    }
-    
-    /* Adjust body to account for fixed virtual keyboard */
+    /* Increase padding for mobile devices */
     body {
-        padding-bottom: 70px;
+        padding-bottom: 90px;
+    }
+    
+    #terminal-container {
+        min-height: calc(30vh - 90px);
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding-bottom: 100px;
+    }
+    
+    #terminal-container {
+        min-height: calc(25vh - 100px);
     }
 }
