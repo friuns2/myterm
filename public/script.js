@@ -28,7 +28,7 @@ terminal.open(terminalContainer);
 fitAddon.fit();
 
 let ws;
-let sessionID = getSessionIDFromURL();
+let sessionID = getSessionIDFromURL(); // Get session ID from URL only
 let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -40,11 +40,19 @@ function getSessionIDFromURL() {
     return urlParams.get('session');
 }
 
-// Function to update URL with session ID
+// Function to update URL with session ID using pushState for navigation history
 function updateURLWithSession(sessionId) {
     const url = new URL(window.location);
     url.searchParams.set('session', sessionId);
-    window.history.pushState({ sessionId }, '', url);
+    window.history.pushState({ sessionId: sessionId }, '', url);
+}
+
+// Function to navigate back to session list
+function goBackToSessionList() {
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    window.history.pushState({ sessionList: true }, '', url);
+    showSessionList();
 }
 
 const connectWebSocket = () => {
@@ -85,17 +93,14 @@ const connectWebSocket = () => {
                 case 'sessionID':
                     // Store session ID received from server
                     sessionID = message.sessionID;
-                    localStorage.setItem('terminalSessionID', sessionID);
                     updateURLWithSession(sessionID);
                     console.log(`Received new session ID: ${sessionID}`);
                     break;
                     
                 case 'exit':
                     terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
-                    terminal.write('Connection closed. Refresh to reconnect.\r\n');
+                    terminal.write('Connection closed. Go back to session list.\r\n');
                     isConnected = false;
-                    // Optionally, clear session ID if process truly exited
-                    localStorage.removeItem('terminalSessionID');
                     break;
                     
                 default:
@@ -116,8 +121,7 @@ const connectWebSocket = () => {
             terminal.write(`\r\nConnection lost. Attempting to reconnect...\r\n`);
             setTimeout(connectWebSocket, delay);
         } else {
-            terminal.write('\r\nConnection lost. Max reconnect attempts reached. Refresh to reconnect.\r\n');
-            localStorage.removeItem('terminalSessionID'); // Clear session ID on max attempts
+            terminal.write('\r\nConnection lost. Max reconnect attempts reached. Go back to session list.\r\n');
         }
     };
 
@@ -135,26 +139,32 @@ async function showSessionList() {
         const sessions = await response.json();
         
         const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = `
-            <div class="p-6 max-w-4xl mx-auto">
-                <h1 class="text-2xl font-bold mb-6 text-center">Terminal Sessions</h1>
-                <div class="grid gap-4 mb-6">
-                    ${sessions.map(session => `
-                        <div class="card bg-base-200 shadow-xl cursor-pointer hover:bg-base-300 transition-colors" 
-                             onclick="connectToSession('${session.id}')">
-                            <div class="card-body p-4">
-                                <h2 class="card-title text-sm">${session.id}</h2>
-                                <p class="text-xs opacity-70">Status: ${session.status}</p>
-                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="text-center">
-                    <button class="btn btn-primary" onclick="createNewSession()">Create New Session</button>
-                </div>
-            </div>
-        `;
+         terminalContainer.innerHTML = `
+             <div class="p-6 max-w-4xl mx-auto">
+                 <h1 class="text-2xl font-bold mb-6 text-center">Terminal Sessions</h1>
+                 <div class="grid gap-4 mb-6">
+                     ${sessions.map(session => `
+                         <div class="card bg-base-200 shadow-xl">
+                             <div class="card-body p-4">
+                                 <div class="flex justify-between items-start">
+                                     <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}')">
+                                         <h2 class="card-title text-sm">${session.id}</h2>
+                                         <p class="text-xs opacity-70">Status: ${session.status}</p>
+                                         <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                     </div>
+                                     <button class="btn btn-error btn-sm ml-2" onclick="killSession('${session.id}')">
+                                         Kill
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                     `).join('')}
+                 </div>
+                 <div class="text-center">
+                     <button class="btn btn-primary" onclick="createNewSession()">Create New Session</button>
+                 </div>
+             </div>
+         `;
     } catch (error) {
         console.error('Failed to load sessions:', error);
         createNewSession();
@@ -164,17 +174,36 @@ async function showSessionList() {
 // Function to connect to existing session
 function connectToSession(sessionId) {
     sessionID = sessionId;
-    localStorage.setItem('terminalSessionID', sessionID);
     updateURLWithSession(sessionID);
     initializeTerminal();
+}
+
+// Function to kill a session
+async function killSession(sessionId) {
+    try {
+        const response = await fetch(`/api/sessions/${sessionId}`, {
+            method: 'DELETE'
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            // Refresh the session list
+            showSessionList();
+        } else {
+            alert('Failed to kill session: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Error killing session:', error);
+        alert('Error killing session');
+    }
 }
 
 // Function to create new session
 function createNewSession() {
     sessionID = null;
-    localStorage.removeItem('terminalSessionID');
-    const url = new URL(window.location.origin + window.location.pathname);
-    window.history.pushState({ sessionList: true }, '', url);
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    window.history.pushState({ newSession: true }, '', url);
     initializeTerminal();
 }
 
@@ -183,11 +212,10 @@ function initializeTerminal() {
     const terminalContainer = document.getElementById('terminal-container');
     terminalContainer.innerHTML = `
         <div class="flex flex-col h-full">
-            <div class="flex justify-between items-center p-2 bg-base-200 border-b border-base-300">
-                <button class="btn btn-sm btn-ghost" onclick="goBackToSessionList()">
+            <div class="bg-base-200 p-2 border-b border-base-300">
+                <button class="btn btn-sm btn-outline" onclick="goBackToSessionList()">
                     ← Back to Sessions
                 </button>
-                <span class="text-sm opacity-70">Session: ${sessionID || 'New'}</span>
             </div>
             <div id="terminal" class="flex-1"></div>
         </div>
@@ -202,47 +230,22 @@ function initializeTerminal() {
     connectWebSocket();
 }
 
-// Function to go back to session list
-function goBackToSessionList() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.close();
-    }
-    sessionID = null;
-    localStorage.removeItem('terminalSessionID');
-    const url = new URL(window.location.origin + window.location.pathname);
-    window.history.pushState({ sessionList: true }, '', url);
-    showSessionList();
-}
-
-// Handle browser navigation
+// Handle browser navigation (back/forward buttons)
 window.addEventListener('popstate', (event) => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlSessionID = urlParams.get('session');
-    
-    if (urlSessionID) {
-        // Navigate to session
-        sessionID = urlSessionID;
-        localStorage.setItem('terminalSessionID', sessionID);
+    const newSessionID = getSessionIDFromURL();
+    if (newSessionID) {
+        sessionID = newSessionID;
         initializeTerminal();
     } else {
-        // Navigate to session list
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.close();
-        }
         sessionID = null;
-        localStorage.removeItem('terminalSessionID');
         showSessionList();
     }
 });
 
 // Check if we should show session list or connect directly
 if (!sessionID) {
-    // Push initial state for session list
-    window.history.replaceState({ sessionList: true }, '', window.location);
     showSessionList();
 } else {
-    // Push initial state for session
-    window.history.replaceState({ sessionId: sessionID }, '', window.location);
     // Initial WebSocket connection
     connectWebSocket();
 }
