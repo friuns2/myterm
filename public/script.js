@@ -554,6 +554,7 @@ if (customCommandInput && sendCommandButton) {
     sendCommandButton.addEventListener('click', sendCommand);
     customCommandInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
+            event.preventDefault(); // Prevent default Enter behavior
             sendCommand();
         }
     });
