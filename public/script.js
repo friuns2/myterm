@@ -459,8 +459,13 @@ function selectWorktree(projectName, branchName) {
 
 async function showProjectSessions(projectName) {
     try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`);
-        const sessions = await response.json();
+        const [sessionsResponse, worktreesResponse] = await Promise.all([
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`),
+            fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`)
+        ]);
+        
+        const sessions = await sessionsResponse.json();
+        const worktrees = await worktreesResponse.json();
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
@@ -468,41 +473,81 @@ async function showProjectSessions(projectName) {
                 <div class="mb-6">
                     <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
                 </div>
-                <h1 class="text-2xl font-bold mb-6 text-center">Sessions for Project: ${projectName}</h1>
-                <div class="grid gap-4 mb-6">
-                    ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
-                        sessions.map(session => `
-                            <div class="card bg-base-200 shadow-xl">
-                                <div class="card-body p-4">
-                                    <div class="flex justify-between items-start">
-                                        <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
-                                            <h2 class="card-title text-sm">${session.id}</h2>
-                                            <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
-                                            <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
-                                                Connect
-                                            </button>
-                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
-                                                Kill
-                                            </button>
+                <h1 class="text-2xl font-bold mb-6 text-center">Project: ${projectName}</h1>
+                
+                <!-- Worktrees Section -->
+                <div class="mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Git Worktrees</h2>
+                        <button class="btn btn-secondary btn-sm" onclick="createWorktree('${projectName}')">+ Create Worktree</button>
+                    </div>
+                    <div class="grid gap-3 mb-4">
+                        ${worktrees.length === 0 ? '<p class="text-center opacity-70 py-4">No worktrees found</p>' : 
+                            worktrees.map(worktree => `
+                                <div class="card bg-base-300 shadow-md">
+                                    <div class="card-body p-3">
+                                        <div class="flex justify-between items-center">
+                                            <div class="cursor-pointer flex-1" onclick="selectWorktree('${projectName}', '${worktree.branch}')">
+                                                <h3 class="font-semibold text-sm">${worktree.branch}</h3>
+                                                <p class="text-xs opacity-70">${worktree.path}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-xs" onclick="selectWorktree('${projectName}', '${worktree.branch}')">
+                                                    Open
+                                                </button>
+                                                <button class="btn btn-success btn-xs" onclick="mergeWorktree('${projectName}', '${worktree.branch}')">
+                                                    Merge
+                                                </button>
+                                                <button class="btn btn-error btn-xs" onclick="deleteWorktree('${projectName}', '${worktree.branch}')">
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        `).join('')
-                    }
+                            `).join('')
+                        }
+                    </div>
                 </div>
-                <div class="text-center">
-                    <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
+                
+                <!-- Sessions Section -->
+                <div class="mb-6">
+                    <h2 class="text-xl font-semibold mb-4">Terminal Sessions</h2>
+                    <div class="grid gap-4 mb-6">
+                        ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
+                            sessions.map(session => `
+                                <div class="card bg-base-200 shadow-xl">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                <h2 class="card-title text-sm">${session.id}</h2>
+                                                <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
+                                                    Connect
+                                                </button>
+                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                    Kill
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                    <div class="text-center">
+                        <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
+                    </div>
                 </div>
             </div>
         `;
     } catch (error) {
-        console.error('Error fetching sessions:', error);
+        console.error('Error fetching project data:', error);
         const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading sessions</div>';
+        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading project data</div>';
     }
 }
 
@@ -790,7 +835,7 @@ async function createWorktree(projectName) {
                     icon: 'success',
                     confirmButtonText: 'OK'
                 });
-                showProjectList(); // Refresh the project list
+                showProjectSessions(projectName); // Refresh the current project view
             } else {
                 await Swal.fire({
                     title: 'Error',
@@ -862,7 +907,7 @@ async function mergeWorktree(projectName, branchName) {
                         icon: 'success',
                         confirmButtonText: 'OK'
                     });
-                    showProjectList(); // Refresh the project list
+                    showProjectSessions(projectName); // Refresh the current project view
                 } else {
                     await Swal.fire({
                         title: 'Error',
@@ -911,7 +956,7 @@ async function deleteWorktree(projectName, branchName) {
                     icon: 'success',
                     confirmButtonText: 'OK'
                 });
-                showProjectList(); // Refresh the project list
+                showProjectSessions(projectName); // Refresh the current project view
             } else {
                 await Swal.fire({
                     title: 'Error',
