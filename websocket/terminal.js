@@ -9,7 +9,7 @@ const { PROJECTS_DIR } = require('../middleware/security');
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer (0 = disabled)
+const MAX_BUFFER_SIZE = 9999999; // Maximum number of characters to buffer (0 = disabled)
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
