@@ -281,7 +281,7 @@ async function showProjectList() {
                 <!-- Global Sessions Section -->
                 <div class="mb-8">
                     <h2 class="text-xl font-semibold mb-4">All Active Sessions</h2>
-                    <div class="grid gap-4 mb-6">
+                    <div class="grid gap-4 mb-6 max-h-64 overflow-y-auto">
                         ${allSessions.length === 0 ? '<p class="text-center opacity-70">No active sessions</p>' : 
                             allSessions.map(session => `
                                 <div class="card bg-base-200 shadow-xl">
@@ -311,7 +311,7 @@ async function showProjectList() {
                 <!-- Global Worktrees Section -->
                 <div class="mb-8">
                     <h2 class="text-xl font-semibold mb-4">All Active Worktrees</h2>
-                    <div class="grid gap-4 mb-6">
+                    <div class="grid gap-4 mb-6 max-h-64 overflow-y-auto">
                         ${allWorktrees.length === 0 ? '<p class="text-center opacity-70">No active worktrees</p>' : 
                             allWorktrees.map(worktree => `
                                 <div class="card bg-base-300 shadow-xl">
@@ -349,7 +349,7 @@ async function showProjectList() {
                         <button class="btn btn-primary" onclick="createNewProject()">Create Project</button>
                     </div>
                 </div>
-                <div class="projects-container grid gap-4">
+                <div class="projects-container grid gap-4 max-h-64 overflow-y-auto">
                     ${projects.length === 0 ? '<p class="text-center opacity-70">No projects found</p>' : 
                         projects.map(project => `
                             <div class="card bg-base-200 shadow-xl">
