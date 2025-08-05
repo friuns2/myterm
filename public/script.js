@@ -437,11 +437,6 @@ function initializeTerminal() {
     const terminalContainer = document.getElementById('terminal-container');
     terminalContainer.innerHTML = `
         <div class="flex flex-col h-full">
-            <div class="bg-base-200 p-2 border-b border-base-300">
-                <button class="btn btn-sm btn-outline" onclick="goBackToSessionList()">
-                    ← Back to Sessions
-                </button>
-            </div>
             <div id="terminal" class="flex-1"></div>
         </div>
     `;
