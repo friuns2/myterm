@@ -135,6 +135,10 @@ const connectWebSocket = () => {
 
 // Function to initialize terminal
 function initializeTerminal() {
+    // Close existing WebSocket if open
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+    }
     const terminalContainer = document.getElementById('terminal-container');
     terminalContainer.innerHTML = `
         <div class="flex flex-col h-full">
@@ -201,4 +205,4 @@ document.addEventListener('click', (event) => {
     if (customInputContainer && !customInputContainer.contains(event.target) && terminal) {
         terminal.focus();
     }
-}); 
+});
