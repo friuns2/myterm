@@ -268,7 +268,7 @@ async function showProjectList() {
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
-            <div class="p-6 max-w-4xl mx-auto">
+            <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
                 <h1 class="text-2xl font-bold mb-6 text-center">Projects</h1>
                 <div class="mb-6">
                     <div class="flex gap-2">
@@ -276,7 +276,7 @@ async function showProjectList() {
                         <button class="btn btn-primary" onclick="createNewProject()">Create Project</button>
                     </div>
                 </div>
-                <div class="grid gap-4 mb-6">
+                <div class="projects-container grid gap-4">
                     ${projects.length === 0 ? '<p class="text-center opacity-70">No projects found</p>' : 
                         projects.map(project => `
                             <div class="card bg-base-200 shadow-xl">
