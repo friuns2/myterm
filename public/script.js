@@ -524,6 +524,11 @@ const sendCommandButton = document.getElementById('send-command-button');
 
 if (customCommandInput && sendCommandButton) {
     const sendCommand = () => {
+        // Focus terminal first
+        if (terminal) {
+            terminal.focus();
+        }
+        
         const command = customCommandInput.value + '\r'; // Add carriage return to simulate Enter
         if (isConnected) {
             ws.send(JSON.stringify({
@@ -548,6 +553,11 @@ if (virtualKeyboard) {
     virtualKeyboard.addEventListener('click', (event) => {
         const button = event.target.closest('button[data-key-code]');
         if (button) {
+            // Focus terminal first
+            if (terminal) {
+                terminal.focus();
+            }
+            
             const keyCode = parseInt(button.dataset.keyCode, 10);
             let data = '';
 
