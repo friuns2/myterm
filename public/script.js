@@ -547,6 +547,77 @@ if (customCommandInput && sendCommandButton) {
     });
 }
 
+// Git Worktree Management
+const branchNameInput = document.getElementById('branch-name-input');
+const createWorktreeButton = document.getElementById('create-worktree-button');
+const mergeWorktreeButton = document.getElementById('merge-worktree-button');
+const listWorktreesButton = document.getElementById('list-worktrees-button');
+
+if (createWorktreeButton) {
+    createWorktreeButton.addEventListener('click', () => {
+        const branchName = branchNameInput.value.trim();
+        if (!branchName) {
+            alert('Please enter a branch name');
+            return;
+        }
+        
+        // Create worktree in ../projectname/worktrees/branchname-w1 format
+        const worktreePath = `../myshell6/worktrees/${branchName}-w1`;
+        const command = `git worktree add ${worktreePath} -b ${branchName}`;
+        
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'input',
+                data: command + '\r'
+            }));
+            branchNameInput.value = '';
+        }
+    });
+}
+
+if (mergeWorktreeButton) {
+    mergeWorktreeButton.addEventListener('click', () => {
+        const branchName = branchNameInput.value.trim();
+        if (!branchName) {
+            alert('Please enter the branch name to merge');
+            return;
+        }
+        
+        // Merge the branch back to main and remove worktree
+        const commands = [
+            `git checkout main`,
+            `git merge ${branchName}`,
+            `git worktree remove ../myshell6/worktrees/${branchName}-w1`,
+            `git branch -d ${branchName}`
+        ];
+        
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            commands.forEach((command, index) => {
+                setTimeout(() => {
+                    ws.send(JSON.stringify({
+                        type: 'input',
+                        data: command + '\r'
+                    }));
+                }, index * 1000); // Delay each command by 1 second
+            });
+            branchNameInput.value = '';
+        }
+    });
+}
+
+if (listWorktreesButton) {
+    listWorktreesButton.addEventListener('click', () => {
+        const command = 'git worktree list';
+        
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'input',
+                data: command + '\r'
+            }));
+        }
+    });
+}
+
 // Virtual keyboard input
 const virtualKeyboard = document.getElementById('virtual-keyboard');
 if (virtualKeyboard) {
