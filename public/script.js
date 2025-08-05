@@ -500,11 +500,11 @@ async function toggleFileBrowser() {
     
     if (isFileBrowserOpen) {
         fileBrowser.classList.add('hidden');
-        fileBrowser.classList.remove('flex');
+        fileBrowser.classList.remove('flex', 'fullscreen');
         isFileBrowserOpen = false;
     } else {
         fileBrowser.classList.remove('hidden');
-        fileBrowser.classList.add('flex');
+        fileBrowser.classList.add('flex', 'fullscreen');
         isFileBrowserOpen = true;
         
         // Load initial directory (project directory or home)
@@ -595,10 +595,10 @@ async function openFileInEditor(filePath) {
         
         currentEditingFile = data.path;
         
-        // Show editor panel
+        // Show editor panel in fullscreen
         const fileEditor = document.getElementById('file-editor');
         fileEditor.classList.remove('hidden');
-        fileEditor.classList.add('flex');
+        fileEditor.classList.add('flex', 'fullscreen');
         isFileEditorOpen = true;
         
         // Update editor content
@@ -667,7 +667,7 @@ async function saveCurrentFile() {
 function closeFileEditor() {
     const fileEditor = document.getElementById('file-editor');
     fileEditor.classList.add('hidden');
-    fileEditor.classList.remove('flex');
+    fileEditor.classList.remove('flex', 'fullscreen');
     isFileEditorOpen = false;
     currentEditingFile = null;
 }
@@ -675,7 +675,7 @@ function closeFileEditor() {
 function closeFileBrowser() {
     const fileBrowser = document.getElementById('file-browser');
     fileBrowser.classList.add('hidden');
-    fileBrowser.classList.remove('flex');
+    fileBrowser.classList.remove('flex', 'fullscreen');
     isFileBrowserOpen = false;
 }
 
@@ -820,6 +820,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 event.target.value = value.substring(0, start) + '\t' + value.substring(end);
                 event.target.selectionStart = event.target.selectionEnd = start + 1;
             }
+        });
+    }
+    
+    // Global ESC key handler to close fullscreen panels
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            if (isFileEditorOpen) {
+                closeFileEditor();
+            } else if (isFileBrowserOpen) {
+                closeFileBrowser();
+            }
+        }
+    });
+    
+    // Click outside to close fullscreen panels
+    document.addEventListener('click', (event) => {
+        const fileBrowser = document.getElementById('file-browser');
+        const fileEditor = document.getElementById('file-editor');
+        
+        if (isFileBrowserOpen && fileBrowser && !fileBrowser.contains(event.target) && !event.target.closest('#browse-files')) {
+            closeFileBrowser();
+        }
+        
+        if (isFileEditorOpen && fileEditor && !fileEditor.contains(event.target)) {
+            // Don't close if clicking on file items to open them
+            if (!event.target.closest('.file-item')) {
+                closeFileEditor();
+            }
+        }
+    });
+    
+    // Prevent clicks inside panels from bubbling up
+    const fileBrowser = document.getElementById('file-browser');
+    const fileEditor = document.getElementById('file-editor');
+    
+    if (fileBrowser) {
+        fileBrowser.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+    }
+    
+    if (fileEditor) {
+        fileEditor.addEventListener('click', (event) => {
+            event.stopPropagation();
         });
     }
 });

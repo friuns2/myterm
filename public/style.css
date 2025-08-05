@@ -46,6 +46,18 @@
     transition: transform 0.3s ease;
 }
 
+/* Full screen overlay styles */
+#file-browser.fullscreen, #file-editor.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 1000;
+    max-height: none !important;
+    border: none !important;
+}
+
 #file-list {
     scrollbar-width: thin;
 }
