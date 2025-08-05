@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid'); // Import uuid
 const { spawn, exec } = require('child_process');
 
 const app = express();
-const port = 3111;
+const port = 3113;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -60,6 +60,90 @@ app.post('/api/projects', express.json(), (req, res) => {
   } catch (error) {
     console.error('Error creating project:', error);
     res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// API endpoint to get all worktrees across all projects
+app.get('/api/worktrees', (req, res) => {
+  try {
+    if (!fs.existsSync(PROJECTS_DIR)) {
+      return res.json([]);
+    }
+    
+    const projects = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    
+    const allWorktrees = [];
+    let completedProjects = 0;
+    
+    if (projects.length === 0) {
+      return res.json([]);
+    }
+    
+    projects.forEach(projectName => {
+      const projectPath = path.join(PROJECTS_DIR, projectName);
+      const gitPath = path.join(projectPath, '.git');
+      
+      if (!fs.existsSync(gitPath)) {
+        completedProjects++;
+        if (completedProjects === projects.length) {
+          res.json(allWorktrees);
+        }
+        return;
+      }
+      
+      exec('git worktree list --porcelain', { cwd: projectPath }, (error, stdout, stderr) => {
+        if (!error) {
+          const worktrees = [];
+          const lines = stdout.split('\n');
+          let currentWorktree = {};
+          
+          for (const line of lines) {
+            if (line.startsWith('worktree ')) {
+              if (currentWorktree.path) {
+                worktrees.push(currentWorktree);
+              }
+              currentWorktree = { path: line.replace('worktree ', '') };
+            } else if (line.startsWith('HEAD ')) {
+              currentWorktree.commit = line.replace('HEAD ', '');
+            } else if (line.startsWith('branch ')) {
+              currentWorktree.branch = line.replace('branch refs/heads/', '');
+            } else if (line.startsWith('bare')) {
+              currentWorktree.bare = true;
+            } else if (line.startsWith('detached')) {
+              currentWorktree.detached = true;
+            }
+          }
+          
+          if (currentWorktree.path) {
+            worktrees.push(currentWorktree);
+          }
+          
+          // Filter out the main repository and only show worktrees in the worktrees directory
+          const filteredWorktrees = worktrees.filter(wt => {
+            const wtPath = wt.path;
+            const worktreesDir = path.join(projectPath, 'worktrees');
+            return wtPath.startsWith(worktreesDir);
+          }).map(wt => ({
+            ...wt,
+            name: path.basename(wt.path),
+            relativePath: path.relative(projectPath, wt.path),
+            projectName: projectName
+          }));
+          
+          allWorktrees.push(...filteredWorktrees);
+        }
+        
+        completedProjects++;
+        if (completedProjects === projects.length) {
+          res.json(allWorktrees);
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error getting all worktrees:', error);
+    res.status(500).json({ error: 'Failed to get worktrees' });
   }
 });
 
@@ -259,6 +343,24 @@ app.delete('/api/projects/:projectName/worktrees/:worktreeName', (req, res) => {
     console.log(`Worktree removed: ${worktreePath}`);
     res.json({ success: true, message: `Worktree ${worktreeName} removed successfully` });
   });
+});
+
+// API endpoint to get all sessions across all projects
+app.get('/api/sessions', (req, res) => {
+  const sessionList = [];
+  sessions.forEach((session, sessionID) => {
+    // Get last line from buffer for status
+    const lines = session.buffer.split('\n');
+    const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
+    
+    sessionList.push({
+      id: sessionID,
+      status: lastLine.trim() || 'Active session',
+      created: session.created || new Date().toISOString(),
+      projectName: session.projectName || 'default'
+    });
+  });
+  res.json(sessionList);
 });
 
 // API endpoint to get session list for a project
