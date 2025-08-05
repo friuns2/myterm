@@ -33,8 +33,8 @@ export function createNewTerminal() {
         tabStopWidth: 4
     });
     
-    // Create new fit addon - access from global scope since it's loaded via CDN
-    fitAddon = new window.FitAddon.FitAddon();
+    // Create new fit addon
+    fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     
     return terminal;
@@ -207,4 +207,4 @@ export function setupTerminalShortcuts() {
             });
         }
     });
-}
+} 
