@@ -355,6 +355,13 @@ async function showWorktrees(projectName) {
             fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`)
         ]);
         
+        if (!sessionsResponse.ok) {
+            throw new Error(`Failed to fetch sessions: ${sessionsResponse.status}`);
+        }
+        if (!worktreesResponse.ok) {
+            throw new Error(`Failed to fetch worktrees: ${worktreesResponse.status}`);
+        }
+        
         const sessions = await sessionsResponse.json();
         const worktrees = await worktreesResponse.json();
         
