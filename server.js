@@ -172,6 +172,22 @@ app.post('/api/projects/:projectName/worktrees', express.json(), (req, res) => {
       return res.status(400).json({ error: 'Project is not a git repository' });
     }
     
+    // Check if repository has any commits, if not create initial commit
+    try {
+      execSync('git log --oneline -1', { cwd: projectPath, stdio: 'pipe' });
+    } catch (logError) {
+      // No commits exist, create initial commit
+      try {
+        if (!fs.existsSync(path.join(projectPath, 'README.md'))) {
+          fs.writeFileSync(path.join(projectPath, 'README.md'), `# ${projectName}\n\nProject created on ${new Date().toISOString()}\n`);
+        }
+        execSync('git add .', { cwd: projectPath, stdio: 'pipe' });
+        execSync('git commit -m "Initial commit"', { cwd: projectPath, stdio: 'pipe' });
+      } catch (commitError) {
+        return res.status(500).json({ error: 'Failed to create initial commit: ' + commitError.message });
+      }
+    }
+    
     // Create worktrees directory if it doesn't exist
     if (!fs.existsSync(worktreesDir)) {
       fs.mkdirSync(worktreesDir, { recursive: true });
