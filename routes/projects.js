@@ -146,7 +146,7 @@ function getProjectsWithWorktrees(req, res) {
         console.error('Error reading projects with worktrees:', error);
         res.status(500).json({ error: 'Failed to read projects with worktrees' });
     }
-});
+}
 
 // API endpoint to delete a project
 router.delete('/:projectName', (req, res) => {
@@ -166,7 +166,7 @@ router.delete('/:projectName', (req, res) => {
         console.error('Error deleting project:', error);
         res.status(500).json({ error: `Failed to delete project: ${error.message}` });
     }
-}
+});
 
 module.exports = router;
-module.exports.getProjectsWithWorktrees = getProjectsWithWorktrees; 
+module.exports.getProjectsWithWorktrees = getProjectsWithWorktrees;
