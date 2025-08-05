@@ -290,7 +290,7 @@ async function showProjectSessions(projectName) {
                                     <div class="flex justify-between items-start">
                                         <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
                                             <h2 class="card-title text-sm">${session.id}</h2>
-                                            <p class="text-xs opacity-70">Status: ${session.status}</p>
+                                            <p class="text-xs opacity-70 line-clamp-5 break-all">Status: ${session.status}</p>
                                             <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                         </div>
                                         <div class="flex gap-2">
