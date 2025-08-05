@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid'); // Import uuid
 const { spawn, exec } = require('child_process');
 
 const app = express();
-const port = 3110;
+const port = 3111;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -60,6 +60,94 @@ app.post('/api/projects', express.json(), (req, res) => {
   } catch (error) {
     console.error('Error creating project:', error);
     res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// API endpoint to get all sessions across all projects
+app.get('/api/sessions', (req, res) => {
+  const allSessions = [];
+  sessions.forEach((session, sessionID) => {
+    // Get last line from buffer for status
+    const lines = session.buffer.split('\n');
+    const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
+    
+    allSessions.push({
+      id: sessionID,
+      status: lastLine.trim() || 'Active session',
+      created: session.created || new Date().toISOString(),
+      projectName: session.projectName || 'Unknown'
+    });
+  });
+  res.json(allSessions);
+});
+
+// API endpoint to get all projects with their worktrees
+app.get('/api/projects-with-worktrees', (req, res) => {
+  try {
+    if (!fs.existsSync(PROJECTS_DIR)) {
+      fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+    }
+    const projects = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    
+    const projectsWithWorktrees = [];
+    
+    for (const projectName of projects) {
+      const projectPath = path.join(PROJECTS_DIR, projectName);
+      const gitPath = path.join(projectPath, '.git');
+      
+      const projectData = {
+        name: projectName,
+        worktrees: []
+      };
+      
+      if (fs.existsSync(gitPath)) {
+        try {
+          const { execSync } = require('child_process');
+          const stdout = execSync('git worktree list --porcelain', { cwd: projectPath, encoding: 'utf8' });
+          
+          const worktrees = [];
+          const lines = stdout.split('\n');
+          let currentWorktree = {};
+          
+          for (const line of lines) {
+            if (line.startsWith('worktree ')) {
+              if (currentWorktree.path) {
+                worktrees.push(currentWorktree);
+              }
+              currentWorktree = { path: line.replace('worktree ', '') };
+            } else if (line.startsWith('HEAD ')) {
+              currentWorktree.commit = line.replace('HEAD ', '');
+            } else if (line.startsWith('branch ')) {
+              currentWorktree.branch = line.replace('branch refs/heads/', '');
+            } else if (line.startsWith('detached')) {
+              currentWorktree.detached = true;
+            }
+          }
+          
+          if (currentWorktree.path) {
+            worktrees.push(currentWorktree);
+          }
+          
+          projectData.worktrees = worktrees.map(wt => ({
+            name: path.basename(wt.path),
+            branch: wt.branch || (wt.detached ? 'detached' : 'main'),
+            relativePath: path.relative(projectPath, wt.path) || '.'
+          }));
+        } catch (error) {
+          // If git command fails, just set empty worktrees
+          projectData.worktrees = [];
+        }
+      }
+      
+      projectsWithWorktrees.push(projectData);
+    }
+    
+    res.json(projectsWithWorktrees);
+  } catch (error) {
+    console.error('Error reading projects with worktrees:', error);
+    res.status(500).json({ error: 'Failed to read projects with worktrees' });
   }
 });
 
@@ -278,24 +366,6 @@ app.get('/api/projects/:projectName/sessions', (req, res) => {
         projectName: session.projectName
       });
     }
-  });
-  res.json(sessionList);
-});
-
-// API endpoint to get all sessions across all projects
-app.get('/api/sessions', (req, res) => {
-  const sessionList = [];
-  sessions.forEach((session, sessionID) => {
-    // Get last line from buffer for status
-    const lines = session.buffer.split('\n');
-    const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
-    
-    sessionList.push({
-      id: sessionID,
-      status: lastLine.trim() || 'Active session',
-      created: session.created || new Date().toISOString(),
-      projectName: session.projectName || 'Unknown'
-    });
   });
   res.json(sessionList);
 });
