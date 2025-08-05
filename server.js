@@ -48,15 +48,36 @@ app.post('/api/projects', express.json(), (req, res) => {
       return res.status(409).json({ error: 'Project already exists' });
     }
     fs.mkdirSync(projectPath, { recursive: true });
-    // Run git init in the new project directory
-    exec(`git init`, { cwd: projectPath }, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error running git init in ${projectPath}:`, error);
-        return res.status(500).json({ error: `Failed to initialize git in project: ${error.message}` });
+    // Run git init and create initial commit in the new project directory
+    const commands = [
+      'git init',
+      'echo "# ' + name.trim() + '" > README.md',
+      'git add README.md',
+      'git commit -m "Initial commit"'
+    ];
+    
+    let commandIndex = 0;
+    
+    const runNextCommand = () => {
+      if (commandIndex >= commands.length) {
+        console.log(`Git initialized with initial commit in ${projectPath}`);
+        return res.json({ success: true, name: name.trim() });
       }
-      console.log(`Git initialized in ${projectPath}`);
-      res.json({ success: true, name: name.trim() });
-    });
+      
+      const command = commands[commandIndex];
+      commandIndex++;
+      
+      exec(command, { cwd: projectPath }, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error running "${command}" in ${projectPath}:`, error);
+          return res.status(500).json({ error: `Failed to initialize git in project: ${error.message}` });
+        }
+        
+        runNextCommand();
+      });
+    };
+    
+    runNextCommand();
   } catch (error) {
     console.error('Error creating project:', error);
     res.status(500).json({ error: 'Failed to create project' });
