@@ -117,6 +117,12 @@ wss.on('connection', (ws, req) => {
     ptyProcess = session.ptyProcess;
     // Clear previous timeout for this session
     clearTimeout(session.timeoutId);
+    
+    // Close previous WebSocket connection if it exists and is still open
+    if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+      session.ws.close();
+    }
+    
     // Update WebSocket instance
     session.ws = ws;
     console.log(`Reconnected to session: ${sessionID}`);
@@ -129,30 +135,6 @@ wss.on('connection', (ws, req) => {
       }));
       console.log(`Sent ${session.buffer.length} characters from buffer`);
     }
-    
-    // Re-setup PTY data handler for reconnected session to prevent interference
-    ptyProcess.removeAllListeners('data');
-    ptyProcess.onData((data) => {
-      const currentSession = sessions.get(sessionID);
-      if (currentSession) {
-        // Add data to buffer
-        currentSession.buffer += data;
-        
-        // Trim buffer if it exceeds maximum size
-        if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
-          // Keep only the last MAX_BUFFER_SIZE characters
-          currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
-        }
-        
-        // Send data to connected client if WebSocket is open
-        if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-          currentSession.ws.send(JSON.stringify({
-            type: 'output',
-            data: data
-          }));
-        }
-      }
-    });
   } else {
     // Create new PTY process and session
     sessionID = uuidv4();
@@ -193,7 +175,7 @@ wss.on('connection', (ws, req) => {
     // Send PTY output to WebSocket and buffer it
     ptyProcess.onData((data) => {
       const currentSession = sessions.get(sessionID);
-      if (currentSession) {
+      if (currentSession && currentSession.ptyProcess === ptyProcess) {
         // Add data to buffer
         currentSession.buffer += data;
         
@@ -232,19 +214,28 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
     try {
       const msg = JSON.parse(message);
+      const currentSession = sessions.get(sessionID);
+      
+      // Ensure we only process messages for the correct session
+      if (!currentSession || currentSession.ws !== ws) {
+        console.log(`Ignoring message for invalid session: ${sessionID}`);
+        return;
+      }
 
       switch (msg.type) {
         case 'input':
-          // Send input to PTY
-          ptyProcess.write(msg.data);
+          // Send input to PTY only if it belongs to this session
+          if (currentSession.ptyProcess === ptyProcess) {
+            ptyProcess.write(msg.data);
+          }
           break;
 
         case 'resize':
-          // Resize PTY
-          ptyProcess.resize(msg.cols, msg.rows);
+          // Resize PTY only if it belongs to this session
+          if (currentSession.ptyProcess === ptyProcess) {
+            ptyProcess.resize(msg.cols, msg.rows);
+          }
           break;
-
-
 
         default:
           console.log('Unknown message type:', msg.type);
@@ -258,7 +249,8 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     console.log('Terminal disconnected');
     const session = sessions.get(sessionID);
-    if (session) {
+    if (session && session.ws === ws) {
+      // Only set timeout if this is the current WebSocket for the session
       session.timeoutId = setTimeout(() => {
         console.log(`Session ${sessionID} timed out. Killing process.`);
         session.ptyProcess.kill();
@@ -271,7 +263,8 @@ wss.on('connection', (ws, req) => {
   ws.on('error', (error) => {
     console.error('WebSocket error:', error);
     const session = sessions.get(sessionID);
-    if (session) {
+    if (session && session.ws === ws) {
+      // Only set timeout if this is the current WebSocket for the session
       session.timeoutId = setTimeout(() => {
         console.log(`Session ${sessionID} timed out due to error. Killing process.`);
         session.ptyProcess.kill();
