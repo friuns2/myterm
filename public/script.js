@@ -173,8 +173,7 @@ function connectToSession(sessionId) {
 function createNewSession() {
     sessionID = null;
     localStorage.removeItem('terminalSessionID');
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
+    const url = new URL(window.location.origin + window.location.pathname);
     window.history.pushState({ sessionList: true }, '', url);
     initializeTerminal();
 }
@@ -210,8 +209,7 @@ function goBackToSessionList() {
     }
     sessionID = null;
     localStorage.removeItem('terminalSessionID');
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
+    const url = new URL(window.location.origin + window.location.pathname);
     window.history.pushState({ sessionList: true }, '', url);
     showSessionList();
 }
