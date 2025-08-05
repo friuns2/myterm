@@ -380,10 +380,7 @@ async function showProjectSessions(projectName) {
             </div>
         `;
         
-        // Show file browser for the project
-        setTimeout(() => {
-            showFileBrowserForProject();
-        }, 100);
+
     } catch (error) {
         console.error('Error fetching sessions:', error);
         const terminalContainer = document.getElementById('terminal-container');
@@ -397,25 +394,13 @@ function connectToSession(sessionId, projectName = null) {
     currentProject = projectName || currentProject;
     updateURLWithSession(sessionID, currentProject);
     initializeTerminal();
-    
-    // Show file browser for the project after connecting
-    setTimeout(() => {
-        showFileBrowserForProject();
-    }, 1000);
 }
 
 function showFileBrowserForProject() {
     if (currentProject) {
         currentBrowsePath = '';
         loadFileTree();
-        const fileBrowser = document.getElementById('file-browser');
-        const toggleBtn = document.getElementById('toggle-files-btn');
-        if (fileBrowser && fileBrowser.classList.contains('hidden')) {
-            fileBrowser.classList.remove('hidden');
-            if (toggleBtn) {
-                toggleBtn.classList.add('btn-active');
-            }
-        }
+        showFileBrowser();
     }
 }
 
