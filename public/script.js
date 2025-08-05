@@ -250,6 +250,10 @@ const connectWebSocket = () => {
 // Function to show project list with sessions inline
 async function showProjectList() {
     try {
+        const terminalContainer = document.getElementById('terminal-container');
+        // Remove terminal-active class to enable scrolling
+        terminalContainer.classList.remove('terminal-active');
+        
         const response = await fetch('/api/projects');
         const projects = await response.json();
         
@@ -267,7 +271,6 @@ async function showProjectList() {
             })
         );
         
-        const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
             <div class="p-6 max-w-4xl mx-auto">
                 <h1 class="text-2xl font-bold mb-6 text-center">Projects</h1>
@@ -447,6 +450,9 @@ function createNewSessionForProject(projectName) {
 // Function to initialize terminal
 function initializeTerminal() {
     const terminalContainer = document.getElementById('terminal-container');
+    // Add terminal-active class to disable scrolling
+    terminalContainer.classList.add('terminal-active');
+    
     terminalContainer.innerHTML = `
         <div class="flex flex-col h-full">
             <div class="bg-base-200 p-2 border-b border-base-300">

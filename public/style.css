@@ -1,6 +1,14 @@
 /* Terminal-specific styles that work with DaisyUI/Tailwind */
 #terminal-container {
     /* Ensure terminal container takes full available space */
+    /* Enable scrolling for projects view */
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* When terminal is active, disable scrolling */
+#terminal-container.terminal-active {
+    overflow: hidden;
 }
 
 #terminal {
