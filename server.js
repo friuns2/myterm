@@ -5,9 +5,12 @@ const os = require('os');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid'); // Import uuid
+const { exec, spawn } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 const app = express();
-const port = 3012;
+const port = 3055;
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -35,7 +38,7 @@ app.get('/api/projects', (req, res) => {
 });
 
 // API endpoint to create a new project
-app.post('/api/projects', express.json(), (req, res) => {
+app.post('/api/projects', express.json(), async (req, res) => {
   const { name } = req.body;
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return res.status(400).json({ error: 'Project name is required' });
@@ -47,10 +50,162 @@ app.post('/api/projects', express.json(), (req, res) => {
       return res.status(409).json({ error: 'Project already exists' });
     }
     fs.mkdirSync(projectPath, { recursive: true });
+    
+    // Initialize git repository
+    try {
+      await execAsync('git init', { cwd: projectPath });
+      console.log(`Git repository initialized for project: ${name.trim()}`);
+    } catch (gitError) {
+      console.warn(`Failed to initialize git for project ${name.trim()}:`, gitError.message);
+    }
+    
     res.json({ success: true, name: name.trim() });
   } catch (error) {
     console.error('Error creating project:', error);
     res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// API endpoint to get worktrees for a project
+app.get('/api/projects/:projectName/worktrees', async (req, res) => {
+  const projectName = req.params.projectName;
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreesPath = path.join(PROJECTS_DIR, projectName, 'worktrees');
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Check if worktrees directory exists
+    if (!fs.existsSync(worktreesPath)) {
+      return res.json([]);
+    }
+    
+    // List worktree directories
+    const worktrees = fs.readdirSync(worktreesPath, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => ({
+        name: dirent.name,
+        path: path.join(worktreesPath, dirent.name),
+        created: fs.statSync(path.join(worktreesPath, dirent.name)).birthtime
+      }));
+    
+    res.json(worktrees);
+  } catch (error) {
+    console.error('Error reading worktrees:', error);
+    res.status(500).json({ error: 'Failed to read worktrees' });
+  }
+});
+
+// API endpoint to create a new worktree
+app.post('/api/projects/:projectName/worktrees', express.json(), async (req, res) => {
+  const projectName = req.params.projectName;
+  const { name, branch } = req.body;
+  
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'Worktree name is required' });
+  }
+  
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreesPath = path.join(PROJECTS_DIR, projectName, 'worktrees');
+  const worktreePath = path.join(worktreesPath, name.trim());
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Create worktrees directory if it doesn't exist
+    if (!fs.existsSync(worktreesPath)) {
+      fs.mkdirSync(worktreesPath, { recursive: true });
+    }
+    
+    if (fs.existsSync(worktreePath)) {
+      return res.status(409).json({ error: 'Worktree already exists' });
+    }
+    
+    // Create git worktree
+    const branchName = branch && branch.trim() ? branch.trim() : name.trim();
+    try {
+      await execAsync(`git worktree add worktrees/${name.trim()} -b ${branchName}`, { cwd: projectPath });
+      res.json({ success: true, name: name.trim(), branch: branchName });
+    } catch (gitError) {
+      // If branch already exists, try to create worktree with existing branch
+      try {
+        await execAsync(`git worktree add worktrees/${name.trim()} ${branchName}`, { cwd: projectPath });
+        res.json({ success: true, name: name.trim(), branch: branchName });
+      } catch (secondError) {
+        console.error('Git worktree creation failed:', secondError.message);
+        res.status(500).json({ error: 'Failed to create git worktree: ' + secondError.message });
+      }
+    }
+  } catch (error) {
+    console.error('Error creating worktree:', error);
+    res.status(500).json({ error: 'Failed to create worktree' });
+  }
+});
+
+// API endpoint to merge worktree back to main
+app.post('/api/projects/:projectName/worktrees/:worktreeName/merge', async (req, res) => {
+  const { projectName, worktreeName } = req.params;
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreePath = path.join(PROJECTS_DIR, projectName, 'worktrees', worktreeName);
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (!fs.existsSync(worktreePath)) {
+      return res.status(404).json({ error: 'Worktree not found' });
+    }
+    
+    // Get current branch name from worktree
+    const { stdout: branchName } = await execAsync('git branch --show-current', { cwd: worktreePath });
+    const branch = branchName.trim();
+    
+    // Switch to main branch in main project
+    await execAsync('git checkout main || git checkout master', { cwd: projectPath });
+    
+    // Merge the worktree branch
+    await execAsync(`git merge ${branch}`, { cwd: projectPath });
+    
+    // Remove the worktree
+    await execAsync(`git worktree remove worktrees/${worktreeName}`, { cwd: projectPath });
+    
+    // Delete the branch
+    await execAsync(`git branch -d ${branch}`, { cwd: projectPath });
+    
+    res.json({ success: true, message: 'Worktree merged and removed successfully' });
+  } catch (error) {
+    console.error('Error merging worktree:', error);
+    res.status(500).json({ error: 'Failed to merge worktree: ' + error.message });
+  }
+});
+
+// API endpoint to delete a worktree
+app.delete('/api/projects/:projectName/worktrees/:worktreeName', async (req, res) => {
+  const { projectName, worktreeName } = req.params;
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+  const worktreePath = path.join(PROJECTS_DIR, projectName, 'worktrees', worktreeName);
+  
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (!fs.existsSync(worktreePath)) {
+      return res.status(404).json({ error: 'Worktree not found' });
+    }
+    
+    // Remove the worktree
+    await execAsync(`git worktree remove worktrees/${worktreeName}`, { cwd: projectPath });
+    
+    res.json({ success: true, message: 'Worktree removed successfully' });
+  } catch (error) {
+    console.error('Error removing worktree:', error);
+    res.status(500).json({ error: 'Failed to remove worktree: ' + error.message });
   }
 });
 
@@ -176,13 +331,29 @@ wss.on('connection', (ws, req) => {
     // Determine working directory
     let cwd = process.cwd();
     if (projectName) {
-      const projectPath = path.join(PROJECTS_DIR, projectName);
-      if (fs.existsSync(projectPath)) {
-        cwd = projectPath;
+      // Check if this is a worktree path (contains '/worktrees/')
+      if (projectName.includes('/worktrees/')) {
+        const fullWorktreePath = path.join(PROJECTS_DIR, projectName);
+        if (fs.existsSync(fullWorktreePath)) {
+          cwd = fullWorktreePath;
+        } else {
+          // Fallback to main project if worktree doesn't exist
+          const mainProjectName = projectName.split('/worktrees/')[0];
+          const mainProjectPath = path.join(PROJECTS_DIR, mainProjectName);
+          if (fs.existsSync(mainProjectPath)) {
+            cwd = mainProjectPath;
+          }
+        }
       } else {
-        // Create project directory if it doesn't exist
-        fs.mkdirSync(projectPath, { recursive: true });
-        cwd = projectPath;
+        // Regular project path
+        const projectPath = path.join(PROJECTS_DIR, projectName);
+        if (fs.existsSync(projectPath)) {
+          cwd = projectPath;
+        } else {
+          // Create project directory if it doesn't exist
+          fs.mkdirSync(projectPath, { recursive: true });
+          cwd = projectPath;
+        }
       }
     }
     
