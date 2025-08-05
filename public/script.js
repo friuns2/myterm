@@ -489,8 +489,10 @@ if (sessionID) {
 
 // Handle terminal resize
 const handleResize = () => {
-    fitAddon.fit();
-    if (isConnected) {
+    if (fitAddon) {
+        fitAddon.fit();
+    }
+    if (isConnected && terminal) {
         ws.send(JSON.stringify({
             type: 'resize',
             cols: terminal.cols,
@@ -504,7 +506,7 @@ window.addEventListener('resize', handleResize);
 
 // Handle visibility change (focus/blur)
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
+    if (!document.hidden && terminal) {
         terminal.focus();
     }
 });
@@ -513,7 +515,7 @@ document.addEventListener('visibilitychange', () => {
 document.addEventListener('click', (event) => {
     // Only focus terminal if the click is not inside the custom input container
     const customInputContainer = document.getElementById('custom-input-container');
-    if (customInputContainer && !customInputContainer.contains(event.target)) {
+    if (customInputContainer && !customInputContainer.contains(event.target) && terminal) {
         terminal.focus();
     }
 });
