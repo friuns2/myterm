@@ -9,7 +9,7 @@ function showNavigationBar() {
         // Update current path display
         const currentPathSpan = document.getElementById('current-path');
         if (currentPathSpan && currentProject) {
-            currentPathSpan.textContent = `Project: ${currentProject}`;
+            currentPathSpan.textContent = currentProject;
         }
     }
 }
@@ -350,4 +350,4 @@ function setupVirtualKeyboard() {
             }
         });
     }
-} 
+}

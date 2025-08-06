@@ -20,7 +20,7 @@ function goBackToProjectList() {
     }
     
     sessionID = null;
-    updateURLWithProject(currentProject);
+    clearURLParams();
     showSessionsAndProjectsList();
 }
 
@@ -254,7 +254,7 @@ async function deleteProject(projectName) {
 function selectProject(projectName) {
     currentProject = projectName;
     sessionID = null;
-    updateURLWithProject(projectName);
+    clearURLParams();
     initializeTerminal();
 }
 
@@ -278,7 +278,7 @@ async function showProjectSessions(projectName) {
                 <div class="mb-6">
                     <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
                 </div>
-                <h1 class="text-2xl font-bold mb-6 text-center">Project: ${projectName}</h1>
+                <h1 class="text-2xl font-bold mb-6 text-center">${projectName}</h1>
                 
                 <!-- Sessions Section -->
                 <div class="mb-8">
@@ -407,6 +407,6 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
-    updateURLWithProject(projectName);
+    clearURLParams();
     initializeTerminal();
 }

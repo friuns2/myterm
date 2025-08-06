@@ -82,16 +82,9 @@ function updateURLWithSession(sessionId, projectName = null) {
     window.history.pushState({ sessionId: sessionId }, '', url);
 }
 
-function updateURLWithProject(projectName) {
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    url.searchParams.set('project', projectName);
-    window.history.pushState({ project: projectName }, '', url);
-}
-
 function clearURLParams() {
     const url = new URL(window.location);
     url.searchParams.delete('session');
     url.searchParams.delete('project');
     window.history.pushState({}, '', url);
-} 
+}
