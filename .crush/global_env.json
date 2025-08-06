@@ -1,0 +1,5 @@
+{
+  "OPENAI_API_KEY": "your_api_key_here",
+  "OPENAI_BASE_URL": "your_api_endpoint",
+  "OPENAI_MODEL": "your_model_choice"
+}
