@@ -258,7 +258,9 @@ if ("virtualKeyboard" in navigator) {
         const { height } = event.target.boundingRect;
         const terminalContainer = document.getElementById('terminal-container');
         if (terminalContainer) {
-            terminalContainer.style.paddingBottom = `${height}px`;
+            // Get the safe area inset bottom dynamically
+            const safeAreaBottom = parseInt(getComputedStyle(terminalContainer).paddingBottom, 10) || 0;
+            terminalContainer.style.paddingBottom = `${height + safeAreaBottom}px`;
         }
         console.log(`Virtual keyboard height changed: ${height}px`);
         terminal.fit(); // Adjust xterm.js terminal to new size

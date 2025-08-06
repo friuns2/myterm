@@ -178,4 +178,5 @@
 }
     #terminal-container {
         /* padding-bottom: 50px; */
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
