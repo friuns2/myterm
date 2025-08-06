@@ -214,74 +214,78 @@ function setupCustomCommandInput() {
 
     if (customCommandInput) {
         const sendCommand = () => {
+            const command = customCommandInput.value.trim();
+            if (!command) return;
+            
             // Focus terminal first to ensure it's active
             if (terminal) {
                 terminal.focus();
                 // Add small delay to ensure focus is properly set
                 setTimeout(() => {
-                    const command = customCommandInput.value; // Add carriage return to simulate Enter
                     if (isConnected) {
+                        // Send the multiline command
                         ws.send(JSON.stringify({
                             type: 'input',
                             data: command
                         }));
                         setTimeout(() => {
-
                             ws.send(JSON.stringify({
                                 type: 'input',
                                 data: '\r'
                             }));
                         }, 50); // 50ms delay
 
-                        customCommandInput.value = ''; // Clear input after sending
+                        // Clear input and reset height
+                        customCommandInput.value = '';
+                        customCommandInput.style.height = 'auto';
+                        customCommandInput.rows = 1;
                     }
                 }, 50); // 50ms delay
             } else {
                 // If no terminal, send immediately
-                const command = customCommandInput.value + '\r';
                 if (isConnected) {
                     ws.send(JSON.stringify({
                         type: 'input',
-                        data: command
+                        data: command + '\r'
                     }));
+                    // Clear input and reset height
                     customCommandInput.value = '';
+                    customCommandInput.style.height = 'auto';
+                    customCommandInput.rows = 1;
                 }
             }
         };
-
-        // Auto-resize function for textarea
-        const autoResize = () => {
-            customCommandInput.style.height = 'auto';
-            const newHeight = Math.min(customCommandInput.scrollHeight, 128); // Max 8rem (128px)
-            customCommandInput.style.height = newHeight + 'px';
-            customCommandInput.rows = Math.max(1, Math.ceil(newHeight / 20)); // Approximate line height
-        };
-
-        // Auto-resize on input
-        customCommandInput.addEventListener('input', autoResize);
 
         customCommandInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
-                if (event.ctrlKey) {
-                    // Ctrl+Enter: Allow multiline (insert newline)
-                    // Don't prevent default, let the newline be inserted
-                    setTimeout(autoResize, 0); // Resize after newline is inserted
-                } else {
-                    // Regular Enter: Send command
-                    event.preventDefault();
-                    sendCommand();
-                    // Reset textarea size after sending
+                if (event.shiftKey) {
+                    // Shift+Enter: Allow new line (default behavior)
+                    // Auto-resize textarea
                     setTimeout(() => {
                         customCommandInput.style.height = 'auto';
-                        customCommandInput.style.height = '2rem';
-                        customCommandInput.rows = 1;
+                        customCommandInput.style.height = Math.min(customCommandInput.scrollHeight, 120) + 'px';
                     }, 0);
+                } else {
+                    // Enter: Send command
+                    event.preventDefault();
+                    sendCommand();
                 }
             }
         });
-
-        // Initial resize
-        autoResize();
+        
+        // Auto-resize textarea on input
+        customCommandInput.addEventListener('input', () => {
+            customCommandInput.style.height = 'auto';
+            customCommandInput.style.height = Math.min(customCommandInput.scrollHeight, 120) + 'px';
+        });
+        
+        // Reset height when cleared
+        customCommandInput.addEventListener('blur', () => {
+            if (!customCommandInput.value.trim()) {
+                customCommandInput.style.height = 'auto';
+                customCommandInput.rows = 1;
+            }
+        });
     }
 }
 
