@@ -38,47 +38,57 @@ function saveGlobalEnv(envVars) {
     }
 }
 
-// Get all global environment variables
+// Get all global environment variables as plain text
 router.get('/', (req, res) => {
     try {
         const globalEnv = loadGlobalEnv();
-        res.json(globalEnv);
+        // Convert JSON to plain text format (KEY=VALUE)
+        const plainText = Object.entries(globalEnv)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('\n');
+        res.json({ text: plainText, vars: globalEnv });
     } catch (error) {
         console.error('Error getting global environment variables:', error);
         res.status(500).json({ error: 'Failed to get environment variables' });
     }
 });
 
-// Set or update global environment variables
+// Set/update global environment variables from plain text
 router.post('/', express.json(), (req, res) => {
     try {
-        const { variables } = req.body;
+        const { text } = req.body;
         
-        if (!variables || typeof variables !== 'object') {
-            return res.status(400).json({ error: 'Variables object is required' });
+        if (typeof text !== 'string') {
+            return res.status(400).json({ error: 'Invalid text format' });
         }
         
-        // Validate variable names and values
-        for (const [key, value] of Object.entries(variables)) {
-            if (typeof key !== 'string' || key.trim() === '') {
-                return res.status(400).json({ error: 'Variable names must be non-empty strings' });
-            }
-            if (typeof value !== 'string') {
-                return res.status(400).json({ error: 'Variable values must be strings' });
+        // Parse plain text to variables object
+        const variables = {};
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine && !trimmedLine.startsWith('#')) {
+                const equalIndex = trimmedLine.indexOf('=');
+                if (equalIndex > 0) {
+                    const key = trimmedLine.substring(0, equalIndex).trim();
+                    const value = trimmedLine.substring(equalIndex + 1).trim();
+                    if (key) {
+                        variables[key] = value;
+                    }
+                }
             }
         }
         
-        const currentEnv = loadGlobalEnv();
-        const updatedEnv = { ...currentEnv, ...variables };
-        
-        if (saveGlobalEnv(updatedEnv)) {
-            res.json({ success: true, message: 'Environment variables updated successfully' });
+        // Save variables
+        if (saveGlobalEnv(variables)) {
+            res.json({ success: true, variables });
         } else {
             res.status(500).json({ error: 'Failed to save environment variables' });
         }
     } catch (error) {
-        console.error('Error updating global environment variables:', error);
-        res.status(500).json({ error: 'Failed to update environment variables' });
+        console.error('Error setting global environment variables:', error);
+        res.status(500).json({ error: 'Failed to set environment variables' });
     }
 });
 
