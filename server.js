@@ -2,7 +2,7 @@ const express = require('express');
 const { setupWebSocketServer } = require('./websocket/terminal');
 
 const app = express();
-const port = 3551;
+const port = 35331;
 
 // Serve static files
 app.use(express.static('public'));
