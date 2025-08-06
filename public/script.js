@@ -2,16 +2,8 @@
 
 // Initialize VirtualKeyboard API for better mobile experience
 if ("virtualKeyboard" in navigator) {
-    navigator.virtualKeyboard.overlaysContent = true;
-    console.log('VirtualKeyboard API enabled - content will not be resized automatically');
-
-    // Add listener for virtual keyboard geometry changes
-    navigator.virtualKeyboard.ongeometrychange = () => {
-        const viewportHeight = window.innerHeight;
-        const keyboardTop = navigator.virtualKeyboard.boundingRect.top;
-        const keyboardHeight = viewportHeight - keyboardTop;
-        document.body.style.paddingBottom = `${keyboardHeight}px`;
-    };
+    navigator.virtualKeyboard.overlaysContent = false;
+    console.log('VirtualKeyboard API enabled - content will be resized automatically');
 } else {
     console.log('VirtualKeyboard API not supported - using fallback CSS');
 }
