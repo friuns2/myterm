@@ -17,7 +17,9 @@
         <div class="flex gap-2 items-center flex-wrap">
             <button id="back-to-sessions" class="btn btn-sm btn-outline">← Back to Sessions</button>
             <button id="browse-files" class="btn btn-sm btn-primary">📁 Browse</button>
+            <button onclick="showShellConfigModal()" class="btn btn-sm btn-secondary">⚙️ Shell Config</button>
             <span id="current-path" class="text-sm opacity-70"></span>
+            <span class="text-xs opacity-50">Active Profile: <span id="active-profile-name">Default</span></span>
         </div>
     </div>
 
@@ -92,6 +94,70 @@
         </form>
     </dialog>
 
+    <!-- Shell Configuration Modal -->
+    <dialog id="shell-config-modal" class="modal">
+        <div class="modal-box max-w-4xl">
+            <h3 class="font-bold text-lg mb-4">Shell Configuration Profiles</h3>
+            
+            <!-- Profile List -->
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <h4 class="font-semibold">Profiles</h4>
+                    <button onclick="showCreateProfileForm()" class="btn btn-sm btn-primary">+ New Profile</button>
+                </div>
+                <div id="profile-list" class="space-y-2 max-h-40 overflow-y-auto">
+                    <!-- Profiles will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Create/Edit Profile Form -->
+            <div id="profile-form" class="hidden">
+                <div class="border-t pt-4">
+                    <h4 class="font-semibold mb-3" id="form-title">Create New Profile</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="label">Profile Name</label>
+                            <input type="text" id="profile-name" class="input input-bordered w-full" placeholder="e.g., Development, Production">
+                        </div>
+                        <div>
+                            <label class="label">Shell Type</label>
+                            <select id="profile-shell" class="select select-bordered w-full">
+                                <option value="/bin/zsh">Zsh</option>
+                                <option value="/bin/bash">Bash</option>
+                                <option value="/bin/sh">Sh</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <label class="label">Environment Variables</label>
+                        <div id="env-vars-container">
+                            <!-- Environment variables will be added here -->
+                        </div>
+                        <button type="button" onclick="addEnvVar()" class="btn btn-xs btn-outline mt-2">+ Add Variable</button>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <label class="label">Shell Options/Aliases</label>
+                        <textarea id="profile-options" class="textarea textarea-bordered w-full" rows="4" placeholder="# Add shell options, aliases, or custom commands\n# Example:\n# alias ll='ls -la'\n# export EDITOR=vim"></textarea>
+                    </div>
+                    
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="saveProfile()" class="btn btn-success">Save Profile</button>
+                        <button onclick="cancelProfileForm()" class="btn btn-outline">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-action">
+                <button onclick="closeShellConfigModal()" class="btn">Close</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
     <!-- Command Input and Virtual Keyboard Section -->
     <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300">
         <div class="flex gap-2 justify-center items-center flex-wrap">
@@ -117,7 +183,7 @@
     <script src="worktrees.js"></script>
     <script src="ui.js"></script>
     <script src="environment.js"></script>
-    <script src="aliases.js"></script>
+    <script src="shell-config.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

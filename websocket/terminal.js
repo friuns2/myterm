@@ -6,6 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { loadGlobalEnv } = require('../routes/environment');
+const { loadShellConfigs } = require('../routes/shell-config');
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -71,6 +72,10 @@ function setupWebSocketServer(server) {
                 }
             }
             
+            // Load shell configuration
+            const shellConfigs = loadShellConfigs();
+            const activeProfile = shellConfigs.profiles[shellConfigs.active_profile] || shellConfigs.profiles.default;
+            
             // Merge global environment variables with process.env
             const globalEnv = loadGlobalEnv();
             
@@ -85,7 +90,10 @@ function setupWebSocketServer(server) {
                 }
             }
             
-            const mergedEnv = { ...process.env, ...processedGlobalEnv };
+            // Merge shell profile environment variables
+            const shellEnv = activeProfile.environment_vars || {};
+            
+            const mergedEnv = { ...process.env, ...processedGlobalEnv, ...shellEnv };
             
             ptyProcess = pty.spawn(shell, [], {
                 name: 'xterm-color',
