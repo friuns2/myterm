@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const router = express.Router();
-const ENV_FILE_PATH = path.join(__dirname, '..', '.crush', 'global_env.json');
+const os = require('os');
+const ENV_FILE_PATH = path.join(os.homedir(), '.crush', 'global_env.json');
 
 // Ensure the .crush directory exists
 function ensureCrushDir() {
