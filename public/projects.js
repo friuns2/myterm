@@ -1,10 +1,19 @@
 // Project and session management functionality
 
+// Global variable for status refresh interval
+let statusRefreshInterval = null;
+
 // Function to navigate back to session list
 function goBackToSessionList() {
     // Cleanup terminal before navigating away
     if (typeof cleanupTerminal === 'function') {
         cleanupTerminal();
+    }
+    
+    // Clear status refresh interval
+    if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
     }
     
     sessionID = null;
@@ -19,6 +28,12 @@ function goBackToProjectList() {
         cleanupTerminal();
     }
     
+    // Clear status refresh interval
+    if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
+    }
+    
     sessionID = null;
     currentProject = null;
     showSessionsAndProjectsList();
@@ -28,6 +43,12 @@ function goBackToProjectList() {
 async function showSessionsAndProjectsList() {
     // Hide navigation bar when showing sessions and projects list
     hideNavigationBar();
+    
+    // Clear any existing refresh interval
+    if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
+    }
     
     try {
         // Fetch all sessions and projects with worktrees in parallel
@@ -57,7 +78,7 @@ async function showSessionsAndProjectsList() {
                     <div class="grid gap-3 mb-6">
                         ${allSessions.length === 0 ? '<p class="text-center opacity-70 py-4">No active sessions</p>' : 
                             allSessions.map(session => `
-                                <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow">
+                                <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow" data-session-id="${session.id}">
                                     <div class="card-body p-4">
                                         <div class="flex justify-between items-start">
                                             <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}')">
@@ -65,7 +86,7 @@ async function showSessionsAndProjectsList() {
                                                     <h3 class="font-semibold text-sm">${session.id}</h3>
                                                     <span class="badge badge-primary badge-sm">${session.projectName}</span>
                                                 </div>
-                                                <p class="text-xs opacity-70 line-clamp-2 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                                <p class="text-xs opacity-70 line-clamp-2 break-all session-status">Status: <span>${ansiToHtml(session.status)}</span></p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
                                             <div class="flex gap-2">
@@ -161,6 +182,44 @@ async function showSessionsAndProjectsList() {
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading sessions and projects</div>';
     }
+    
+    // Set up real-time status refresh every 3 seconds
+    statusRefreshInterval = setInterval(async () => {
+        try {
+            // Only refresh if we're still on the dashboard (terminal-container has the dashboard content)
+            const terminalContainer = document.getElementById('terminal-container');
+            if (terminalContainer && terminalContainer.innerHTML.includes('Shell Dashboard')) {
+                await refreshSessionStatus();
+            } else {
+                // Clear interval if we're no longer on the dashboard
+                clearInterval(statusRefreshInterval);
+                statusRefreshInterval = null;
+            }
+        } catch (error) {
+            console.error('Error refreshing session status:', error);
+        }
+    }, 3000); // Refresh every 3 seconds
+}
+
+// Function to refresh only session status without full page reload
+async function refreshSessionStatus() {
+    try {
+        const response = await fetch('/api/sessions');
+        const allSessions = await response.json();
+        
+        // Update each session's status in the DOM
+        allSessions.forEach(session => {
+            const sessionElements = document.querySelectorAll(`[data-session-id="${session.id}"]`);
+            sessionElements.forEach(element => {
+                const statusElement = element.querySelector('.session-status');
+                if (statusElement) {
+                    statusElement.innerHTML = `Status: <span>${ansiToHtml(session.status)}</span>`;
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Failed to refresh session status:', error);
+    }
 }
 
 async function createNewProject() {
@@ -252,6 +311,12 @@ async function deleteProject(projectName) {
 }
 
 function selectProject(projectName) {
+    // Clear status refresh interval when leaving dashboard
+    if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
+    }
+    
     currentProject = projectName;
     sessionID = null;
     initializeTerminal();
@@ -264,6 +329,12 @@ function connectToSession(sessionId, projectName = null) {
     // Cleanup existing terminal before connecting to new session
     if (typeof cleanupTerminal === 'function') {
         cleanupTerminal();
+    }
+    
+    // Clear status refresh interval when leaving dashboard
+    if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
     }
     
     sessionID = sessionId;
