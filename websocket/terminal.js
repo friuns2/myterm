@@ -56,7 +56,7 @@ function setupWebSocketServer(server) {
         } else {
             // Create new PTY process and session
             sessionID = uuidv4();
-            const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+            const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
             
             // Determine working directory
             let cwd = process.cwd();
