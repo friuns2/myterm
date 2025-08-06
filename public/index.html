@@ -2,10 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Terminal</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.24/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,6 +16,7 @@
         <div class="flex gap-2 items-center flex-wrap">
             <button id="back-to-sessions" class="btn btn-sm btn-outline">← Back to Sessions</button>
             <button id="browse-files" class="btn btn-sm btn-primary">📁 Browse</button>
+            <button id="aliases-editor" class="btn btn-sm btn-secondary">⚡ Aliases</button>
             <span id="current-path" class="text-sm opacity-70"></span>
         </div>
     </div>
@@ -57,6 +55,25 @@
             </div>
             <textarea id="file-content" class="flex-1 p-3 bg-base-100 font-mono text-sm resize-none border-none outline-none"></textarea>
         </div>
+
+        <!-- Aliases Editor Panel -->
+        <div id="aliases-panel" class="w-96 bg-base-100 border-l border-base-300 hidden flex-col">
+            <div class="p-3 border-b border-base-300">
+                <div class="flex items-center justify-between mb-2">
+                    <button id="close-aliases" class="btn btn-xs btn-outline">← Back to Console</button>
+                    <h3 class="font-semibold">Command Aliases</h3>
+                    <button id="add-alias" class="btn btn-xs btn-primary">+ Add</button>
+                </div>
+                <div class="text-xs opacity-70 mb-2">Create shortcuts for frequently used commands</div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-3">
+                <div id="aliases-list" class="space-y-2"></div>
+                <div id="no-aliases" class="text-center text-sm opacity-50 mt-8 hidden">
+                    No aliases created yet.<br>
+                    Click "+ Add" to create your first alias.
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Modals -->
@@ -94,6 +111,46 @@
         </form>
     </dialog>
 
+    <!-- Alias Editor Modal -->
+    <dialog id="alias-modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg" id="alias-modal-title">Create New Alias</h3>
+            <div class="py-4 space-y-4">
+                <div>
+                    <label class="label">
+                        <span class="label-text">Alias Name</span>
+                    </label>
+                    <input type="text" id="alias-name" placeholder="e.g., ll, gs, deploy..." class="input input-bordered w-full" />
+                    <div class="label">
+                        <span class="label-text-alt">Short name to trigger the command</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="label">
+                        <span class="label-text">Command</span>
+                    </label>
+                    <textarea id="alias-command" placeholder="e.g., ls -la, git status, npm run build..." class="textarea textarea-bordered w-full" rows="3"></textarea>
+                    <div class="label">
+                        <span class="label-text-alt">The actual command to execute</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="label">
+                        <span class="label-text">Description (optional)</span>
+                    </label>
+                    <input type="text" id="alias-description" placeholder="Brief description of what this alias does..." class="input input-bordered w-full" />
+                </div>
+            </div>
+            <div class="modal-action">
+                <button id="save-alias-btn" class="btn btn-primary">Save Alias</button>
+                <button id="cancel-alias-btn" class="btn">Cancel</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
     <!-- Command Input and Virtual Keyboard Section -->
     <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300">
         <div class="flex gap-2 justify-center items-center flex-wrap">
@@ -113,6 +170,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
     <!-- Load modular JavaScript files -->
     <script src="utils.js"></script>
+    <script src="aliases.js"></script>
     <script src="terminal.js"></script>
     <script src="projects.js"></script>
     <script src="files.js"></script>
