@@ -73,7 +73,6 @@ const connectWebSocket = () => {
     if (sessionID) {
         params.append('sessionID', sessionID);
     }
-    // Project parameter is optional - only add if explicitly set
     if (currentProject) {
         params.append('projectName', currentProject);
     }
