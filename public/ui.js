@@ -317,57 +317,36 @@ function setupVirtualKeyboard() {
                         data = '\x09';
                         break;
                     case 17: // Ctrl
-                        // Focus input field and wait for next key
-                        const customCommandInput = document.getElementById('custom-command-input');
-                        if (customCommandInput) {
-                            customCommandInput.focus();
-                            customCommandInput.placeholder = 'Press next key for Ctrl combination (e.g., c for Ctrl+C)';
-                            
-                            // Add temporary keydown listener
-                            const handleCtrlCombo = (e) => {
-                                e.preventDefault();
-                                customCommandInput.removeEventListener('keydown', handleCtrlCombo);
-                                customCommandInput.placeholder = 'Enter command... (Shift+Enter for new line, Enter to send)';
-                                
-                                const nextKey = e.key.toLowerCase();
-                                let ctrlData = '';
-                                
-                                if (nextKey.length === 1 && nextKey >= 'a' && nextKey <= 'z') {
-                                    const charCode = nextKey.charCodeAt(0);
-                                    ctrlData = String.fromCharCode(charCode - 96); // Convert to Ctrl+A to Ctrl+Z
-                                } else if (nextKey === '[') {
-                                    ctrlData = '\x1B'; // Ctrl+[ is Esc
-                                } else if (nextKey === '\\') {
-                                    ctrlData = '\x1C'; // Ctrl+\ is FS (File Separator)
-                                } else if (nextKey === ']') {
-                                    ctrlData = '\x1D'; // Ctrl+] is GS (Group Separator)
-                                } else if (nextKey === '^') {
-                                    ctrlData = '\x1E'; // Ctrl+^ is RS (Record Separator)
-                                } else if (nextKey === '_') {
-                                    ctrlData = '\x1F'; // Ctrl+_ is US (Unit Separator)
+                        // Prompt user for the next key
+                        const { value: nextKey } = await Swal.fire({
+                            title: 'Ctrl Key Combination',
+                            input: 'text',
+                            inputLabel: 'Enter next key for Ctrl combination',
+                            inputPlaceholder: "e.g., 'c' for Ctrl+C, 'z' for Ctrl+Z",
+                            showCancelButton: true,
+                            inputValidator: (value) => {
+                                if (!value) {
+                                    return 'You need to enter a key!';
                                 }
-                                
-                                if (ctrlData && isConnected) {
-                                    if (terminal) {
-                                        terminal.focus();
-                                        setTimeout(() => {
-                                            ws.send(JSON.stringify({
-                                                type: 'input',
-                                                data: ctrlData
-                                            }));
-                                        }, 50);
-                                    } else {
-                                        ws.send(JSON.stringify({
-                                            type: 'input',
-                                            data: ctrlData
-                                        }));
-                                    }
-                                }
-                            };
-                            
-                            customCommandInput.addEventListener('keydown', handleCtrlCombo);
+                            }
+                        });
+                        if (nextKey) {
+                            const charCode = nextKey.toLowerCase().charCodeAt(0);
+                            if (charCode >= 97 && charCode <= 122) { // 'a' through 'z'
+                                data = String.fromCharCode(charCode - 96); // Convert to Ctrl+A to Ctrl+Z
+                            } else if (nextKey === '[') {
+                                data = '\x1B'; // Ctrl+[ is Esc
+                            } else if (nextKey === '\\') {
+                                data = '\x1C'; // Ctrl+\ is FS (File Separator)
+                            } else if (nextKey === ']') {
+                                data = '\x1D'; // Ctrl+] is GS (Group Separator)
+                            } else if (nextKey === '^') {
+                                data = '\x1E'; // Ctrl+^ is RS (Record Separator)
+                            } else if (nextKey === '_') {
+                                data = '\x1F'; // Ctrl+_ is US (Unit Separator)
+                            }
                         }
-                        return; // Don't send data immediately for Ctrl
+                        break;
                     case 3: // Ctrl+C (ASCII End-of-Text character)
                         data = '\x03';
                         break;

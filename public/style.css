@@ -176,6 +176,11 @@
         font-size: 10px !important;
     }
 }
-    #terminal-container {
-        padding-bottom: 50px;
-    }
+#terminal-container {
+    padding-bottom: 50px;
+}
+
+#virtual-keyboard {
+    padding-bottom: 50px;
+}
+
