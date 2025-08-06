@@ -249,12 +249,39 @@ function setupCustomCommandInput() {
             }
         };
 
+        // Auto-resize function for textarea
+        const autoResize = () => {
+            customCommandInput.style.height = 'auto';
+            const newHeight = Math.min(customCommandInput.scrollHeight, 128); // Max 8rem (128px)
+            customCommandInput.style.height = newHeight + 'px';
+            customCommandInput.rows = Math.max(1, Math.ceil(newHeight / 20)); // Approximate line height
+        };
+
+        // Auto-resize on input
+        customCommandInput.addEventListener('input', autoResize);
+
         customCommandInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
-                event.preventDefault(); // Prevent default Enter behavior
-                sendCommand();
+                if (event.ctrlKey) {
+                    // Ctrl+Enter: Allow multiline (insert newline)
+                    // Don't prevent default, let the newline be inserted
+                    setTimeout(autoResize, 0); // Resize after newline is inserted
+                } else {
+                    // Regular Enter: Send command
+                    event.preventDefault();
+                    sendCommand();
+                    // Reset textarea size after sending
+                    setTimeout(() => {
+                        customCommandInput.style.height = 'auto';
+                        customCommandInput.style.height = '2rem';
+                        customCommandInput.rows = 1;
+                    }, 0);
+                }
             }
         });
+
+        // Initial resize
+        autoResize();
     }
 }
 
