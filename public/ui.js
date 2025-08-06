@@ -239,6 +239,11 @@ function setupCustomCommandInput() {
                         customCommandInput.value = '';
                         customCommandInput.style.height = 'auto';
                         customCommandInput.rows = 1;
+                        
+                        // Refocus the input field after sending command
+                        setTimeout(() => {
+                            customCommandInput.focus();
+                        }, 100);
                     }
                 }, 50); // 50ms delay
             } else {
@@ -252,6 +257,11 @@ function setupCustomCommandInput() {
                     customCommandInput.value = '';
                     customCommandInput.style.height = 'auto';
                     customCommandInput.rows = 1;
+                    
+                    // Refocus the input field after sending command
+                    setTimeout(() => {
+                        customCommandInput.focus();
+                    }, 100);
                 }
             }
         };
