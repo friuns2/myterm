@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
+const { loadGlobalEnv } = require('../routes/environment');
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -70,12 +71,16 @@ function setupWebSocketServer(server) {
                 }
             }
             
+            // Merge global environment variables with process.env
+            const globalEnv = loadGlobalEnv();
+            const mergedEnv = { ...process.env, ...globalEnv };
+            
             ptyProcess = pty.spawn(shell, [], {
                 name: 'xterm-color',
                 cols: 80,
                 rows: 24,
                 cwd: cwd,
-                env: process.env
+                env: mergedEnv
             });
 
             const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
@@ -236,4 +241,4 @@ module.exports = {
     setupWebSocketServer,
     getSessions,
     deleteSession
-}; 
+};

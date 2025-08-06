@@ -176,34 +176,6 @@
         font-size: 10px !important;
     }
 }
-
-/* Modern virtual keyboard handling using VirtualKeyboard API */
-/* Ensure virtual keyboard stays at bottom */
-#virtual-keyboard {
-    position: fixed;
-    bottom: env(keyboard-inset-height, 0px);
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    transition: bottom 0.3s ease;
-}
-
-/* Adjust terminal container to account for both custom virtual keyboard and system virtual keyboard */
-#terminal-container {
-    padding-bottom: calc(70px + env(keyboard-inset-height, 0px));
-    transition: padding-bottom 0.3s ease;
-}
-
-/* Adjust body to account for custom virtual keyboard */
-body {
-    padding-bottom: 70px;
-}
-
-/* Fallback for older browsers without VirtualKeyboard API support */
-@media (max-width: 768px) {
-    /* Additional mobile-specific adjustments if needed */
-    .xterm {
-        /* Ensure terminal text remains readable on small screens */
-        line-height: 1.2;
+    #terminal-container {
+        padding-bottom: 50px;
     }
-}

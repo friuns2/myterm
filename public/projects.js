@@ -42,7 +42,12 @@ async function showSessionsAndProjectsList() {
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
             <div class="p-6 max-w-6xl mx-auto h-full flex flex-col overflow-y-auto">
-                <h1 class="text-3xl font-bold mb-8 text-center">Shell Dashboard</h1>
+                <div class="flex items-center justify-between mb-8">
+                    <h1 class="text-3xl font-bold">Shell Dashboard</h1>
+                    <button class="btn btn-outline btn-sm" onclick="showEnvironmentManager()">
+                        <span class="text-lg">🌍</span> Environment Variables
+                    </button>
+                </div>
                 
                 <!-- All Sessions Section -->
                 <div class="mb-8">
@@ -404,4 +409,4 @@ function createNewSessionForProject(projectName) {
     currentProject = projectName;
     updateURLWithProject(projectName);
     initializeTerminal();
-} 
+}
