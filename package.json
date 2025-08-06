@@ -1,9 +1,7 @@
 {
   "name": "shell-executor",
   "version": "1.0.0",
-  "description": "Web-based terminal emulator with PTY support for nano, tmux, etc.",
-  "main": "shell-executor.js",
-  "scripts": {
+  "description": "Web-based terminal emulator with PTY support for nano, tmux, etc.",  "scripts": {
     "start": "node server.js"
   },
   "dependencies": {

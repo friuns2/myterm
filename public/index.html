@@ -2,13 +2,14 @@
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Web Terminal2</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.24/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="style.css">
+    
 </head>
 <body class="bg-base-100 h-screen flex flex-col overflow-hidden">
     <!-- Navigation Bar -->
@@ -92,7 +93,7 @@
     </dialog>
 
     <!-- Command Input and Virtual Keyboard Section -->
-    <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300">
+    <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300" hidden>
         <div class="flex gap-2 justify-center items-center flex-wrap">
             <textarea id="custom-command-input" placeholder="Enter command... (Shift+Enter for new line, Enter to send)" 
                       class="textarea textarea-bordered textarea-xs bg-base-100 text-sm flex-1 min-w-0 max-w-xs resize-none" 

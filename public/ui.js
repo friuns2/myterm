@@ -214,8 +214,13 @@ function setupCustomCommandInput() {
 
     if (customCommandInput) {
         const sendCommand = () => {
-            const command = customCommandInput.value.trim();
+            let command = customCommandInput.value.trim();
             if (!command) return;
+            
+            // Auto-append --yolo flag for qwen and gemini commands
+            if (command === 'qwen' || command === 'gemini') {
+                command += ' --yolo';
+            }
             
             // Focus terminal first to ensure it's active
             if (terminal) {
@@ -233,7 +238,7 @@ function setupCustomCommandInput() {
                                 type: 'input',
                                 data: '\r'
                             }));
-                        }, 50); // 50ms delay
+                        }, 500); // 50ms delay
 
                         // Clear input and reset height
                         customCommandInput.value = '';
@@ -243,7 +248,7 @@ function setupCustomCommandInput() {
                         // Refocus the input field after sending command
                         setTimeout(() => {
                             customCommandInput.focus();
-                        }, 100);
+                        }, 550);
                     }
                 }, 50); // 50ms delay
             } else {
