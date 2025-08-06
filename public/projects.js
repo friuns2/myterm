@@ -20,7 +20,7 @@ function goBackToProjectList() {
     }
     
     sessionID = null;
-    clearURLParams();
+    currentProject = null;
     showSessionsAndProjectsList();
 }
 
@@ -254,108 +254,10 @@ async function deleteProject(projectName) {
 function selectProject(projectName) {
     currentProject = projectName;
     sessionID = null;
-    clearURLParams();
     initializeTerminal();
 }
 
-async function showProjectSessions(projectName) {
-    // Hide navigation bar when showing project sessions
-    hideNavigationBar();
-    
-    try {
-        // Fetch both sessions and worktrees in parallel
-        const [sessionsResponse, worktreesResponse] = await Promise.all([
-            fetch(`/api/projects/${encodeURIComponent(projectName)}/sessions`),
-            fetch(`/api/projects/${encodeURIComponent(projectName)}/worktrees`)
-        ]);
-        
-        const sessions = await sessionsResponse.json();
-        const worktrees = await worktreesResponse.json();
-        
-        const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = `
-            <div class="p-6 max-w-4xl mx-auto">
-                <div class="mb-6">
-                    <button class="btn btn-outline" onclick="goBackToProjectList()">← Back to Projects</button>
-                </div>
-                <h1 class="text-2xl font-bold mb-6 text-center">${projectName}</h1>
-                
-                <!-- Sessions Section -->
-                <div class="mb-8">
-                    <h2 class="text-xl font-semibold mb-4">Terminal Sessions</h2>
-                    <div class="grid gap-4 mb-6">
-                        ${sessions.length === 0 ? '<p class="text-center opacity-70">No active sessions for this project</p>' : 
-                            sessions.map(session => `
-                                <div class="card bg-base-200 shadow-xl">
-                                    <div class="card-body p-4">
-                                        <div class="flex justify-between items-start">
-                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${projectName}')">
-                                                <h2 class="card-title text-sm">${session.id}</h2>
-                                                <p class="text-xs opacity-70 line-clamp-5 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
-                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                                            </div>
-                                            <div class="flex gap-2">
-                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${projectName}')">
-                                                    Connect
-                                                </button>
-                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
-                                                    Kill
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')
-                        }
-                    </div>
-                    <div class="text-center">
-                        <button class="btn btn-primary" onclick="createNewSessionForProject('${projectName}')">Create New Session</button>
-                    </div>
-                </div>
 
-                <!-- Worktrees Section -->
-                <div class="mb-8">
-                    <h2 class="text-xl font-semibold mb-4">Git Worktrees</h2>
-                    <div class="grid gap-4 mb-6">
-                        ${worktrees.length === 0 ? '<p class="text-center opacity-70">No worktrees for this project</p>' : 
-                            worktrees.map(worktree => `
-                                <div class="card bg-base-300 shadow-xl">
-                                    <div class="card-body p-4">
-                                        <div class="flex justify-between items-start">
-                                            <div class="cursor-pointer flex-1" onclick="openWorktree('${projectName}', '${worktree.name}')">
-                                                <h2 class="card-title text-sm">🌿 ${worktree.name}</h2>
-                                                <p class="text-xs opacity-70">Branch: ${worktree.branch || 'detached'}</p>
-                                                <p class="text-xs opacity-50">Path: ${worktree.relativePath}</p>
-                                            </div>
-                                            <div class="flex gap-2">
-                                                <button class="btn btn-primary btn-sm" onclick="openWorktree('${projectName}', '${worktree.name}')">
-                                                    Open
-                                                </button>
-                                                <button class="btn btn-success btn-sm" onclick="mergeWorktree('${projectName}', '${worktree.name}')">
-                                                    Merge
-                                                </button>
-                                                <button class="btn btn-error btn-sm" onclick="deleteWorktree('${projectName}', '${worktree.name}')">
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')
-                        }
-                    </div>
-                    <div class="text-center">
-                        <button class="btn btn-secondary" onclick="createWorktreeModal('${projectName}')">Create New Worktree</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    } catch (error) {
-        console.error('Error fetching project data:', error);
-        const terminalContainer = document.getElementById('terminal-container');
-        terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading project data</div>';
-    }
-}
 
 // Function to connect to existing session
 function connectToSession(sessionId, projectName = null) {
@@ -407,6 +309,5 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
-    clearURLParams();
     initializeTerminal();
 }

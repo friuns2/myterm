@@ -9,7 +9,7 @@ function showNavigationBar() {
         // Update current path display
         const currentPathSpan = document.getElementById('current-path');
         if (currentPathSpan && currentProject) {
-            currentPathSpan.textContent = currentProject;
+            currentPathSpan.textContent = `Project: ${currentProject}`;
         }
     }
 }
@@ -36,8 +36,6 @@ window.addEventListener('popstate', (event) => {
     
     if (sessionID) {
         initializeTerminal();
-    } else if (currentProject) {
-        showProjectSessions(currentProject);
     } else {
         showSessionsAndProjectsList();
     }

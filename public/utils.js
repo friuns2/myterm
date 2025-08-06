@@ -82,6 +82,8 @@ function updateURLWithSession(sessionId, projectName = null) {
     window.history.pushState({ sessionId: sessionId }, '', url);
 }
 
+
+
 function clearURLParams() {
     const url = new URL(window.location);
     url.searchParams.delete('session');
