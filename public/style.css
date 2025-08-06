@@ -135,6 +135,8 @@
     
     #terminal-container {
         min-height: 30vh;
+        /* Ensure terminal doesn't get hidden by virtual keyboard */
+        max-height: calc(100vh - 200px);
     }
     
     /* Adjust navigation for mobile */
@@ -150,6 +152,32 @@
     #current-path {
         font-size: 0.7rem;
         word-break: break-all;
+    }
+    
+    /* Virtual keyboard handling */
+    #virtual-keyboard {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: inherit;
+        border-top: 1px solid;
+        /* Use dynamic viewport height that accounts for virtual keyboard */
+        transform: translateY(0);
+        transition: transform 0.3s ease;
+    }
+    
+    /* Ensure input field is always visible */
+    #custom-command-input {
+        max-width: none !important;
+        width: 100% !important;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Add padding to body to account for fixed virtual keyboard */
+    body {
+        padding-bottom: env(keyboard-inset-height, 0px);
     }
 }
 
@@ -176,7 +204,10 @@
         font-size: 10px !important;
     }
 }
-    #terminal-container {
-        /* padding-bottom: 50px; */
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-    }
+#terminal-container {
+    padding-bottom: 50px;
+}
+
+#virtual-keyboard {
+    padding-bottom: 50px;
+}

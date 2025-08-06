@@ -264,6 +264,14 @@ function setupCustomCommandInput() {
                     setTimeout(() => {
                         customCommandInput.style.height = 'auto';
                         customCommandInput.style.height = Math.min(customCommandInput.scrollHeight, 120) + 'px';
+                        
+                        // Ensure input stays visible on mobile
+                        if (window.innerWidth <= 768) {
+                            customCommandInput.scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'center'
+                            });
+                        }
                     }, 0);
                 } else {
                     // Enter: Send command

@@ -256,15 +256,15 @@ function cleanupTerminal() {
 if ("virtualKeyboard" in navigator) {
     navigator.virtualKeyboard.addEventListener('geometrychange', (event) => {
         const { height } = event.target.boundingRect;
-        const terminalContainer = document.getElementById('terminal-container');
-        if (terminalContainer) {
-            // Get the safe area inset bottom dynamically
-            const safeAreaBottom = parseInt(getComputedStyle(terminalContainer).paddingBottom, 10) || 0;
-            terminalContainer.style.paddingBottom = `${height + safeAreaBottom}px`;
-        }
         console.log(`Virtual keyboard height changed: ${height}px`);
-        terminal.fit(); // Adjust xterm.js terminal to new size
-        console.log('Terminal resized for virtual keyboard');
+        
+        // Trigger terminal resize after a short delay to ensure layout has updated
+        setTimeout(() => {
+            if (fitAddon && terminal) {
+                fitAddon.fit();
+                console.log('Terminal resized for virtual keyboard');
+            }
+        }, 100);
     });
 }
 
