@@ -70,12 +70,12 @@ function setupEnvironmentEventListeners() {
     const saveButton = document.getElementById('save-manually');
     
     // Back to dashboard with auto-save
-    backButton.addEventListener('click', async () => {
-        if (hasUnsavedChanges) {
-            await saveEnvironmentVariables();
-        }
-        showSessionList();
-    });
+     backButton.addEventListener('click', async () => {
+         if (hasUnsavedChanges) {
+             await saveEnvironmentVariables();
+         }
+         showSessionsAndProjectsList();
+     });
     
     // Auto-save on text change
     envEditor.addEventListener('input', () => {

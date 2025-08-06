@@ -49,6 +49,18 @@ async function showSessionsAndProjectsList() {
                     </button>
                 </div>
                 
+                <!-- Quick Actions Section -->
+                <div class="mb-8">
+                    <div class="flex gap-4 justify-center">
+                        <button class="btn btn-primary btn-lg" onclick="createNewTerminalSession()">
+                            <span class="text-xl">🖥️</span> New Terminal Session
+                        </button>
+                        <button class="btn btn-secondary btn-lg" onclick="showEnvironmentVariables()">
+                            <span class="text-xl">🌍</span> Environment Variables
+                        </button>
+                    </div>
+                </div>
+                
                 <!-- All Sessions Section -->
                 <div class="mb-8">
                     <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
@@ -63,7 +75,7 @@ async function showSessionsAndProjectsList() {
                                             <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}')">
                                                 <div class="flex items-center gap-2 mb-2">
                                                     <h3 class="font-semibold text-sm">${session.id}</h3>
-                                                    <span class="badge badge-primary badge-sm">${session.projectName}</span>
+                                                    <span class="badge badge-primary badge-sm">${session.projectName || 'No Project'}</span>
                                                 </div>
                                                 <p class="text-xs opacity-70 line-clamp-2 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
@@ -365,8 +377,18 @@ function connectToSession(sessionId, projectName = null) {
     }
     
     sessionID = sessionId;
-    currentProject = projectName || currentProject;
-    updateURLWithSession(sessionID, currentProject);
+    currentProject = projectName || null; // Handle undefined/null project names
+    
+    if (projectName) {
+        updateURLWithSession(sessionId, projectName);
+    } else {
+        // If no project, just set session ID in URL
+        const url = new URL(window.location);
+        url.searchParams.set('session', sessionId);
+        url.searchParams.delete('project');
+        window.history.pushState({ session: sessionId }, '', url);
+    }
+    
     initializeTerminal();
 }
 
@@ -396,6 +418,19 @@ async function killSession(sessionId) {
             icon: 'error'
         });
     }
+}
+
+// Function to create new terminal session without project requirement
+function createNewTerminalSession() {
+    // Cleanup existing terminal before creating new session
+    if (typeof cleanupTerminal === 'function') {
+        cleanupTerminal();
+    }
+    
+    sessionID = null;
+    currentProject = null; // No project required
+    clearURLParams(); // Clear any existing URL parameters
+    initializeTerminal();
 }
 
 // Function to create new session for project

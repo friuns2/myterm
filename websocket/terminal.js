@@ -58,8 +58,8 @@ function setupWebSocketServer(server) {
             sessionID = uuidv4();
             const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
             
-            // Determine working directory
-            let cwd = process.cwd();
+            // Determine working directory - project is optional
+            let cwd = process.cwd(); // Default to current working directory
             if (projectName) {
                 const projectPath = path.join(PROJECTS_DIR, projectName);
                 if (fs.existsSync(projectPath)) {

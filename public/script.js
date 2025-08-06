@@ -10,11 +10,11 @@ if ("virtualKeyboard" in navigator) {
 
 // Global variables shared across modules
 let sessionID = getSessionIDFromURL(); // Get session ID from URL only
-let currentProject = getProjectFromURL() || null;
+let currentProject = getProjectFromURL() || null; // Project is now optional
 
 // Check URL parameters and show appropriate interface
 if (sessionID) {
-    initializeTerminal();
+    initializeTerminal(); // Initialize terminal regardless of project parameter
 } else {
     showSessionsAndProjectsList();
 }
