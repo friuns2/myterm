@@ -176,14 +176,6 @@ function initializeTerminal() {
     
     // Set up terminal data handler for the new instance
     terminal.onData((data) => {
-        // Check for aliases before sending data
-        if (typeof window.interceptTerminalInput === 'function') {
-            const handled = window.interceptTerminalInput(data);
-            if (handled) {
-                return; // Alias was processed, don't send original input
-            }
-        }
-        
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
                 type: 'input',

@@ -44,9 +44,14 @@ async function showSessionsAndProjectsList() {
             <div class="p-6 max-w-6xl mx-auto h-full flex flex-col overflow-y-auto">
                 <div class="flex items-center justify-between mb-8">
                     <h1 class="text-3xl font-bold">Shell Dashboard</h1>
-                    <button class="btn btn-outline btn-sm" onclick="showEnvironmentManager()">
-                        <span class="text-lg">🌍</span> Environment Variables
-                    </button>
+                    <div class="flex gap-2">
+                        <button class="btn btn-outline btn-sm" onclick="showEnvironmentManager()">
+                            <span class="text-lg">🌍</span> Environment Variables
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="showAliasesManager()">
+                            <span class="text-lg">⚡</span> Shell Aliases
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- All Sessions Section -->
