@@ -44,7 +44,14 @@ router.get('/', (req, res) => {
         const globalEnv = loadGlobalEnv();
         // Convert JSON to plain text format (KEY=VALUE)
         const plainText = Object.entries(globalEnv)
-            .map(([key, value]) => `${key}=${value}`)
+            .map(([key, value]) => {
+                if (Array.isArray(value)) {
+                    // For arrays, create multiple lines with the same key
+                    return value.map(v => `${key}=${v}`).join('\n');
+                } else {
+                    return `${key}=${value}`;
+                }
+            })
             .join('\n');
         res.json({ text: plainText, vars: globalEnv });
     } catch (error) {
@@ -74,7 +81,17 @@ router.post('/', express.json(), (req, res) => {
                     const key = trimmedLine.substring(0, equalIndex).trim();
                     const value = trimmedLine.substring(equalIndex + 1).trim();
                     if (key) {
-                        variables[key] = value;
+                        // Handle multiple values for the same key
+                        if (variables[key]) {
+                            // If key already exists, convert to array or add to existing array
+                            if (Array.isArray(variables[key])) {
+                                variables[key].push(value);
+                            } else {
+                                variables[key] = [variables[key], value];
+                            }
+                        } else {
+                            variables[key] = value;
+                        }
                     }
                 }
             }

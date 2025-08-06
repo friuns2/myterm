@@ -73,7 +73,19 @@ function setupWebSocketServer(server) {
             
             // Merge global environment variables with process.env
             const globalEnv = loadGlobalEnv();
-            const mergedEnv = { ...process.env, ...globalEnv };
+            
+            // Process global env to handle array values
+            const processedGlobalEnv = {};
+            for (const [key, value] of Object.entries(globalEnv)) {
+                if (Array.isArray(value)) {
+                    // For arrays, use the last value as the environment variable
+                    processedGlobalEnv[key] = value[value.length - 1];
+                } else {
+                    processedGlobalEnv[key] = value;
+                }
+            }
+            
+            const mergedEnv = { ...process.env, ...processedGlobalEnv };
             
             ptyProcess = pty.spawn(shell, [], {
                 name: 'xterm-color',
