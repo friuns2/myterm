@@ -213,13 +213,22 @@ function setupCustomCommandInput() {
     const customCommandInput = document.getElementById('custom-command-input');
 
     if (customCommandInput) {
-        const sendCommand = () => {
+        const sendCommand = async () => {
             let command = customCommandInput.value.trim();
             if (!command) return;
             
-            // Auto-append --yolo flag for qwen and gemini commands
-            if (command === 'qwen' || command === 'gemini') {
-                command += ' --yolo';
+            // Load aliases and apply them
+            try {
+                const aliases = await loadAliasesFromServer();
+                if (aliases && aliases[command]) {
+                    command = aliases[command];
+                }
+            } catch (error) {
+                console.error('Error loading aliases:', error);
+                // Fallback to hardcoded aliases for qwen and gemini
+                if (command === 'qwen' || command === 'gemini') {
+                    command += ' --yolo';
+                }
             }
             
             // Focus terminal first to ensure it's active
