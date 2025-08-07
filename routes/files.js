@@ -48,17 +48,10 @@ router.get('/browse', (req, res) => {
 
 // API endpoint to read file content
 router.get('/file', (req, res) => {
-    let filePath = req.query.path;
+    const filePath = req.query.path;
     
     if (!filePath) {
         return res.status(400).json({ error: 'File path is required' });
-    }
-    
-    // Expand tilde to home directory
-    if (filePath.startsWith('~/')) {
-        filePath = path.join(os.homedir(), filePath.slice(2));
-    } else if (filePath === '~') {
-        filePath = os.homedir();
     }
     
     try {
@@ -92,17 +85,10 @@ router.get('/file', (req, res) => {
 
 // API endpoint to save file content
 router.post('/file', express.json(), (req, res) => {
-    let { path: filePath, content } = req.body;
+    const { path: filePath, content } = req.body;
     
     if (!filePath) {
         return res.status(400).json({ error: 'File path is required' });
-    }
-    
-    // Expand tilde to home directory
-    if (filePath.startsWith('~/')) {
-        filePath = path.join(os.homedir(), filePath.slice(2));
-    } else if (filePath === '~') {
-        filePath = os.homedir();
     }
     
     try {
@@ -153,4 +139,4 @@ router.post('/folder', express.json(), (req, res) => {
     }
 });
 
-module.exports = router;
+module.exports = router; 
