@@ -94,7 +94,23 @@ function getProjectsWithWorktrees(req, res) {
             fs.mkdirSync(PROJECTS_DIR, { recursive: true });
         }
         const projects = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
-            .filter(dirent => dirent.isDirectory())
+            .filter(dirent => {
+                if (dirent.isDirectory()) {
+                    return true;
+                }
+                // Check if it's a symbolic link pointing to a directory
+                if (dirent.isSymbolicLink()) {
+                    try {
+                        const fullPath = path.join(PROJECTS_DIR, dirent.name);
+                        const stats = fs.statSync(fullPath);
+                        return stats.isDirectory();
+                    } catch (error) {
+                        // If we can't stat the symlink target, exclude it
+                        return false;
+                    }
+                }
+                return false;
+            })
             .map(dirent => dirent.name);
         
         const projectsWithWorktrees = [];
