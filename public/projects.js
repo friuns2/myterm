@@ -51,6 +51,9 @@ async function showSessionsAndProjectsList() {
                         <button class="btn btn-outline btn-sm" onclick="showAliasesManager()">
                             <span class="text-lg">⚡</span> Shell Aliases
                         </button>
+                        <button class="btn btn-outline btn-sm" onclick="showSettingsManager()">
+                            <span class="text-lg">⚙️</span> Settings
+                        </button>
                     </div>
                 </div>
                 
