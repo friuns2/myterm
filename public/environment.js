@@ -36,6 +36,7 @@ async function showEnvironmentManager() {
                     <div class="flex items-center justify-between p-4 border-b border-base-300">
                         <h2 class="text-xl font-semibold">Environment Variables</h2>
                         <div class="flex gap-2">
+                            <button id="edit-zsh-settings" class="btn btn-secondary btn-sm">⚙️ Edit Zsh Settings</button>
                             <button id="clear-all-vars" class="btn btn-error btn-sm">Clear All</button>
                             <button id="save-manually" class="btn btn-primary btn-sm">Save Now</button>
                         </div>
@@ -68,6 +69,7 @@ function setupEnvironmentEventListeners() {
     const envEditor = document.getElementById('env-editor');
     const clearAllButton = document.getElementById('clear-all-vars');
     const saveButton = document.getElementById('save-manually');
+    const zshSettingsButton = document.getElementById('edit-zsh-settings');
     
     // Back to dashboard with auto-save
      backButton.addEventListener('click', async () => {
@@ -106,6 +108,11 @@ function setupEnvironmentEventListeners() {
             hasUnsavedChanges = true;
             await saveEnvironmentVariables();
         }
+    });
+    
+    // Edit zsh settings
+    zshSettingsButton.addEventListener('click', async () => {
+        await showZshSettingsEditor();
     });
     
     // Auto-save when page is about to unload
@@ -185,4 +192,148 @@ function updateSaveStatus(status) {
 }
 
 // Export functions for global access
+// Function to show zsh settings editor
+async function showZshSettingsEditor() {
+    try {
+        // Read the current .zshrc file
+        const response = await fetch('/api/files/read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: '~/.zshrc'
+            })
+        });
+        
+        let zshrcContent = '';
+        if (response.ok) {
+            const data = await response.json();
+            zshrcContent = data.content || '';
+        }
+        
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalContainer.innerHTML = `
+            <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
+                <div class="flex items-center justify-between mb-6">
+                    <h1 class="text-3xl font-bold">Zsh Settings Editor</h1>
+                    <div class="flex gap-2">
+                        <span id="zsh-save-status" class="text-sm opacity-70"></span>
+                        <button id="back-to-env-manager" class="btn btn-outline">← Back to Environment</button>
+                    </div>
+                </div>
+                
+                <div class="bg-base-200 rounded-lg p-4 mb-6">
+                    <p class="text-sm opacity-70 mb-2">
+                        Edit your .zshrc configuration file. This file contains shell settings, aliases, functions, and startup commands.
+                        Changes will take effect in new terminal sessions.
+                    </p>
+                    <p class="text-xs opacity-50">
+                        File location: ~/.zshrc
+                    </p>
+                </div>
+                
+                <!-- Text Editor Section -->
+                <div class="bg-base-100 rounded-lg border border-base-300 flex-1 flex flex-col">
+                    <div class="flex items-center justify-between p-4 border-b border-base-300">
+                        <h2 class="text-xl font-semibold">Zsh Configuration</h2>
+                        <div class="flex gap-2">
+                            <button id="save-zsh-settings" class="btn btn-primary btn-sm">Save .zshrc</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 p-4">
+                        <textarea 
+                            id="zsh-editor" 
+                            class="textarea textarea-bordered w-full h-full resize-none font-mono text-sm" 
+                            placeholder="# Zsh configuration file\n# Add your aliases, functions, and settings here\n# Example:\nalias ll='ls -la'\nexport PATH=$PATH:/usr/local/bin"
+                            spellcheck="false"
+                        >${zshrcContent}</textarea>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        setupZshSettingsEventListeners();
+        updateZshSaveStatus('Loaded');
+        
+    } catch (error) {
+        console.error('Error loading zsh settings:', error);
+        alert('Failed to load zsh settings');
+    }
+}
+
+// Setup event listeners for zsh settings management
+function setupZshSettingsEventListeners() {
+    const backButton = document.getElementById('back-to-env-manager');
+    const zshEditor = document.getElementById('zsh-editor');
+    const saveButton = document.getElementById('save-zsh-settings');
+    
+    // Back to environment manager
+    backButton.addEventListener('click', () => {
+        showEnvironmentManager();
+    });
+    
+    // Save zsh settings
+    saveButton.addEventListener('click', async () => {
+        await saveZshSettings();
+    });
+    
+    // Auto-save indication on text change
+    zshEditor.addEventListener('input', () => {
+        updateZshSaveStatus('Unsaved changes...');
+    });
+}
+
+// Function to save zsh settings
+async function saveZshSettings() {
+    try {
+        updateZshSaveStatus('Saving...');
+        
+        const zshEditor = document.getElementById('zsh-editor');
+        const content = zshEditor.value;
+        
+        const response = await fetch('/api/files/write', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: '~/.zshrc',
+                content: content
+            })
+        });
+        
+        if (response.ok) {
+            updateZshSaveStatus('Saved successfully');
+            setTimeout(() => updateZshSaveStatus(''), 3000);
+        } else {
+            throw new Error('Failed to save file');
+        }
+        
+    } catch (error) {
+        console.error('Error saving zsh settings:', error);
+        updateZshSaveStatus('Error saving file');
+        alert('Failed to save zsh settings');
+    }
+}
+
+// Function to update zsh save status
+function updateZshSaveStatus(status) {
+    const statusElement = document.getElementById('zsh-save-status');
+    if (statusElement) {
+        statusElement.textContent = status;
+        
+        // Add visual feedback
+        statusElement.className = 'text-sm opacity-70';
+        if (status.includes('Error') || status.includes('Failed')) {
+            statusElement.className += ' text-error';
+        } else if (status.includes('Saved')) {
+            statusElement.className += ' text-success';
+        } else if (status.includes('Saving')) {
+            statusElement.className += ' text-warning';
+        }
+    }
+}
+
 window.showEnvironmentManager = showEnvironmentManager;
