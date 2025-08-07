@@ -147,18 +147,6 @@ router.post('/', express.json(), (req, res) => {
     }
 });
 
-// Clear all managed aliases
-router.delete('/all', (req, res) => {
-    try {
-        if (updateZshrcWithAliases('')) {
-            res.json({ success: true, message: 'All aliases cleared successfully' });
-        } else {
-            res.status(500).json({ error: 'Failed to clear aliases' });
-        }
-    } catch (error) {
-        console.error('Error clearing aliases:', error);
-        res.status(500).json({ error: 'Failed to clear aliases' });
-    }
-});
+
 
 module.exports = router;

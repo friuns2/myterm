@@ -67,30 +67,6 @@
     border-radius: 4px;
 }
 
-/* Navigation history button styles */
-#nav-back-btn:disabled,
-#nav-forward-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-#nav-back-btn:not(:disabled):hover,
-#nav-forward-btn:not(:disabled):hover {
-    transform: translateX(-1px);
-    transition: transform 0.1s ease;
-}
-
-#nav-forward-btn:not(:disabled):hover {
-    transform: translateX(1px);
-}
-
-/* History navigation keyboard shortcut indicator */
-.nav-shortcut-hint {
-    font-size: 0.7rem;
-    opacity: 0.6;
-    margin-top: 2px;
-}
-
 .projects-container::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.5);
 }

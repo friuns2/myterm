@@ -5,13 +5,6 @@ let aliasHasUnsavedChanges = false;
 
 // Function to show aliases management interface
 async function showAliasesManager() {
-    // Add to navigation history
-    navigationHistory.pushState({
-        type: 'aliases',
-        title: 'Shell Aliases',
-        data: {}
-    });
-    
     try {
         const response = await fetch('/api/aliases');
         const data = await response.json();
@@ -23,7 +16,7 @@ async function showAliasesManager() {
                     <h1 class="text-3xl font-bold">Shell Aliases Manager</h1>
                     <div class="flex gap-2">
                         <span id="alias-save-status" class="text-sm opacity-70"></span>
-                        <button id="back-to-dashboard" class="btn btn-outline" onclick="navigationHistory.pushState({type: 'sessions', title: 'Sessions & Projects', data: {}})">← Back to Dashboard</button>
+                        <button id="back-to-dashboard" class="btn btn-outline">← Back to Dashboard</button>
                     </div>
                 </div>
                 
@@ -50,7 +43,6 @@ async function showAliasesManager() {
                     <div class="flex items-center justify-between p-4 border-b border-base-300">
                         <h2 class="text-xl font-semibold">Shell Aliases</h2>
                         <div class="flex gap-2">
-                            <button id="clear-all-aliases" class="btn btn-error btn-sm">Clear All</button>
                             <button id="save-aliases-manually" class="btn btn-primary btn-sm">Save Now</button>
                         </div>
                     </div>
@@ -80,7 +72,6 @@ async function showAliasesManager() {
 function setupAliasesEventListeners() {
     const backButton = document.getElementById('back-to-dashboard');
     const aliasesEditor = document.getElementById('aliases-editor');
-    const clearAllButton = document.getElementById('clear-all-aliases');
     const saveButton = document.getElementById('save-aliases-manually');
     
     // Back to dashboard with auto-save
@@ -112,15 +103,7 @@ function setupAliasesEventListeners() {
         await saveAliases();
     });
     
-    // Clear all aliases
-    clearAllButton.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to clear all aliases? This will remove all MyShell24-managed aliases from your .zshrc file.')) {
-            const aliasesEditor = document.getElementById('aliases-editor');
-            aliasesEditor.value = '';
-            aliasHasUnsavedChanges = true;
-            await saveAliases();
-        }
-    });
+
     
     // Auto-save when page is about to unload
     window.addEventListener('beforeunload', async (e) => {

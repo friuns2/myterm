@@ -25,31 +25,20 @@ function hideNavigationBar() {
 
 // Event listeners for file browser and editor
 document.addEventListener('DOMContentLoaded', () => {
-    // History navigation event listeners
-    const navBackBtn = document.getElementById('nav-back-btn');
-    if (navBackBtn) {
-        navBackBtn.addEventListener('click', () => {
-            navigationHistory.goBack();
-        });
-    }
-    
-    const navForwardBtn = document.getElementById('nav-forward-btn');
-    if (navForwardBtn) {
-        navForwardBtn.addEventListener('click', () => {
-            navigationHistory.goForward();
-        });
-    }
-    
     // Navigation bar event listeners
     const backToSessionsBtn = document.getElementById('back-to-sessions');
     if (backToSessionsBtn) {
         backToSessionsBtn.addEventListener('click', () => {
-            // Use history navigation instead of direct navigation
-            navigationHistory.pushState({
-                type: 'sessions',
-                title: 'Sessions & Projects',
-                data: {}
-            });
+            // Cleanup terminal before navigating away
+            if (typeof cleanupTerminal === 'function') {
+                cleanupTerminal();
+            }
+            
+            if (currentProject) {
+                goBackToProjectList();
+            } else {
+                goBackToSessionList();
+            }
         });
     }
     

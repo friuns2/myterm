@@ -45,9 +45,6 @@ async function showSessionsAndProjectsList() {
                 <div class="flex items-center justify-between mb-8">
                     <h1 class="text-3xl font-bold">Shell Dashboard</h1>
                     <div class="flex gap-2">
-                        <button class="btn btn-outline btn-sm" onclick="showEnvironmentManager()">
-                            <span class="text-lg">🌍</span> Environment Variables
-                        </button>
                         <button class="btn btn-outline btn-sm" onclick="showAliasesManager()">
                             <span class="text-lg">⚡</span> Shell Aliases
                         </button>
@@ -258,7 +255,8 @@ async function deleteProject(projectName) {
 
 function selectProject(projectName) {
     currentProject = projectName;
-    createNewSessionForProject(projectName);
+    sessionID = null;
+    initializeTerminal();
 }
 
 
@@ -272,14 +270,6 @@ function connectToSession(sessionId, projectName = null) {
     
     sessionID = sessionId;
     currentProject = projectName || currentProject;
-    
-    // Add to navigation history
-    navigationHistory.pushState({
-        type: 'terminal',
-        title: `Terminal - ${projectName || 'Session'} (${sessionId.substring(0, 8)})`,
-        data: { sessionId, projectName }
-    });
-    
     initializeTerminal();
 }
 
@@ -320,13 +310,5 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
-    
-    // Add to navigation history
-    navigationHistory.pushState({
-        type: 'terminal',
-        title: `Terminal - ${projectName}`,
-        data: { projectName }
-    });
-    
     initializeTerminal();
 }
