@@ -99,13 +99,6 @@ function setupWebSocketServer(server) {
             sessions.set(sessionID, session);
             console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
-                // Wait a moment for shell to initialize, then add the alias
-                setTimeout(() => {
-                    const mshPath = path.join(cwd, 'msh.js');
-                    ptyProcess.write(`alias msh="node ${mshPath}"\n`);
-                }, 500);
-            
-
             // Send session ID to client
             ws.send(JSON.stringify({
                 type: 'sessionID',
