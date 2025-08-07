@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 
 const app = express();
-const port = 3531;
+const port = 3532;
 
 // Serve static files
 app.use(express.static('public'));

@@ -8,6 +8,11 @@ if ("virtualKeyboard" in navigator) {
     console.log('VirtualKeyboard API not supported - using fallback CSS');
 }
 
+// Clear any existing URL parameters on page load
+if (window.location.search) {
+    window.history.replaceState({}, '', window.location.pathname);
+}
+
 // Global variables shared across modules
 let sessionID = null;
 let currentProject = null;
