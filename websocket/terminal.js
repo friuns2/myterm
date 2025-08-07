@@ -103,7 +103,8 @@ function setupWebSocketServer(server) {
             if (shell === 'zsh') {
                 // Wait a moment for shell to initialize, then add the alias
                 setTimeout(() => {
-                    ptyProcess.write('alias msh="node server.js"\n');
+                    const serverPath = path.join(cwd, 'server.js');
+                    ptyProcess.write(`alias msh="node ${serverPath}"\n`);
                 }, 500);
             }
 
