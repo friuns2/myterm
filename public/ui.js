@@ -23,22 +23,48 @@ function hideNavigationBar() {
 
 // Handle browser navigation (back/forward buttons)
 window.addEventListener('popstate', (event) => {
+    console.log('Popstate event triggered:', event.state);
+    
+    // Validate current navigation state first
+    const recoveryNeeded = validateAndRecoverNavigationState();
+    if (recoveryNeeded) {
+        console.log('Navigation state was recovered, using current state');
+        return;
+    }
+    
     const newSessionID = getSessionIDFromURL();
     const newProject = getProjectFromURL();
     
+    // Use state from history if available, otherwise fall back to URL parsing
+    const targetSessionID = event.state?.sessionId ?? newSessionID;
+    const targetProject = event.state?.projectName ?? newProject;
+    const targetView = event.state?.view;
+    
+    console.log('Navigation target:', { targetSessionID, targetProject, targetView });
+    
     // Cleanup existing terminal if we're navigating away from a session
-    if (sessionID && sessionID !== newSessionID && typeof cleanupTerminal === 'function') {
+    if (sessionID && sessionID !== targetSessionID && typeof cleanupTerminal === 'function') {
+        console.log('Cleaning up terminal for session:', sessionID);
         cleanupTerminal();
     }
     
-    sessionID = newSessionID;
-    currentProject = newProject;
+    // Update global state
+    sessionID = targetSessionID;
+    currentProject = targetProject;
     
-    if (sessionID) {
-        initializeTerminal();
-    } else {
-        showSessionsAndProjectsList();
-    }
+    // Navigate to appropriate view with error handling
+    safeNavigate(() => {
+        if (targetSessionID) {
+            console.log('Initializing terminal for session:', targetSessionID);
+            initializeTerminal();
+        } else if (targetProject && !targetSessionID) {
+            console.log('Initializing terminal for project:', targetProject);
+            initializeTerminal();
+        } else {
+            console.log('Showing dashboard');
+            showSessionsAndProjectsList();
+        }
+    });
 });
 
 // Event listeners for file browser and editor

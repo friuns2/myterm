@@ -79,14 +79,92 @@ function updateURLWithSession(sessionId, projectName = null) {
     if (projectName) {
         url.searchParams.set('project', projectName);
     }
-    window.history.pushState({ sessionId: sessionId }, '', url);
+    const state = { 
+        sessionId: sessionId, 
+        projectName: projectName,
+        view: 'terminal'
+    };
+    window.history.pushState(state, '', url);
 }
 
-
-
+// Function to clear URL parameters and update history
 function clearURLParams() {
     const url = new URL(window.location);
     url.searchParams.delete('session');
     url.searchParams.delete('project');
-    window.history.pushState({}, '', url);
+    const state = { 
+        sessionId: null, 
+        projectName: null,
+        view: 'dashboard'
+    };
+    window.history.pushState(state, '', url);
+}
+
+// Alias for backward compatibility
+function updateURLWithoutSession() {
+    clearURLParams();
+}
+
+// Function to update URL with project only
+function updateURLWithProject(projectName) {
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    url.searchParams.set('project', projectName);
+    const state = { 
+        sessionId: null, 
+        projectName: projectName,
+        view: 'terminal'
+    };
+    window.history.pushState(state, '', url);
+}
+
+// Function to validate and recover from invalid navigation states
+function validateAndRecoverNavigationState() {
+    const urlSessionID = getSessionIDFromURL();
+    const urlProject = getProjectFromURL();
+    const historyState = window.history.state;
+    
+    console.log('Validating navigation state:', {
+        urlSessionID,
+        urlProject,
+        globalSessionID: sessionID,
+        globalProject: currentProject,
+        historyState
+    });
+    
+    // Check for inconsistencies between URL and global state
+    if (urlSessionID !== sessionID || urlProject !== currentProject) {
+        console.log('Detected navigation state inconsistency, recovering...');
+        
+        // Update global state to match URL
+        sessionID = urlSessionID;
+        currentProject = urlProject;
+        
+        // Update history state to match
+        const correctedState = {
+            sessionId: sessionID,
+            projectName: currentProject,
+            view: sessionID ? 'terminal' : (currentProject ? 'terminal' : 'dashboard')
+        };
+        window.history.replaceState(correctedState, '', window.location.href);
+        
+        return true; // Indicates recovery was needed
+    }
+    
+    return false; // No recovery needed
+}
+
+// Function to safely navigate with error handling
+function safeNavigate(targetFunction, ...args) {
+    try {
+        targetFunction(...args);
+    } catch (error) {
+        console.error('Navigation error:', error);
+        // Fallback to dashboard on navigation errors
+        console.log('Falling back to dashboard due to navigation error');
+        clearURLParams();
+        sessionID = null;
+        currentProject = null;
+        showSessionsAndProjectsList();
+    }
 }
