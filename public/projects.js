@@ -259,7 +259,6 @@ async function deleteProject(projectName) {
 function selectProject(projectName) {
     currentProject = projectName;
     sessionID = null;
-    updateURLWithProject(projectName);
     initializeTerminal();
 }
 
@@ -315,6 +314,5 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
-    updateURLWithProject(projectName);
     initializeTerminal();
 }
