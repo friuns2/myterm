@@ -99,14 +99,12 @@ function setupWebSocketServer(server) {
             sessions.set(sessionID, session);
             console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
-            // Add msh alias for custom commands if using zsh
-            if (shell === 'zsh') {
                 // Wait a moment for shell to initialize, then add the alias
                 setTimeout(() => {
-                    const serverPath = path.join(cwd, 'server.js');
-                    ptyProcess.write(`alias msh="node ${serverPath}"\n`);
+                    const mshPath = path.join(cwd, 'msh.js');
+                    ptyProcess.write(`alias msh="node ${mshPath}"\n`);
                 }, 500);
-            }
+            
 
             // Send session ID to client
             ws.send(JSON.stringify({
