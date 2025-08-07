@@ -103,7 +103,7 @@ function setupWebSocketServer(server) {
             if (shell === 'zsh') {
                 // Wait a moment for shell to initialize, then add the alias
                 setTimeout(() => {
-                    ptyProcess.write('alias msh="echo Custom msh command - add your implementation here"\n');
+                    ptyProcess.write('alias msh="node server.js"\n');
                 }, 500);
             }
 
