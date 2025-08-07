@@ -6,37 +6,7 @@ const { PROJECTS_DIR } = require('../middleware/security');
 
 const router = express.Router();
 
-// API endpoint to get projects list
-router.get('/', (req, res) => {
-    try {
-        if (!fs.existsSync(PROJECTS_DIR)) {
-            fs.mkdirSync(PROJECTS_DIR, { recursive: true });
-        }
-        const projects = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
-            .filter(dirent => {
-                if (dirent.isDirectory()) {
-                    return true;
-                }
-                // Check if it's a symbolic link pointing to a directory
-                if (dirent.isSymbolicLink()) {
-                    try {
-                        const fullPath = path.join(PROJECTS_DIR, dirent.name);
-                        const stats = fs.statSync(fullPath);
-                        return stats.isDirectory();
-                    } catch (error) {
-                        // If we can't stat the symlink target, exclude it
-                        return false;
-                    }
-                }
-                return false;
-            })
-            .map(dirent => dirent.name);
-        res.json(projects);
-    } catch (error) {
-        console.error('Error reading projects:', error);
-        res.status(500).json({ error: 'Failed to read projects' });
-    }
-});
+
 
 // API endpoint to create a new project
 router.post('/', express.json(), (req, res) => {
