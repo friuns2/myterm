@@ -258,8 +258,7 @@ async function deleteProject(projectName) {
 
 function selectProject(projectName) {
     currentProject = projectName;
-    sessionID = null;
-    initializeTerminal();
+    createNewSessionForProject(projectName);
 }
 
 
@@ -273,6 +272,14 @@ function connectToSession(sessionId, projectName = null) {
     
     sessionID = sessionId;
     currentProject = projectName || currentProject;
+    
+    // Add to navigation history
+    navigationHistory.pushState({
+        type: 'terminal',
+        title: `Terminal - ${projectName || 'Session'} (${sessionId.substring(0, 8)})`,
+        data: { sessionId, projectName }
+    });
+    
     initializeTerminal();
 }
 
@@ -313,5 +320,13 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
+    
+    // Add to navigation history
+    navigationHistory.pushState({
+        type: 'terminal',
+        title: `Terminal - ${projectName}`,
+        data: { projectName }
+    });
+    
     initializeTerminal();
 }

@@ -5,6 +5,13 @@ let hasUnsavedChanges = false;
 
 // Function to show environment variables management interface
 async function showEnvironmentManager() {
+    // Add to navigation history
+    navigationHistory.pushState({
+        type: 'environment',
+        title: 'Environment Variables',
+        data: {}
+    });
+    
     try {
         const response = await fetch('/api/environment');
         const data = await response.json();
@@ -16,7 +23,7 @@ async function showEnvironmentManager() {
                     <h1 class="text-3xl font-bold">Global Environment Variables</h1>
                     <div class="flex gap-2">
                         <span id="save-status" class="text-sm opacity-70"></span>
-                        <button id="back-to-dashboard" class="btn btn-outline">← Back to Dashboard</button>
+                        <button id="back-to-dashboard" class="btn btn-outline" onclick="navigationHistory.pushState({type: 'sessions', title: 'Sessions & Projects', data: {}})">← Back to Dashboard</button>
                     </div>
                 </div>
                 

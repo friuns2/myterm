@@ -119,6 +119,14 @@ function openWorktree(projectName, worktreeName) {
     // Open a new terminal session in the worktree directory
     sessionID = null;
     currentProject = `${projectName}/worktrees/${worktreeName}`;
+    
+    // Add to navigation history
+    navigationHistory.pushState({
+        type: 'terminal',
+        title: `Terminal - ${projectName}/${worktreeName}`,
+        data: { projectName: `${projectName}/worktrees/${worktreeName}` }
+    });
+    
     initializeTerminal();
 }
 

@@ -5,6 +5,13 @@ let aliasHasUnsavedChanges = false;
 
 // Function to show aliases management interface
 async function showAliasesManager() {
+    // Add to navigation history
+    navigationHistory.pushState({
+        type: 'aliases',
+        title: 'Shell Aliases',
+        data: {}
+    });
+    
     try {
         const response = await fetch('/api/aliases');
         const data = await response.json();
@@ -16,7 +23,7 @@ async function showAliasesManager() {
                     <h1 class="text-3xl font-bold">Shell Aliases Manager</h1>
                     <div class="flex gap-2">
                         <span id="alias-save-status" class="text-sm opacity-70"></span>
-                        <button id="back-to-dashboard" class="btn btn-outline">← Back to Dashboard</button>
+                        <button id="back-to-dashboard" class="btn btn-outline" onclick="navigationHistory.pushState({type: 'sessions', title: 'Sessions & Projects', data: {}})">← Back to Dashboard</button>
                     </div>
                 </div>
                 

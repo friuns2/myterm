@@ -15,7 +15,21 @@
     <!-- Navigation Bar -->
     <div id="nav-bar" class="bg-base-200 p-2 border-b border-base-300 hidden">
         <div class="flex gap-2 items-center flex-wrap">
-            <button id="back-to-sessions" class="btn btn-sm btn-outline">← Back to Sessions</button>
+            <!-- History Navigation -->
+            <div class="flex gap-1">
+                <button id="nav-back-btn" class="btn btn-sm btn-outline" title="Go back">
+                    ← Back
+                </button>
+                <button id="nav-forward-btn" class="btn btn-sm btn-outline" title="Go forward">
+                    Forward →
+                </button>
+            </div>
+            
+            <!-- Divider -->
+            <div class="divider divider-horizontal"></div>
+            
+            <!-- Original Navigation -->
+            <button id="back-to-sessions" class="btn btn-sm btn-outline">🏠 Home</button>
             <button id="browse-files" class="btn btn-sm btn-primary">📁 Browse</button>
             <span id="current-path" class="text-sm opacity-70"></span>
         </div>
@@ -111,6 +125,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
     <!-- Load modular JavaScript files -->
     <script src="utils.js"></script>
+    <script src="history.js"></script>
     <script src="terminal.js"></script>
     <script src="projects.js"></script>
     <script src="files.js"></script>
