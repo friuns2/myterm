@@ -196,14 +196,8 @@ function updateSaveStatus(status) {
 async function showZshSettingsEditor() {
     try {
         // Read the current .zshrc file
-        const response = await fetch('/api/files/read', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                path: '~/.zshrc'
-            })
+        const response = await fetch(`/api/files/file?path=${encodeURIComponent('~/.zshrc')}`, {
+            method: 'GET'
         });
         
         let zshrcContent = '';
@@ -293,7 +287,7 @@ async function saveZshSettings() {
         const zshEditor = document.getElementById('zsh-editor');
         const content = zshEditor.value;
         
-        const response = await fetch('/api/files/write', {
+        const response = await fetch('/api/files/file', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
