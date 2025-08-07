@@ -35,7 +35,7 @@ function setupGlobalAlias() {
         const homeDir = os.homedir();
         const zshrcPath = path.join(homeDir, '.zshrc');
         const mshPath = path.join(__dirname, 'msh.js');
-        const aliasLine = `alias msh="node ${mshPath}"`;
+        const aliasLine = `alias msh="node ${mshPath} -p"`;
         
         // Check if .zshrc exists
         let zshrcContent = '';

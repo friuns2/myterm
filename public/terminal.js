@@ -118,7 +118,6 @@ const connectWebSocket = () => {
                 case 'sessionID':
                     // Store session ID received from server
                     sessionID = message.sessionID;
-                    updateURLWithSession(sessionID, currentProject);
                     console.log(`Received new session ID: ${sessionID}`);
                     break;
                     

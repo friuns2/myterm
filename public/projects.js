@@ -273,7 +273,6 @@ function connectToSession(sessionId, projectName = null) {
     
     sessionID = sessionId;
     currentProject = projectName || currentProject;
-    updateURLWithSession(sessionID, currentProject);
     initializeTerminal();
 }
 

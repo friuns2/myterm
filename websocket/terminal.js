@@ -18,10 +18,9 @@ function setupWebSocketServer(server) {
     wss.on('connection', (ws, req) => {
         console.log('Terminal connected');
         
-        // Parse session ID and project name from query parameters
-        const url = new URL(req.url, `http://${req.headers.host}`);
-        let sessionID = url.searchParams.get('sessionID');
-        const projectName = url.searchParams.get('projectName');
+        // No longer using URL parameters for session management
+        let sessionID = null;
+        const projectName = null;
         let ptyProcess;
 
         if (sessionID && sessions.has(sessionID)) {

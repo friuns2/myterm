@@ -21,25 +21,7 @@ function hideNavigationBar() {
     }
 }
 
-// Handle browser navigation (back/forward buttons)
-window.addEventListener('popstate', (event) => {
-    const newSessionID = getSessionIDFromURL();
-    const newProject = getProjectFromURL();
-    
-    // Cleanup existing terminal if we're navigating away from a session
-    if (sessionID && sessionID !== newSessionID && typeof cleanupTerminal === 'function') {
-        cleanupTerminal();
-    }
-    
-    sessionID = newSessionID;
-    currentProject = newProject;
-    
-    if (sessionID) {
-        initializeTerminal();
-    } else {
-        showSessionsAndProjectsList();
-    }
-});
+
 
 // Event listeners for file browser and editor
 document.addEventListener('DOMContentLoaded', () => {

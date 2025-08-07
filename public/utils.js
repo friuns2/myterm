@@ -60,33 +60,3 @@ function ansiToHtml(text) {
     
     return result;
 }
-
-// Function to get session ID from URL parameters
-function getSessionIDFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('session');
-}
-
-function getProjectFromURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('project');
-}
-
-// Function to update URL with session ID using pushState for navigation history
-function updateURLWithSession(sessionId, projectName = null) {
-    const url = new URL(window.location);
-    url.searchParams.set('session', sessionId);
-    if (projectName) {
-        url.searchParams.set('project', projectName);
-    }
-    window.history.pushState({ sessionId: sessionId }, '', url);
-}
-
-
-
-function clearURLParams() {
-    const url = new URL(window.location);
-    url.searchParams.delete('session');
-    url.searchParams.delete('project');
-    window.history.pushState({}, '', url);
-}
