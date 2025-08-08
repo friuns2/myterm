@@ -16,6 +16,7 @@ const sessionsRouter = require('./routes/sessions');
 const filesRouter = require('./routes/files');
 const worktreesRouter = require('./routes/worktrees');
 const aliasesRouter = require('./routes/aliases');
+const settingsRouter = require('./routes/settings');
 
 // Use route modules
 app.use('/api/projects', projectsRouter);
@@ -23,6 +24,7 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api', filesRouter);
 app.use('/api', worktreesRouter);
 app.use('/api/aliases', aliasesRouter);
+app.use('/api/settings', settingsRouter);
 
 // Move the projects-with-worktrees endpoint here to avoid routing conflicts
 app.get('/api/projects-with-worktrees', require('./routes/projects').getProjectsWithWorktrees);

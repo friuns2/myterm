@@ -1,47 +1,46 @@
-// Aliases management functionality
+// Settings management functionality
 
-let aliasAutoSaveTimeout = null;
-let aliasHasUnsavedChanges = false;
+let settingsAutoSaveTimeout = null;
+let settingsHasUnsavedChanges = false;
 
-// Function to show aliases management interface
-async function showAliasesManager() {
+// Function to show settings management interface
+async function showSettingsManager() {
     try {
-        const response = await fetch('/api/aliases');
+        const response = await fetch('/api/settings');
         const data = await response.json();
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
             <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
                 <div class="flex items-center justify-between mb-6">
-                    <h1 class="text-3xl font-bold">Shell Aliases Manager</h1>
+                    <h1 class="text-3xl font-bold">Settings</h1>
                     <div class="flex gap-2">
-                        <span id="alias-save-status" class="text-sm opacity-70"></span>
+                        <span id="settings-save-status" class="text-sm opacity-70"></span>
                         <button id="back-to-dashboard" class="btn btn-outline">← Back to Dashboard</button>
                     </div>
                 </div>
                 
                 <div class="bg-base-200 rounded-lg p-4 mb-6">
                     <div class="text-xs opacity-50">
-                        <strong>Location:</strong> ${data.zshrcPath || '~/.zshrc'}
-                        ${data.hasZshrc ? '<span class="text-success">✓ Found</span>' : '<span class="text-warning">⚠ Will be created</span>'}
+                        <strong>Location:</strong> ${data.settingsPath || '~/.myshell24/settings.conf'}
+                        ${data.hasFile ? '<span class="text-success">✓ Found</span>' : '<span class="text-warning">⚠ Will be created</span>'}
                     </div>
                 </div>
                 
                 <!-- Text Editor Section -->
                 <div class="bg-base-100 rounded-lg border border-base-300 flex-1 flex flex-col">
                     <div class="flex items-center justify-between p-4 border-b border-base-300">
-                        <h2 class="text-xl font-semibold">Shell Aliases</h2>
+                        <h2 class="text-xl font-semibold">Configuration</h2>
                         <div class="flex gap-2">
-                            <button id="clear-all-aliases" class="btn btn-error btn-sm" hidden>Clear All</button>
-                            <button id="save-aliases-manually" class="btn btn-primary btn-sm">Save Now</button>
+                            <button id="save-settings-manually" class="btn btn-primary btn-sm">Save Now</button>
                         </div>
                     </div>
                     
                     <div class="flex-1 p-4">
                         <textarea 
-                            id="aliases-editor" 
+                            id="settings-editor" 
                             class="textarea textarea-bordered w-full h-full resize-none font-mono text-sm" 
-                            placeholder="# Add your shell aliases here\n# Format: alias name='command' or just name=command\n# Examples:\nalias ll='ls -la'\nalias gs='git status'\nalias ..='cd ..'\nalias grep='grep --color=auto'\nalias h='history'\nalias c='clear'"
+                            placeholder="# Add any settings you want here (free-form text)\n# This file is saved to ~/.myshell24/settings.conf"
                             spellcheck="false"
                         >${data.text || ''}</textarea>
                     </div>
@@ -49,79 +48,68 @@ async function showAliasesManager() {
             </div>
         `;
         
-        setupAliasesEventListeners();
-        updateAliasSaveStatus('Loaded');
+        setupSettingsEventListeners();
+        updateSettingsSaveStatus('Loaded');
         
     } catch (error) {
-        console.error('Error loading aliases:', error);
-        alert('Failed to load aliases');
+        console.error('Error loading settings:', error);
+        alert('Failed to load settings');
     }
 }
 
-// Setup event listeners for aliases management
-function setupAliasesEventListeners() {
+// Setup event listeners for settings management
+function setupSettingsEventListeners() {
     const backButton = document.getElementById('back-to-dashboard');
-    const aliasesEditor = document.getElementById('aliases-editor');
-    const clearAllButton = document.getElementById('clear-all-aliases');
-    const saveButton = document.getElementById('save-aliases-manually');
+    const settingsEditor = document.getElementById('settings-editor');
+    const saveButton = document.getElementById('save-settings-manually');
     
     // Back to dashboard with auto-save
     backButton.addEventListener('click', async () => {
-        if (aliasHasUnsavedChanges) {
-            await saveAliases();
+        if (settingsHasUnsavedChanges) {
+            await saveSettings();
         }
         showSessionsAndProjectsList();
     });
     
     // Auto-save on text change
-    aliasesEditor.addEventListener('input', () => {
-        aliasHasUnsavedChanges = true;
-        updateAliasSaveStatus('Unsaved changes...');
+    settingsEditor.addEventListener('input', () => {
+        settingsHasUnsavedChanges = true;
+        updateSettingsSaveStatus('Unsaved changes...');
         
         // Clear existing timeout
-        if (aliasAutoSaveTimeout) {
-            clearTimeout(aliasAutoSaveTimeout);
+        if (settingsAutoSaveTimeout) {
+            clearTimeout(settingsAutoSaveTimeout);
         }
         
         // Set new timeout for auto-save (2 seconds after last change)
-        aliasAutoSaveTimeout = setTimeout(async () => {
-            await saveAliases();
+        settingsAutoSaveTimeout = setTimeout(async () => {
+            await saveSettings();
         }, 2000);
     });
     
     // Manual save
     saveButton.addEventListener('click', async () => {
-        await saveAliases();
-    });
-    
-    // Clear all aliases
-    clearAllButton.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to clear all aliases? This will remove all MyShell24-managed aliases from your .zshrc file.')) {
-            const aliasesEditor = document.getElementById('aliases-editor');
-            aliasesEditor.value = '';
-            aliasHasUnsavedChanges = true;
-            await saveAliases();
-        }
+        await saveSettings();
     });
     
     // Auto-save when page is about to unload
     window.addEventListener('beforeunload', async (e) => {
-        if (aliasHasUnsavedChanges) {
+        if (settingsHasUnsavedChanges) {
             // Try to save before leaving
-            await saveAliases();
+            await saveSettings();
         }
     });
 }
 
-// Save aliases
-async function saveAliases() {
+// Save settings
+async function saveSettings() {
     try {
-        const aliasesEditor = document.getElementById('aliases-editor');
-        const text = aliasesEditor.value;
+        const settingsEditor = document.getElementById('settings-editor');
+        const text = settingsEditor.value;
         
-        updateAliasSaveStatus('Saving...');
+        updateSettingsSaveStatus('Saving...');
         
-        const response = await fetch('/api/aliases', {
+        const response = await fetch('/api/settings', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -131,33 +119,28 @@ async function saveAliases() {
         
         if (response.ok) {
             const result = await response.json();
-            aliasHasUnsavedChanges = false;
-            updateAliasSaveStatus(`Saved (${result.aliasCount || 0} aliases)`);
+            settingsHasUnsavedChanges = false;
+            updateSettingsSaveStatus('Saved');
             
             // Clear auto-save timeout
-            if (aliasAutoSaveTimeout) {
-                clearTimeout(aliasAutoSaveTimeout);
-                aliasAutoSaveTimeout = null;
+            if (settingsAutoSaveTimeout) {
+                clearTimeout(settingsAutoSaveTimeout);
+                settingsAutoSaveTimeout = null;
             }
         } else {
             const error = await response.json();
-            updateAliasSaveStatus('Save failed');
-            console.error('Failed to save aliases:', error);
-            
-            // Show detailed error if available
-            if (error.details && error.details.length > 0) {
-                alert('Save failed:\n' + error.details.join('\n'));
-            }
+            updateSettingsSaveStatus('Save failed');
+            console.error('Failed to save settings:', error);
         }
     } catch (error) {
-        updateAliasSaveStatus('Save error');
-        console.error('Error saving aliases:', error);
+        updateSettingsSaveStatus('Save error');
+        console.error('Error saving settings:', error);
     }
 }
 
 // Update save status display
-function updateAliasSaveStatus(status) {
-    const saveStatus = document.getElementById('alias-save-status');
+function updateSettingsSaveStatus(status) {
+    const saveStatus = document.getElementById('settings-save-status');
     if (saveStatus) {
         saveStatus.textContent = status;
         
@@ -186,4 +169,4 @@ function updateAliasSaveStatus(status) {
 }
 
 // Export functions for global access
-window.showAliasesManager = showAliasesManager;
+window.showSettingsManager = showSettingsManager;
