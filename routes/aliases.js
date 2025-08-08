@@ -29,7 +29,7 @@ function extractManagedAliases(zshrcContent) {
         const aliasesSection = zshrcContent.substring(
             startIndex + ALIASES_SECTION_START.length,
             endIndex
-        ).trim();
+        );
         return aliasesSection;
     }
     
@@ -92,51 +92,13 @@ router.post('/', express.json(), (req, res) => {
             return res.status(400).json({ error: 'Invalid text format' });
         }
         
-        // Validate aliases format
-        const lines = text.split('\n').filter(line => line.trim());
-        const validAliases = [];
-        const errors = [];
-        
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line && !line.startsWith('#')) {
-                // Check if line starts with 'alias ' and has proper format
-                if (line.startsWith('alias ') && line.includes('=')) {
-                    validAliases.push(line);
-                } else if (!line.startsWith('alias ')) {
-                    // Auto-format if it's just name=value
-                    const equalIndex = line.indexOf('=');
-                    if (equalIndex > 0) {
-                        const name = line.substring(0, equalIndex).trim();
-                        const value = line.substring(equalIndex + 1).trim();
-                        if (name && value) {
-                            validAliases.push(`alias ${name}=${value}`);
-                        } else {
-                            errors.push(`Line ${i + 1}: Invalid alias format`);
-                        }
-                    } else {
-                        errors.push(`Line ${i + 1}: Invalid alias format`);
-                    }
-                } else {
-                    errors.push(`Line ${i + 1}: Invalid alias format`);
-                }
-            } else if (line.startsWith('#')) {
-                // Keep comments
-                validAliases.push(line);
-            }
-        }
-        
-        if (errors.length > 0) {
-            return res.status(400).json({ error: 'Invalid alias format', details: errors });
-        }
-        
-        const formattedText = validAliases.join('\n');
-        
-        if (updateZshrcWithAliases(formattedText)) {
+        // Save the text exactly as provided without parsing/formatting
+        if (updateZshrcWithAliases(text)) {
+            const aliasCount = (text.match(/^\s*alias\s+/gm) || []).length;
             res.json({ 
                 success: true, 
                 message: 'Aliases updated successfully',
-                aliasCount: validAliases.filter(line => line.startsWith('alias ')).length
+                aliasCount
             });
         } else {
             res.status(500).json({ error: 'Failed to save aliases' });
