@@ -4,7 +4,8 @@ const path = require('path');
 
 const router = express.Router();
 const os = require('os');
-const ENV_FILE_PATH = path.join(os.homedir(), '.crush', 'global_env.json');
+// Allow overriding env storage path for tests/sandbox
+const ENV_FILE_PATH = process.env.MYSHELL_ENV_PATH || path.join(os.homedir(), '.crush', 'global_env.json');
 
 // Ensure the .crush directory exists
 function ensureCrushDir() {

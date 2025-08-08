@@ -170,12 +170,6 @@
         font-size: 11px !important;
     }
 }
-
-@media (max-width: 480px) {
-    .xterm {
-        font-size: 10px !important;
-    }
-}
 #terminal-container {
     padding-bottom: 50px;
 }

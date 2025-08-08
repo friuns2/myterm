@@ -4,7 +4,8 @@ const path = require('path');
 const os = require('os');
 
 const router = express.Router();
-const ZSHRC_PATH = path.join(os.homedir(), '.zshrc');
+// Allow overriding zshrc path for testing/sandbox via env var
+const ZSHRC_PATH = process.env.MYSHELL_ZSHRC_PATH || path.join(os.homedir(), '.zshrc');
 const ALIASES_SECTION_START = '# === MyShell24 Aliases Start ===';
 const ALIASES_SECTION_END = '# === MyShell24 Aliases End ===';
 
@@ -58,6 +59,11 @@ function updateZshrcWithAliases(aliasesText) {
             zshrcContent += '\n' + newAliasesSection + '\n';
         }
         
+        // Ensure target directory exists (important when using a sandbox path)
+        const targetDir = path.dirname(ZSHRC_PATH);
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
         fs.writeFileSync(ZSHRC_PATH, zshrcContent);
         return true;
     } catch (error) {
