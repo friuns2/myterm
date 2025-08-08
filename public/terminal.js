@@ -12,7 +12,6 @@ let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_BASE_DELAY = 1000; // 1 second
-const WIDE_COLS = 240; // Desired wide column count to enable horizontal scroll
 
 // Function to properly cleanup existing WebSocket connection
 function cleanupWebSocket() {
@@ -186,21 +185,12 @@ function initializeTerminal() {
     const newTerminalElement = document.getElementById('terminal');
     terminal.open(newTerminalElement);
     if (fitAddon) {
-        // Perform an initial fit to size rows based on height, then widen columns
         fitAddon.fit();
     }
 
     // Disable automatic line wrapping (DECAWM off)
     // CSI ? 7 l — Reset mode 7 (Auto-Wrap) so long lines do not wrap
-    terminal.write('\x1b[?7l');
-
-    // Widen terminal columns to a fixed large value to allow horizontal scrolling
-    // This must happen after open (and optional initial fit) so metrics are available
-    try {
-        terminal.resize(WIDE_COLS, terminal.rows);
-    } catch (e) {
-        console.warn('Resize to wide columns failed:', e);
-    }
+    //terminal.write('\x1b[?7l');
     
     // Set up terminal data handler for the new instance
     terminal.onData((data) => {
@@ -224,14 +214,8 @@ function initializeTerminal() {
 
 // Handle terminal resize
 const handleResize = () => {
-    // Adjust rows based on available height, preserve wide column count for horizontal scroll
-    if (fitAddon && terminal) {
-        const dims = fitAddon.proposeDimensions();
-        if (dims && typeof dims.rows === 'number' && dims.rows > 0) {
-            if (dims.rows !== terminal.rows) {
-                terminal.resize(terminal.cols, dims.rows);
-            }
-        }
+    if (fitAddon) {
+        fitAddon.fit();
     }
     if (isConnected && terminal) {
         ws.send(JSON.stringify({
@@ -295,16 +279,8 @@ if ("virtualKeyboard" in navigator) {
         // Trigger terminal resize after a short delay to ensure layout has updated
         setTimeout(() => {
             if (fitAddon && terminal) {
-                const dims = fitAddon.proposeDimensions();
-                if (dims && typeof dims.rows === 'number' && dims.rows > 0) {
-                    if (dims.rows !== terminal.rows) {
-                        terminal.resize(terminal.cols, dims.rows);
-                    }
-                }
-                if (isConnected) {
-                    ws.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
-                }
-                console.log('Terminal rows adjusted for virtual keyboard');
+                fitAddon.fit();
+                console.log('Terminal resized for virtual keyboard');
             }
         }, 100);
     });

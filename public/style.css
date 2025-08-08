@@ -1,12 +1,10 @@
 /* Terminal-specific styles that work with DaisyUI/Tailwind */
 #terminal-container {
-    /* Enable horizontal scrolling for wide terminals */
-    overflow-x: auto;
+    /* Ensure terminal container takes full available space */
 }
 
 #terminal {
-    /* Prevent terminal from shrinking so horizontal scroll appears when wider than container */
-    min-width: max-content;
+    /* Terminal will be sized by Tailwind classes */
 }
 
 /* Virtual keyboard button active states */

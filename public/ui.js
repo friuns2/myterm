@@ -204,9 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Initialize input before virtual keyboard so VK can use input helpers
-    setupCustomCommandInput();
     setupVirtualKeyboard();
+    setupCustomCommandInput();
 });
 
 // Custom input field handling
@@ -352,37 +351,6 @@ function setupCustomCommandInput() {
             }
         };
 
-        // Helpers to navigate history (used by both keyboard and virtual keyboard)
-        const navigateHistoryUp = () => {
-            if (historyIndex === -1) {
-                currentInput = customCommandInput.value;
-            }
-            if (historyIndex < commandHistory.length - 1) {
-                historyIndex++;
-                customCommandInput.value = commandHistory[historyIndex];
-                hideSuggestions();
-            }
-        };
-
-        const navigateHistoryDown = () => {
-            if (historyIndex > 0) {
-                historyIndex--;
-                customCommandInput.value = commandHistory[historyIndex];
-                hideSuggestions();
-            } else if (historyIndex === 0) {
-                historyIndex = -1;
-                customCommandInput.value = currentInput;
-                hideSuggestions();
-            }
-        };
-
-        // Expose small API for virtual keyboard to use when input is focused
-        window.customInputHistory = {
-            isFocused: () => document.activeElement === customCommandInput,
-            navigateUp: navigateHistoryUp,
-            navigateDown: navigateHistoryDown
-        };
-
         customCommandInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 if (event.shiftKey) {
@@ -399,10 +367,25 @@ function setupCustomCommandInput() {
                 }
             } else if (event.key === 'ArrowUp') {
                 event.preventDefault();
-                navigateHistoryUp();
+                if (historyIndex === -1) {
+                    currentInput = customCommandInput.value;
+                }
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    customCommandInput.value = commandHistory[historyIndex];
+                    hideSuggestions();
+                }
             } else if (event.key === 'ArrowDown') {
                 event.preventDefault();
-                navigateHistoryDown();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    customCommandInput.value = commandHistory[historyIndex];
+                    hideSuggestions();
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    customCommandInput.value = currentInput;
+                    hideSuggestions();
+                }
             } else if (event.key === 'Escape') {
                 hideSuggestions();
                 historyIndex = -1;
@@ -513,19 +496,9 @@ function setupVirtualKeyboard() {
                         data = '\x03';
                         break;
                     case 38: // Up Arrow
-                        if (window.customInputHistory && window.customInputHistory.isFocused()) {
-                            window.customInputHistory.navigateUp();
-                            // Do not activate xterm
-                            return;
-                        }
                         data = '\x1B[A';
                         break;
                     case 40: // Down Arrow
-                        if (window.customInputHistory && window.customInputHistory.isFocused()) {
-                            window.customInputHistory.navigateDown();
-                            // Do not activate xterm
-                            return;
-                        }
                         data = '\x1B[B';
                         break;
                     case 37: // Left Arrow

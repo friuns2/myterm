@@ -1,6 +1,33 @@
 // Project and session management functionality
 
 // Function to navigate back to session list
+let sessionsStatusIntervalId = null;
+
+function stopSessionsStatusAutoRefresh() {
+    if (sessionsStatusIntervalId) {
+        clearInterval(sessionsStatusIntervalId);
+        sessionsStatusIntervalId = null;
+    }
+}
+
+function startSessionsStatusAutoRefresh() {
+    stopSessionsStatusAutoRefresh();
+    sessionsStatusIntervalId = setInterval(async () => {
+        try {
+            const res = await fetch('/api/sessions');
+            if (!res.ok) return;
+            const sessions = await res.json();
+            sessions.forEach(session => {
+                const el = document.getElementById(`session-status-${session.id}`);
+                if (el) {
+                    el.innerHTML = ansiToHtml(session.status);
+                }
+            });
+        } catch (e) {
+            // ignore transient errors
+        }
+    }, 2000);
+}
 function goBackToSessionList() {
     // Cleanup terminal before navigating away
     if (typeof cleanupTerminal === 'function') {
@@ -68,7 +95,7 @@ async function showSessionsAndProjectsList() {
                                                     <h3 class="font-semibold text-sm">${session.id}</h3>
                                                     <span class="badge badge-primary badge-sm">${session.projectName}</span>
                                                 </div>
-                                                <p class="text-xs opacity-70 line-clamp-2 break-all">Status: <span>${ansiToHtml(session.status)}</span></p>
+                                                <p class="text-xs opacity-70 line-clamp-6 break-all">Status: <span id="session-status-${session.id}">${ansiToHtml(session.status)}</span></p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
                                             <div class="flex gap-2">
@@ -159,6 +186,7 @@ async function showSessionsAndProjectsList() {
                 </div>
             </div>
         `;
+        startSessionsStatusAutoRefresh();
     } catch (error) {
         console.error('Failed to load sessions and projects:', error);
         const terminalContainer = document.getElementById('terminal-container');
@@ -257,6 +285,7 @@ async function deleteProject(projectName) {
 function selectProject(projectName) {
     currentProject = projectName;
     sessionID = null;
+    stopSessionsStatusAutoRefresh();
     initializeTerminal();
 }
 
@@ -272,6 +301,7 @@ function connectToSession(sessionId, projectName = null) {
     sessionID = sessionId;
     currentProject = projectName || currentProject;
     updateURLWithSession(sessionID, currentProject);
+    stopSessionsStatusAutoRefresh();
     initializeTerminal();
 }
 
@@ -313,5 +343,6 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
+    stopSessionsStatusAutoRefresh();
     initializeTerminal();
 }
