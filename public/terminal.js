@@ -13,26 +13,6 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_BASE_DELAY = 1000; // 1 second
 
-// Detect mobile/touch devices
-function isMobileDevice() {
-    return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
-}
-
-// On mobile, prevent soft keyboard from appearing for xterm's hidden textarea
-function suppressMobileSoftKeyboard(terminalContainerEl) {
-    if (!isMobileDevice()) return;
-    const helperTextarea = terminalContainerEl?.querySelector('textarea') || document.querySelector('.xterm textarea');
-    if (helperTextarea) {
-        helperTextarea.setAttribute('inputmode', 'none');
-        helperTextarea.setAttribute('autocomplete', 'off');
-        helperTextarea.setAttribute('autocorrect', 'off');
-        helperTextarea.setAttribute('autocapitalize', 'off');
-        helperTextarea.setAttribute('spellcheck', 'false');
-        helperTextarea.setAttribute('readonly', 'readonly');
-        helperTextarea.blur();
-    }
-}
-
 // Function to properly cleanup existing WebSocket connection
 function cleanupWebSocket() {
     if (ws) {
@@ -197,8 +177,6 @@ function initializeTerminal() {
     // Mount new terminal to DOM element
     const newTerminalElement = document.getElementById('terminal');
     terminal.open(newTerminalElement);
-    // On mobile, suppress IME keyboard after xterm mounts
-    suppressMobileSoftKeyboard(newTerminalElement);
     if (fitAddon) {
         fitAddon.fit();
     }
@@ -213,10 +191,8 @@ function initializeTerminal() {
         }
     });
     
-    // Focus the new terminal instance (avoid auto-focus on mobile to prevent soft keyboard)
-    if (!isMobileDevice()) {
-        terminal.focus();
-    }
+    // Focus the new terminal instance
+    terminal.focus();
     
     // Connect WebSocket
     connectWebSocket();
@@ -262,23 +238,12 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// Focus terminal when clicking anywhere (skip auto-focus on mobile to avoid keyboard)
+// Focus terminal when clicking anywhere
 document.addEventListener('click', (event) => {
     // Only focus terminal if the click is not inside the custom input container
     const customInputContainer = document.getElementById('custom-input-container');
     if (customInputContainer && !customInputContainer.contains(event.target) && terminal) {
-        if (!isMobileDevice()) {
-            terminal.focus();
-        }
-    }
-});
-
-// Prevent focusing xterm helper textarea directly on mobile
-document.addEventListener('focusin', (event) => {
-    if (!isMobileDevice()) return;
-    const helperTextarea = document.querySelector('.xterm textarea');
-    if (helperTextarea && event.target === helperTextarea) {
-        helperTextarea.blur();
+        terminal.focus();
     }
 });
 

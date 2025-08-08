@@ -41,13 +41,6 @@
     color: #000 !important;
 }
 
-/* Prevent mobile soft keyboard for xterm's hidden textarea */
-.xterm textarea {
-    inputmode: none !important;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
 /* File browser and editor styles */
 #file-browser, #file-editor {
     transition: transform 0.3s ease;
