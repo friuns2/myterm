@@ -1,4 +1,5 @@
 import { state } from './state';
+import { html, render } from 'uhtml';
 
 type DirectoryItem = { name: string; type: 'directory' | 'file'; path: string };
 type BrowseResponse = {
@@ -41,27 +42,23 @@ export async function loadDirectory(dirPath: string): Promise<void> {
 export function displayDirectoryContents(data: BrowseResponse): void {
   const fileList = document.getElementById('file-list');
   if (!fileList) return;
-  fileList.innerHTML = '';
-  if (data.parentPath && data.parentPath !== data.currentPath) {
-    fileList.appendChild(createFileItem({ name: '..', type: 'directory', path: data.parentPath }));
-  }
-  data.items.forEach((item) => fileList.appendChild(createFileItem(item)));
+  const Item = (item: DirectoryItem) => html`<div class="file-item p-2 rounded cursor-pointer flex items-center gap-2 text-sm" onclick=${() => (item.type === 'directory' ? loadDirectory(item.path) : openFileInEditor(item.path))}>
+    <span class="text-lg">${item.type === 'directory' ? '📁' : '📄'}</span>
+    <span class="flex-1 truncate" title=${item.name}>${item.name.length > 25 ? item.name.substring(0, 22) + '...' : item.name}</span>
+  </div>`;
+  render(
+    fileList,
+    html`<div>
+      ${data.parentPath && data.parentPath !== data.currentPath ? Item({ name: '..', type: 'directory', path: data.parentPath }) : null}
+      ${data.items.map((i) => Item(i))}
+    </div>`
+  );
 }
 
-export function createFileItem(item: DirectoryItem): HTMLDivElement {
-  const div = document.createElement('div');
-  div.className = 'file-item p-2 rounded cursor-pointer flex items-center gap-2 text-sm';
-  const icon = item.type === 'directory' ? '📁' : '📄';
-  const displayName = item.name.length > 25 ? item.name.substring(0, 22) + '...' : item.name;
-  div.innerHTML = `
-    <span class="text-lg">${icon}</span>
-    <span class="flex-1 truncate" title="${item.name}">${displayName}</span>
-  `;
-  div.addEventListener('click', () => {
-    if (item.type === 'directory') loadDirectory(item.path);
-    else void openFileInEditor(item.path);
-  });
-  return div;
+export function createFileItem(_item: DirectoryItem): HTMLDivElement {
+  // Legacy function no longer used; kept for API compatibility if referenced.
+  const placeholder = document.createElement('div');
+  return placeholder;
 }
 
 export async function openFileInEditor(filePath: string): Promise<void> {
