@@ -13,7 +13,7 @@ async function showAliasesManager() {
         terminalContainer.innerHTML = `
             <div class="p-6 max-w-4xl mx-auto h-full flex flex-col">
                 <div class="flex items-center justify-between mb-6">
-                    <h1 class="text-3xl font-bold">Shell Aliases Manager</h1>
+                    <h1 class="text-3xl font-bold">Shell Settings</h1>
                     <div class="flex gap-2">
                         <button id="back-to-dashboard" class="btn btn-outline">← Back to Dashboard</button>
                     </div>
@@ -29,7 +29,7 @@ async function showAliasesManager() {
                 <!-- Text Editor Section -->
                 <div class="bg-base-100 rounded-lg border border-base-300 flex-1 flex flex-col">
                     <div class="flex items-center justify-between p-4 border-b border-base-300">
-                        <h2 class="text-xl font-semibold">Shell Aliases</h2>
+                        <h2 class="text-xl font-semibold">Shell Settings</h2>
                         <div class="flex gap-2">
                             <button id="clear-all-aliases" class="btn btn-error btn-sm" hidden>Clear All</button>
                             <button id="save-aliases-manually" class="btn btn-primary btn-sm">Save Now</button>
