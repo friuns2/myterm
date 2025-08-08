@@ -305,10 +305,14 @@ function setupCustomCommandInput() {
             }
         });
 
-        // Keep focus on the input after choosing a datalist option (browser-specific quirk)
+        // Keep keyboard open after selecting a datalist option on mobile
         const refocusInputCaretToEnd = () => {
-            customCommandInput.focus();
             const length = customCommandInput.value.length;
+            try {
+                customCommandInput.focus({ preventScroll: true });
+            } catch (_) {
+                customCommandInput.focus();
+            }
             try {
                 customCommandInput.setSelectionRange(length, length);
             } catch (_) {
@@ -316,13 +320,13 @@ function setupCustomCommandInput() {
             }
         };
 
+        // After datalist selection, ensure focus stays and caret is at end
         customCommandInput.addEventListener('change', () => {
-            // After a datalist selection, ensure focus stays on the field
             setTimeout(refocusInputCaretToEnd, 0);
         });
 
+        // In some browsers, selecting from datalist might blur the input
         customCommandInput.addEventListener('input', () => {
-            // In some browsers, selecting from datalist might blur the input
             if (document.activeElement !== customCommandInput) {
                 setTimeout(refocusInputCaretToEnd, 0);
             }
