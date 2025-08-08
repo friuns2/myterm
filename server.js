@@ -3,16 +3,14 @@ const { setupWebSocketServer } = require('./websocket/terminal');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { authMiddleware } = require('./middleware/auth');
+const { basicAuthMiddleware, rejectUpgradeIfUnauthorized } = require('./middleware/basicAuth');
 
 const app = express();
 const port = 3531;
 
 // Serve static files
+app.use(basicAuthMiddleware);
 app.use(express.static('public'));
-
-// Protect API routes if auth is configured
-app.use('/api', authMiddleware);
 
 // Import route modules
 const projectsRouter = require('./routes/projects');
@@ -66,6 +64,14 @@ const server = app.listen(port, () => {
     console.log(`Web Terminal running at http://localhost:${port}`);
     // Setup global alias on server start
     setupGlobalAlias();
+});
+
+// Enforce Basic Auth on WebSocket upgrades
+server.on('upgrade', (req, socket) => {
+    if (rejectUpgradeIfUnauthorized(req, socket)) {
+        return;
+    }
+    // If authorized, do nothing; ws server will handle the upgrade
 });
 
 // Set up WebSocket server
