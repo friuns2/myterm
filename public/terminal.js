@@ -1,8 +1,8 @@
 // Terminal management functionality
 
-// Initialize xterm.js terminal
-const { Terminal } = window;
-const { FitAddon } = window.FitAddon;
+// Initialize xterm.js terminal (from local shim)
+const Terminal = window.Terminal;
+const FitAddonCtor = window.FitAddon && window.FitAddon.FitAddon;
 
 // Global variables for current terminal instance
 let terminal = null;
@@ -55,9 +55,11 @@ function createNewTerminal() {
         allowTransparency: false
     });
     
-    // Create new fit addon
-    fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
+    // Create new fit addon if available
+    fitAddon = FitAddonCtor ? new FitAddonCtor() : null;
+    if (fitAddon) {
+        terminal.loadAddon(fitAddon);
+    }
     
     return terminal;
 }
@@ -172,7 +174,9 @@ function initializeTerminal() {
     // Mount new terminal to DOM element
     const newTerminalElement = document.getElementById('terminal');
     terminal.open(newTerminalElement);
-    fitAddon.fit();
+    if (fitAddon) {
+        fitAddon.fit();
+    }
     
     // Set up terminal data handler for the new instance
     terminal.onData((data) => {
