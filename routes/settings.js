@@ -4,42 +4,123 @@ const path = require('path');
 const os = require('os');
 
 const router = express.Router();
-const SETTINGS_PATH = path.join(os.homedir(), '.myshell-settings');
+const ZSHRC_PATH = path.join(os.homedir(), '.zshrc');
+const ALIASES_SECTION_START = '# === MyShell24 Aliases Start ===';
+const ALIASES_SECTION_END = '# === MyShell24 Aliases End ===';
 
-function readSettings() {
+// Read current .zshrc file
+function readZshrc() {
     try {
-        if (fs.existsSync(SETTINGS_PATH)) {
-            return fs.readFileSync(SETTINGS_PATH, 'utf8');
+        if (fs.existsSync(ZSHRC_PATH)) {
+            return fs.readFileSync(ZSHRC_PATH, 'utf8');
         }
-    } catch (e) {
-        console.error('Error reading settings:', e);
+    } catch (error) {
+        console.error('Error reading .zshrc file:', error);
     }
     return '';
 }
 
-router.get('/', (_req, res) => {
+// Extract aliases from .zshrc managed by MyShell24
+function extractManagedAliases(zshrcContent) {
+    const startIndex = zshrcContent.indexOf(ALIASES_SECTION_START);
+    const endIndex = zshrcContent.indexOf(ALIASES_SECTION_END);
+    
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        const aliasesSection = zshrcContent.substring(
+            startIndex + ALIASES_SECTION_START.length,
+            endIndex
+        );
+        return aliasesSection;
+    }
+    
+    return '';
+}
+
+// Update .zshrc with new aliases
+function updateZshrcWithAliases(aliasesText) {
     try {
-        const text = readSettings();
-        res.json({ text, path: SETTINGS_PATH, exists: fs.existsSync(SETTINGS_PATH) });
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to read settings' });
+        let zshrcContent = readZshrc();
+        const startIndex = zshrcContent.indexOf(ALIASES_SECTION_START);
+        const endIndex = zshrcContent.indexOf(ALIASES_SECTION_END);
+        
+        const newAliasesSection = `${ALIASES_SECTION_START}\n${aliasesText}\n${ALIASES_SECTION_END}`;
+        
+        if (startIndex !== -1 && endIndex !== -1) {
+            // Replace existing section
+            zshrcContent = zshrcContent.substring(0, startIndex) + 
+                          newAliasesSection + 
+                          zshrcContent.substring(endIndex + ALIASES_SECTION_END.length);
+        } else {
+            // Add new section at the end
+            if (zshrcContent && !zshrcContent.endsWith('\n')) {
+                zshrcContent += '\n';
+            }
+            zshrcContent += '\n' + newAliasesSection + '\n';
+        }
+        
+        fs.writeFileSync(ZSHRC_PATH, zshrcContent);
+        return true;
+    } catch (error) {
+        console.error('Error updating .zshrc file:', error);
+        return false;
+    }
+}
+
+// Get all managed aliases as plain text
+router.get('/', (req, res) => {
+    try {
+        const zshrcContent = readZshrc();
+        const aliasesText = extractManagedAliases(zshrcContent);
+        
+        res.json({ 
+            text: aliasesText,
+            zshrcPath: ZSHRC_PATH,
+            hasZshrc: fs.existsSync(ZSHRC_PATH)
+        });
+    } catch (error) {
+        console.error('Error getting aliases:', error);
+        res.status(500).json({ error: 'Failed to get aliases' });
     }
 });
 
+// Set/update aliases from plain text
 router.post('/', express.json(), (req, res) => {
     try {
-        const { text } = req.body || {};
+        const { text } = req.body;
+        
         if (typeof text !== 'string') {
             return res.status(400).json({ error: 'Invalid text format' });
         }
-        fs.writeFileSync(SETTINGS_PATH, text, 'utf8');
-        res.json({ success: true, size: Buffer.byteLength(text, 'utf8') });
-    } catch (e) {
-        console.error('Error writing settings:', e);
-        res.status(500).json({ error: 'Failed to save settings' });
+        
+        // Save the text exactly as provided without parsing/formatting
+        if (updateZshrcWithAliases(text)) {
+            const aliasCount = (text.match(/^\s*alias\s+/gm) || []).length;
+            res.json({ 
+                success: true, 
+                message: 'Aliases updated successfully',
+                aliasCount
+            });
+        } else {
+            res.status(500).json({ error: 'Failed to save aliases' });
+        }
+    } catch (error) {
+        console.error('Error setting aliases:', error);
+        res.status(500).json({ error: 'Failed to set aliases' });
+    }
+});
+
+// Clear all managed aliases
+router.delete('/all', (req, res) => {
+    try {
+        if (updateZshrcWithAliases('')) {
+            res.json({ success: true, message: 'All aliases cleared successfully' });
+        } else {
+            res.status(500).json({ error: 'Failed to clear aliases' });
+        }
+    } catch (error) {
+        console.error('Error clearing aliases:', error);
+        res.status(500).json({ error: 'Failed to clear aliases' });
     }
 });
 
 module.exports = router;
-
-

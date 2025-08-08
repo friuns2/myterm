@@ -6,7 +6,7 @@ let aliasHasUnsavedChanges = false;
 // Function to show aliases management interface
 async function showAliasesManager() {
     try {
-        const response = await fetch('/api/aliases');
+        const response = await fetch('/api/settings');
         const data = await response.json();
         
         const terminalContainer = document.getElementById('terminal-container');
@@ -117,7 +117,7 @@ async function saveAliases() {
         const aliasesEditor = document.getElementById('aliases-editor');
         const text = aliasesEditor.value;
         
-        const response = await fetch('/api/aliases', {
+        const response = await fetch('/api/settings', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
