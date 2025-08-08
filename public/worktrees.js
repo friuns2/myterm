@@ -119,7 +119,6 @@ function openWorktree(projectName, worktreeName) {
     // Open a new terminal session in the worktree directory
     sessionID = null;
     currentProject = `${projectName}/worktrees/${worktreeName}`;
-    updateURLWithProject(currentProject);
     initializeTerminal();
 }
 

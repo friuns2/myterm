@@ -34,7 +34,7 @@ window.addEventListener('popstate', (event) => {
     sessionID = newSessionID;
     currentProject = newProject;
     
-    if (sessionID || currentProject) {
+    if (sessionID) {
         initializeTerminal();
     } else {
         showSessionsAndProjectsList();

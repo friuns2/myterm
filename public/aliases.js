@@ -21,17 +21,6 @@ async function showAliasesManager() {
                 </div>
                 
                 <div class="bg-base-200 rounded-lg p-4 mb-6">
-                    <p class="text-sm opacity-70 mb-2">
-                        Create and manage zsh shell aliases. Aliases are stored in your ~/.zshrc file.
-                        Use the format: <code>alias name='command'</code> or just <code>name=command</code> (auto-formatted).
-                        Changes are automatically saved and will be available in new terminal sessions.
-                    </p>
-                    <p class="text-xs opacity-50 mb-2">
-                        Examples:<br>
-                        • <code>alias ll='ls -la'</code><br>
-                        • <code>alias gs='git status'</code><br>
-                        • <code>alias ..='cd ..'</code>
-                    </p>
                     <div class="text-xs opacity-50">
                         <strong>Location:</strong> ${data.zshrcPath || '~/.zshrc'}
                         ${data.hasZshrc ? '<span class="text-success">✓ Found</span>' : '<span class="text-warning">⚠ Will be created</span>'}
@@ -43,7 +32,7 @@ async function showAliasesManager() {
                     <div class="flex items-center justify-between p-4 border-b border-base-300">
                         <h2 class="text-xl font-semibold">Shell Aliases</h2>
                         <div class="flex gap-2">
-                            <button id="clear-all-aliases" class="btn btn-error btn-sm">Clear All</button>
+                            <button id="clear-all-aliases" class="btn btn-error btn-sm" hidden>Clear All</button>
                             <button id="save-aliases-manually" class="btn btn-primary btn-sm">Save Now</button>
                         </div>
                     </div>
