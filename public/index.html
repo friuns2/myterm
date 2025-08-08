@@ -95,9 +95,9 @@
     <!-- Command Input and Virtual Keyboard Section -->
     <div id="virtual-keyboard" class="bg-base-200 p-2 border-t border-base-300" >
         <div class="flex gap-2 justify-center items-center flex-wrap">
-            <textarea id="custom-command-input" placeholder="Enter command... (Shift+Enter for new line, Enter to send)" 
-                      class="textarea textarea-bordered textarea-xs bg-base-100 text-sm flex-1 min-w-0 max-w-xs resize-none" 
-                      rows="1"></textarea>
+            <input id="custom-command-input" type="text" list="command-history-list" placeholder="Enter command... (Enter to send)" 
+                   class="input input-bordered input-xs bg-base-100 text-sm flex-1 min-w-0 max-w-xs" />
+            <datalist id="command-history-list"></datalist>
             <button class="btn btn-xs btn-outline" data-key-code="27">Esc</button>
             <button class="btn btn-xs btn-outline" data-key-code="9">Tab</button>
             <button class="btn btn-xs btn-outline" data-key-code="17">Ctrl</button>

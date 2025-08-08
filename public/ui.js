@@ -211,84 +211,38 @@ document.addEventListener('DOMContentLoaded', () => {
 // Custom input field handling
 function setupCustomCommandInput() {
     const customCommandInput = document.getElementById('custom-command-input');
+    const historyDatalist = document.getElementById('command-history-list');
 
     if (customCommandInput) {
         // Command history management
         let commandHistory = JSON.parse(localStorage.getItem('terminalCommandHistory') || '[]');
-        let historyIndex = -1;
-        let currentInput = '';
-        let suggestionsList = null;
-        
+
+        // Render history to datalist (native suggestions)
+        const renderHistoryToDatalist = () => {
+            if (!historyDatalist) return;
+            historyDatalist.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+            commandHistory.slice(0, 100).forEach((cmd) => {
+                const optionEl = document.createElement('option');
+                optionEl.value = cmd;
+                fragment.appendChild(optionEl);
+            });
+            historyDatalist.appendChild(fragment);
+        };
+
         // Save command to history
         const saveToHistory = (command) => {
             if (command && command.trim()) {
-                // Remove duplicate if exists
-                const index = commandHistory.indexOf(command);
-                if (index > -1) {
-                    commandHistory.splice(index, 1);
+                const duplicateIndex = commandHistory.indexOf(command);
+                if (duplicateIndex > -1) {
+                    commandHistory.splice(duplicateIndex, 1);
                 }
-                // Add to beginning
                 commandHistory.unshift(command);
-                // Limit history size
                 if (commandHistory.length > 100) {
                     commandHistory = commandHistory.slice(0, 100);
                 }
                 localStorage.setItem('terminalCommandHistory', JSON.stringify(commandHistory));
-            }
-        };
-        
-        // Create suggestions dropdown
-        const createSuggestionsDropdown = () => {
-            if (suggestionsList) {
-                suggestionsList.remove();
-            }
-            
-            suggestionsList = document.createElement('div');
-            suggestionsList.className = 'absolute bottom-full left-0 right-0 bg-base-200 border border-base-300 rounded-t-lg max-h-40 overflow-y-auto z-50 hidden';
-            suggestionsList.style.marginBottom = '2px';
-            
-            const container = customCommandInput.parentElement;
-            container.style.position = 'relative';
-            container.appendChild(suggestionsList);
-            
-            return suggestionsList;
-        };
-        
-        // Show command suggestions
-        const showSuggestions = (input) => {
-            if (!suggestionsList) {
-                createSuggestionsDropdown();
-            }
-            
-            const filtered = commandHistory.filter(cmd => 
-                cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input
-            ).slice(0, 5);
-            
-            if (filtered.length === 0) {
-                suggestionsList.classList.add('hidden');
-                return;
-            }
-            
-            suggestionsList.innerHTML = '';
-            filtered.forEach((cmd, index) => {
-                const item = document.createElement('div');
-                item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm';
-                item.textContent = cmd;
-                item.addEventListener('click', () => {
-                    customCommandInput.value = cmd;
-                    suggestionsList.classList.add('hidden');
-                    customCommandInput.focus();
-                });
-                suggestionsList.appendChild(item);
-            });
-            
-            suggestionsList.classList.remove('hidden');
-        };
-        
-        // Hide suggestions
-        const hideSuggestions = () => {
-            if (suggestionsList) {
-                suggestionsList.classList.add('hidden');
+                renderHistoryToDatalist();
             }
         };
 
@@ -298,9 +252,6 @@ function setupCustomCommandInput() {
             
             // Save to history
             saveToHistory(command);
-            historyIndex = -1;
-            currentInput = '';
-            hideSuggestions();
             
             // Focus terminal first to ensure it's active
             if (terminal) {
@@ -320,10 +271,8 @@ function setupCustomCommandInput() {
                             }));
                         }, 50); // 50ms delay
 
-                        // Clear input and reset height
+                        // Clear input
                         customCommandInput.value = '';
-                        customCommandInput.style.height = 'auto';
-                        customCommandInput.rows = 1;
                         
                         // Refocus the input field after sending command
                         setTimeout(() => {
@@ -338,10 +287,8 @@ function setupCustomCommandInput() {
                         type: 'input',
                         data: command + '\r'
                     }));
-                    // Clear input and reset height
+                    // Clear input
                     customCommandInput.value = '';
-                    customCommandInput.style.height = 'auto';
-                    customCommandInput.rows = 1;
                     
                     // Refocus the input field after sending command
                     setTimeout(() => {
@@ -353,94 +300,13 @@ function setupCustomCommandInput() {
 
         customCommandInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
-                if (event.shiftKey) {
-                    // Shift+Enter: Allow new line (default behavior)
-                    // Auto-resize textarea
-                    setTimeout(() => {
-                        customCommandInput.style.height = 'auto';
-                        customCommandInput.style.height = Math.min(customCommandInput.scrollHeight, 120) + 'px';
-                    }, 0);
-                } else {
-                    // Enter: Send command
-                    event.preventDefault();
-                    sendCommand();
-                }
-            } else if (event.key === 'ArrowUp') {
                 event.preventDefault();
-                if (historyIndex === -1) {
-                    currentInput = customCommandInput.value;
-                }
-                if (historyIndex < commandHistory.length - 1) {
-                    historyIndex++;
-                    customCommandInput.value = commandHistory[historyIndex];
-                    hideSuggestions();
-                }
-            } else if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    customCommandInput.value = commandHistory[historyIndex];
-                    hideSuggestions();
-                } else if (historyIndex === 0) {
-                    historyIndex = -1;
-                    customCommandInput.value = currentInput;
-                    hideSuggestions();
-                }
-            } else if (event.key === 'Escape') {
-                hideSuggestions();
-                historyIndex = -1;
-                currentInput = '';
+                sendCommand();
             }
         });
-        
-        // Auto-resize textarea on input and show suggestions
-        customCommandInput.addEventListener('input', () => {
-            customCommandInput.style.height = 'auto';
-            customCommandInput.style.height = Math.min(customCommandInput.scrollHeight, 120) + 'px';
-            
-            // Reset history navigation when typing
-            historyIndex = -1;
-            currentInput = customCommandInput.value;
-            
-            // Show suggestions if input is not empty
-            const input = customCommandInput.value.trim();
-            if (input.length > 0) {
-                showSuggestions(input);
-            } else {
-                hideSuggestions();
-            }
-        });
-        
-        // Reset height when cleared and hide suggestions
-        customCommandInput.addEventListener('blur', () => {
-            if (!customCommandInput.value.trim()) {
-                customCommandInput.style.height = 'auto';
-                customCommandInput.rows = 1;
-            }
-            // Hide suggestions after a short delay to allow clicking on them
-            setTimeout(() => {
-                hideSuggestions();
-            }, 200);
-        });
-        
-        // Show suggestions when focusing if there's input
-        customCommandInput.addEventListener('focus', () => {
-            const input = customCommandInput.value.trim();
-            if (input.length > 0) {
-                showSuggestions(input);
-            }
-        });
-        
-        // Initialize suggestions dropdown
-        createSuggestionsDropdown();
-        
-        // Hide suggestions when clicking outside
-        document.addEventListener('click', (event) => {
-            if (!customCommandInput.contains(event.target) && 
-                (!suggestionsList || !suggestionsList.contains(event.target))) {
-                hideSuggestions();
-            }
-        });
+
+        // Initially render history into datalist
+        renderHistoryToDatalist();
     }
 }
 
