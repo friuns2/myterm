@@ -30,12 +30,7 @@ export function hideNavigationBar(): void {
 }
 
 export function setupGlobalUI(): void {
-  window.addEventListener('popstate', () => {
-    sessionID.value = getSessionIDFromURL();
-    currentProject.value = getProjectFromURL();
-    if (sessionID.value) initializeTerminal();
-    else showSessionsAndProjectsList();
-  });
+  // Routing handled in main.tsx now
 
   document.addEventListener('DOMContentLoaded', () => {
     const backToSessionsBtn = document.getElementById('back-to-sessions');

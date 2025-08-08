@@ -14,5 +14,8 @@ export const currentBrowserPath = signal<NullableString>(null);
 
 export const isConnected = signal<boolean>(false);
 
+export type View = 'dashboard' | 'terminal' | 'environment' | 'aliases';
+export const currentView = signal<View>('dashboard');
+
 
 

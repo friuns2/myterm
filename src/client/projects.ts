@@ -1,5 +1,6 @@
 import { ansiToHtml } from './utils';
 import { currentProject, sessionID } from './state';
+import { updateURLForView } from './utils';
 import { cleanupTerminal, initializeTerminal } from './terminal';
 
 export function goBackToSessionList(): void {
@@ -11,7 +12,8 @@ export function goBackToSessionList(): void {
   if (typeof (window as any).updateURLWithoutSession === 'function') {
     (window as any).updateURLWithoutSession();
   }
-  showSessionsAndProjectsList();
+  updateURLForView('dashboard');
+  (window as any).dispatchEvent?.(new PopStateEvent('popstate'));
 }
 
 export function goBackToProjectList(): void {
@@ -20,14 +22,13 @@ export function goBackToProjectList(): void {
   }
   sessionID.value = null;
   currentProject.value = null;
-  showSessionsAndProjectsList();
+  updateURLForView('dashboard');
+  (window as any).dispatchEvent?.(new PopStateEvent('popstate'));
 }
 
 export async function showSessionsAndProjectsList(): Promise<void> {
-  const container = document.getElementById('terminal-container');
-  if (!container) return;
-  container.innerHTML = '';
-  (window as any).render?.((window as any).h?.((window as any).Dashboard), container);
+  updateURLForView('dashboard');
+  (window as any).dispatchEvent?.(new PopStateEvent('popstate'));
 }
 
 export async function createNewProject(): Promise<void> {
