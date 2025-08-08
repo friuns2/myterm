@@ -1,21 +1,15 @@
-// Shared client state using Preact Signals
-import { signal } from '@preact/signals';
+// Shared client state
 
 export type NullableString = string | null;
 
-export const sessionID = signal<NullableString>(null);
-export const currentProject = signal<NullableString>(null);
-
-export const isFileBrowserOpen = signal<boolean>(false);
-export const isFileEditorOpen = signal<boolean>(false);
-
-export const currentEditingFile = signal<NullableString>(null);
-export const currentBrowserPath = signal<NullableString>(null);
-
-export const isConnected = signal<boolean>(false);
-
-export type View = 'dashboard' | 'terminal' | 'environment' | 'aliases';
-export const currentView = signal<View>('dashboard');
-
+export const state = {
+  sessionID: null as NullableString,
+  currentProject: null as NullableString,
+  isFileBrowserOpen: false,
+  isFileEditorOpen: false,
+  currentEditingFile: null as NullableString,
+  currentBrowserPath: null as NullableString,
+  isConnected: false,
+};
 
 

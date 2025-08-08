@@ -1,6 +1,6 @@
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
-import { sessionID, currentProject, isConnected } from './state';
+import { state } from './state';
 import { updateURLWithSession } from './utils';
 
 let terminal: Terminal | null = null;
@@ -22,7 +22,7 @@ function cleanupWebSocket(): void {
     }
     ws = null;
   }
-  isConnected.value = false;
+  state.isConnected = false;
   reconnectAttempts = 0;
 }
 
@@ -46,16 +46,16 @@ export function connectWebSocket(): void {
   let url = `${protocol}//${window.location.host}`;
 
   const params = new URLSearchParams();
-  if (sessionID.value) params.append('sessionID', sessionID.value);
-  if (currentProject.value) params.append('projectName', currentProject.value);
+  if (state.sessionID) params.append('sessionID', state.sessionID);
+  if (state.currentProject) params.append('projectName', state.currentProject);
   if (params.toString()) url += `?${params.toString()}`;
 
   ws = new WebSocket(url);
 
   ws.onopen = () => {
-    isConnected.value = true;
+    state.isConnected = true;
     reconnectAttempts = 0;
-    if (terminal && sessionID.value) {
+    if (terminal && state.sessionID) {
       // Force redraw after reconnect
       // @ts-expect-error xterm private API exists in runtime
       terminal.clearTextureAtlas?.();
@@ -76,13 +76,13 @@ export function connectWebSocket(): void {
           terminal?.write(message.data);
           break;
         case 'sessionID':
-          sessionID.value = message.sessionID;
-          updateURLWithSession(message.sessionID, currentProject.value);
+          state.sessionID = message.sessionID;
+          updateURLWithSession(message.sessionID, state.currentProject);
           break;
         case 'exit':
           terminal?.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);
           terminal?.write('Connection closed. Go back to session list.\r\n');
-          isConnected.value = false;
+          state.isConnected = false;
           break;
         default:
           // ignore
@@ -94,7 +94,7 @@ export function connectWebSocket(): void {
   };
 
   ws.onclose = () => {
-    isConnected.value = false;
+    state.isConnected = false;
     if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       const delay = RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttempts);
       reconnectAttempts++;

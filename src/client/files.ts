@@ -1,4 +1,4 @@
-import { currentBrowserPath, currentEditingFile, currentProject, isFileBrowserOpen, isFileEditorOpen } from './state';
+import { state } from './state';
 
 type DirectoryItem = { name: string; type: 'directory' | 'file'; path: string };
 type BrowseResponse = {
@@ -10,15 +10,15 @@ type BrowseResponse = {
 export async function toggleFileBrowser(): Promise<void> {
   const fileBrowser = document.getElementById('file-browser');
   if (!fileBrowser) return;
-  if (isFileBrowserOpen.value) {
+  if (state.isFileBrowserOpen) {
     fileBrowser.classList.add('hidden');
     fileBrowser.classList.remove('flex', 'fullscreen');
-    isFileBrowserOpen.value = false;
+    state.isFileBrowserOpen = false;
   } else {
     fileBrowser.classList.remove('hidden');
     fileBrowser.classList.add('flex', 'fullscreen');
-    isFileBrowserOpen.value = true;
-    const initialPath = currentProject.value ? `../projects/${currentProject.value}` : '~';
+    state.isFileBrowserOpen = true;
+    const initialPath = state.currentProject ? `../projects/${state.currentProject}` : '~';
     await loadDirectory(initialPath);
   }
 }
@@ -28,7 +28,7 @@ export async function loadDirectory(dirPath: string): Promise<void> {
     const response = await fetch(`/api/browse?path=${encodeURIComponent(dirPath)}`);
     const data: BrowseResponse = await response.json();
     if (!response.ok) throw new Error((data as any).error || 'Failed to load directory');
-    currentBrowserPath.value = data.currentPath;
+    state.currentBrowserPath = data.currentPath;
     displayDirectoryContents(data);
     const currentDirInput = document.getElementById('current-dir') as HTMLInputElement | null;
     if (currentDirInput) currentDirInput.value = data.currentPath;
@@ -69,11 +69,11 @@ export async function openFileInEditor(filePath: string): Promise<void> {
     const response = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to load file');
-    currentEditingFile.value = data.path;
+    state.currentEditingFile = data.path;
     const fileEditor = document.getElementById('file-editor');
     fileEditor?.classList.remove('hidden');
     fileEditor?.classList.add('flex', 'fullscreen');
-    isFileEditorOpen.value = true;
+    state.isFileEditorOpen = true;
     const fileContent = document.getElementById('file-content') as HTMLTextAreaElement | null;
     const editorFilename = document.getElementById('editor-filename');
     if (fileContent) fileContent.value = data.content;
@@ -85,7 +85,7 @@ export async function openFileInEditor(filePath: string): Promise<void> {
 }
 
 export async function saveCurrentFile(): Promise<void> {
-  if (!currentEditingFile.value) {
+  if (!state.currentEditingFile) {
     await (window as any).Swal.fire({ title: 'Warning', text: 'No file is currently being edited', icon: 'warning' });
     return;
   }
@@ -95,7 +95,7 @@ export async function saveCurrentFile(): Promise<void> {
     const response = await fetch('/api/file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: currentEditingFile.value, content })
+      body: JSON.stringify({ path: state.currentEditingFile, content })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to save file');
@@ -119,15 +119,15 @@ export function closeFileEditor(): void {
   const fileEditor = document.getElementById('file-editor');
   fileEditor?.classList.add('hidden');
   fileEditor?.classList.remove('flex', 'fullscreen');
-  isFileEditorOpen.value = false;
-  currentEditingFile.value = null;
+  state.isFileEditorOpen = false;
+  state.currentEditingFile = null;
 }
 
 export function closeFileBrowser(): void {
   const fileBrowser = document.getElementById('file-browser');
   fileBrowser?.classList.add('hidden');
   fileBrowser?.classList.remove('flex', 'fullscreen');
-  isFileBrowserOpen.value = false;
+  state.isFileBrowserOpen = false;
 }
 
 export function createNewFile(): void {
@@ -152,11 +152,11 @@ export async function handleFileCreation(): Promise<void> {
   const input = document.getElementById('new-file-name') as HTMLInputElement | null;
   const fileName = (input?.value || '').trim();
   if (!fileName) return;
-  if (!currentBrowserPath.value) {
+  if (!state.currentBrowserPath) {
     await (window as any).Swal.fire({ title: 'Warning', text: 'No directory selected', icon: 'warning' });
     return;
   }
-  const filePath = `${currentBrowserPath.value}/${fileName}`;
+  const filePath = `${state.currentBrowserPath}/${fileName}`;
   try {
     const response = await fetch('/api/file', {
       method: 'POST',
@@ -165,7 +165,7 @@ export async function handleFileCreation(): Promise<void> {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to create file');
-    await loadDirectory(currentBrowserPath.value);
+    await loadDirectory(state.currentBrowserPath);
     await openFileInEditor(filePath);
     (document.getElementById('new-file-modal') as HTMLDialogElement | null)?.close();
   } catch (error: any) {
@@ -178,11 +178,11 @@ export async function handleFolderCreation(): Promise<void> {
   const input = document.getElementById('new-folder-name') as HTMLInputElement | null;
   const folderName = (input?.value || '').trim();
   if (!folderName) return;
-  if (!currentBrowserPath.value) {
+  if (!state.currentBrowserPath) {
     await (window as any).Swal.fire({ title: 'Warning', text: 'No directory selected', icon: 'warning' });
     return;
   }
-  const folderPath = `${currentBrowserPath.value}/${folderName}`;
+  const folderPath = `${state.currentBrowserPath}/${folderName}`;
   try {
     const response = await fetch('/api/folder', {
       method: 'POST',
@@ -191,7 +191,7 @@ export async function handleFolderCreation(): Promise<void> {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to create folder');
-    await loadDirectory(currentBrowserPath.value);
+    await loadDirectory(state.currentBrowserPath);
     (document.getElementById('new-folder-modal') as HTMLDialogElement | null)?.close();
   } catch (error: any) {
     console.error('Error creating folder:', error);

@@ -12,11 +12,9 @@
     "baseUrl": ".",
     "paths": {
       "@client/*": ["src/client/*"]
-    },
-    "jsx": "react-jsx",
-    "jsxImportSource": "preact"
+    }
   },
-  "include": ["src/client/**/*.ts", "src/client/**/*.tsx"],
+  "include": ["src/client/**/*.ts"],
   "exclude": ["node_modules", "public"]
 }
 

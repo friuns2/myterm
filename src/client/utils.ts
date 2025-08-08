@@ -60,23 +60,12 @@ export function getProjectFromURL(): string | null {
   return urlParams.get('project');
 }
 
-export type ViewParam = 'dashboard' | 'terminal' | 'environment' | 'aliases';
-
-export function getViewFromURL(): ViewParam {
-  const urlParams = new URLSearchParams(window.location.search);
-  const v = urlParams.get('view') as ViewParam | null;
-  const session = urlParams.get('session');
-  if (session) return 'terminal';
-  return v || 'dashboard';
-}
-
 export function updateURLWithSession(sessionId: string, projectName: string | null = null): void {
   const url = new URL(window.location.href);
   url.searchParams.set('session', sessionId);
   if (projectName) {
     url.searchParams.set('project', projectName);
   }
-  url.searchParams.delete('view');
   window.history.pushState({ sessionId: sessionId }, '', url);
 }
 
@@ -84,20 +73,11 @@ export function clearURLParams(): void {
   const url = new URL(window.location.href);
   url.searchParams.delete('session');
   url.searchParams.delete('project');
-  url.searchParams.delete('view');
   window.history.pushState({}, '', url);
 }
 
 export function updateURLWithoutSession(): void {
   clearURLParams();
-}
-
-export function updateURLForView(view: ViewParam, projectName: string | null = null): void {
-  const url = new URL(window.location.href);
-  url.searchParams.delete('session');
-  if (projectName) url.searchParams.set('project', projectName);
-  url.searchParams.set('view', view);
-  window.history.pushState({ view }, '', url);
 }
 
 

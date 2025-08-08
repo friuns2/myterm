@@ -1,4 +1,4 @@
-import { currentProject, sessionID } from './state';
+import { state } from './state';
 
 export function createWorktreeModal(projectName: string): void {
   const existing = document.getElementById('new-worktree-modal') as HTMLDialogElement | null;
@@ -72,8 +72,8 @@ export async function handleWorktreeCreation(projectName: string): Promise<void>
 }
 
 export function openWorktree(projectName: string, worktreeName: string): void {
-  sessionID.value = null;
-  currentProject.value = `${projectName}/worktrees/${worktreeName}`;
+  state.sessionID = null;
+  state.currentProject = `${projectName}/worktrees/${worktreeName}`;
   (window as any).initializeTerminal?.();
 }
 
