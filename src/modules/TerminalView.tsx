@@ -56,7 +56,7 @@ export function TerminalView() {
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      let url = `${protocol}//${window.location.host}`;
+      let url = `${protocol}//${window.location.host}/ws`;
       const params = new URLSearchParams();
       if (sessionIdSignal.value) params.append('sessionID', sessionIdSignal.value);
       if (currentProjectSignal.value) params.append('projectName', currentProjectSignal.value);

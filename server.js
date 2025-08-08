@@ -65,5 +65,5 @@ const server = app.listen(port, () => {
     setupGlobalAlias();
 });
 
-// Set up WebSocket server
+// Set up WebSocket server (listens on same HTTP server)
 setupWebSocketServer(server);
