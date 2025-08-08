@@ -20,8 +20,15 @@ function goBackToProjectList() {
     }
     
     sessionID = null;
-    currentProject = null;
-    showSessionsAndProjectsList();
+    // Preserve project context if it was in the URL, otherwise go to dashboard
+    currentProject = getProjectFromURL();
+    if (currentProject) {
+        updateURLWithProject(currentProject);
+        initializeTerminal();
+    } else {
+        updateURLWithoutSession();
+        showSessionsAndProjectsList();
+    }
 }
 
 // Function to show project list
@@ -256,6 +263,7 @@ async function deleteProject(projectName) {
 function selectProject(projectName) {
     currentProject = projectName;
     sessionID = null;
+    updateURLWithProject(currentProject);
     initializeTerminal();
 }
 
@@ -311,5 +319,6 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
+    updateURLWithProject(currentProject);
     initializeTerminal();
 }
