@@ -320,15 +320,38 @@ function setupCustomCommandInput() {
             }
         };
 
+        // Aggressive refocus burst to fight mobile keyboard dismissal after datalist
+        const aggressiveRefocusBurst = (durationMs = 500) => {
+            const startTime = Date.now();
+            const tick = () => {
+                refocusInputCaretToEnd();
+                if (Date.now() - startTime < durationMs) {
+                    setTimeout(tick, 50);
+                }
+            };
+            tick();
+        };
+
+        let lastDatalistInteractionTs = 0;
+
         // After datalist selection, ensure focus stays and caret is at end
         customCommandInput.addEventListener('change', () => {
-            setTimeout(refocusInputCaretToEnd, 0);
+            lastDatalistInteractionTs = Date.now();
+            setTimeout(() => aggressiveRefocusBurst(600), 0);
         });
 
         // In some browsers, selecting from datalist might blur the input
         customCommandInput.addEventListener('input', () => {
             if (document.activeElement !== customCommandInput) {
-                setTimeout(refocusInputCaretToEnd, 0);
+                lastDatalistInteractionTs = Date.now();
+                setTimeout(() => aggressiveRefocusBurst(600), 0);
+            }
+        });
+
+        // If a blur happens right after a datalist interaction, refocus
+        customCommandInput.addEventListener('blur', () => {
+            if (Date.now() - lastDatalistInteractionTs < 800) {
+                setTimeout(() => aggressiveRefocusBurst(600), 0);
             }
         });
 
