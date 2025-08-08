@@ -123,6 +123,16 @@ const connectWebSocket = () => {
                     updateURLWithSession(sessionID, currentProject);
                     console.log(`Received new session ID: ${sessionID}`);
                     break;
+                case 'error':
+                    // Server rejected the connection due to missing/invalid session
+                    console.error('Server error:', message.message);
+                    terminal.write(`\r\nError: ${message.message}\r\n`);
+                    terminal.write('Use Back to Sessions to return.\r\n');
+                    isConnected = false;
+                    // Do not attempt to reconnect on this error
+                    reconnectAttempts = MAX_RECONNECT_ATTEMPTS;
+                    try { ws.close(); } catch (e) {}
+                    break;
                     
                 case 'exit':
                     terminal.write(`\r\nProcess exited with code: ${message.exitCode}\r\n`);

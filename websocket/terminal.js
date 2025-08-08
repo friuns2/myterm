@@ -52,8 +52,8 @@ function setupWebSocketServer(server) {
                 }));
                 console.log(`Sent ${session.buffer.length} characters from buffer`);
             }
-        } else {
-            // Create new PTY process and session
+        } else if (!sessionID && projectName) {
+            // Create new PTY process and session for a specific project
             sessionID = uuidv4();
             const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
             
@@ -140,6 +140,20 @@ function setupWebSocketServer(server) {
                 }
                 sessions.delete(sessionID); // Clean up session on exit
             });
+        } else {
+            // Do NOT auto-create sessions when no valid sessionID is provided and no project is specified
+            // Send an error to the client and close the connection
+            try {
+                let message = 'Missing sessionID in query string';
+                if (sessionID && !sessions.has(sessionID)) {
+                    message = `Session not found: ${sessionID}`;
+                }
+                ws.send(JSON.stringify({ type: 'error', message }));
+            } catch (e) {
+                // ignore send errors
+            }
+            ws.close(1008, 'Invalid session');
+            return;
         }
 
         // Handle WebSocket messages
