@@ -1,16 +1,10 @@
 /* Terminal-specific styles that work with DaisyUI/Tailwind */
 #terminal-container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0; /* allow flex children to shrink properly inside overflow containers */
-    overflow: hidden;
+    /* Ensure terminal container takes full available space */
 }
 
 #terminal {
-    width: 100%;
-    height: 100%;
-    min-height: 0;
+    /* Terminal will be sized by Tailwind classes */
 }
 
 /* Virtual keyboard button active states */
@@ -23,12 +17,11 @@
 .xterm {
     font-family: 'Courier New', monospace !important;
     font-size: 14px !important;
-    line-height: 1.25;
 }
 
 .xterm .xterm-viewport {
     background-color: #000 !important;
-    overscroll-behavior: contain;
+    overflow-y: auto !important; /* allow vertical scrolling */
 }
 
 .xterm .xterm-screen {
@@ -52,7 +45,6 @@
 /* File browser and editor styles */
 #file-browser, #file-editor {
     transition: transform 0.3s ease;
-    min-height: 0; /* fix flex overflow issues */
 }
 
 /* Projects list scrolling styles */
@@ -180,12 +172,15 @@
     }
 }
 
-/* Reduce motion for users who prefer it */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
+@media (max-width: 480px) {
+    .xterm {
+        font-size: 10px !important;
     }
+}
+#terminal-container {
+    padding-bottom: 50px;
+}
+
+#virtual-keyboard {
+    padding-bottom: 50px;
 }

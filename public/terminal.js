@@ -45,6 +45,7 @@ function createNewTerminal() {
         cursorBlink: true,
         fontFamily: 'Courier New, monospace',
         fontSize: 14,
+        scrollback: 10000,
         theme: {
             background: '#000000',
             foreground: '#00ff00',
