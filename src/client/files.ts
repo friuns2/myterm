@@ -71,11 +71,11 @@ export async function openFileInEditor(filePath: string): Promise<void> {
     if (!response.ok) throw new Error(data.error || 'Failed to load file');
     state.currentEditingFile = data.path;
     const fileEditor = document.getElementById('file-editor');
+    const fileContent = document.getElementById('file-content') as HTMLTextAreaElement | null;
+    const editorFilename = document.getElementById('editor-filename');
     fileEditor?.classList.remove('hidden');
     fileEditor?.classList.add('flex', 'fullscreen');
     state.isFileEditorOpen = true;
-    const fileContent = document.getElementById('file-content') as HTMLTextAreaElement | null;
-    const editorFilename = document.getElementById('editor-filename');
     if (fileContent) fileContent.value = data.content;
     if (editorFilename) editorFilename.textContent = filePath.split('/').pop() || '';
   } catch (error: any) {

@@ -26,16 +26,14 @@ export function createWorktreeModal(projectName: string): void {
         <form method="dialog" class="modal-backdrop"><button>close</button></form>
       </dialog>`;
     document.body.insertAdjacentHTML('beforeend', modalHTML);
-    document.getElementById('create-worktree-btn')?.addEventListener('click', () => handleWorktreeCreation(projectName));
-    document.getElementById('cancel-worktree-btn')?.addEventListener('click', () => (document.getElementById('new-worktree-modal') as HTMLDialogElement | null)?.close());
+    const createBtn = document.getElementById('create-worktree-btn');
+    const cancelBtn = document.getElementById('cancel-worktree-btn');
     const worktreeNameInput = document.getElementById('new-worktree-name');
     const worktreeBranchInput = document.getElementById('new-worktree-branch');
-    worktreeNameInput?.addEventListener('keypress', (e) => {
-      if ((e as KeyboardEvent).key === 'Enter') handleWorktreeCreation(projectName);
-    });
-    worktreeBranchInput?.addEventListener('keypress', (e) => {
-      if ((e as KeyboardEvent).key === 'Enter') handleWorktreeCreation(projectName);
-    });
+    createBtn?.addEventListener('click', () => handleWorktreeCreation(projectName));
+    cancelBtn?.addEventListener('click', () => (document.getElementById('new-worktree-modal') as HTMLDialogElement | null)?.close());
+    worktreeNameInput?.addEventListener('keypress', (e) => { if ((e as KeyboardEvent).key === 'Enter') handleWorktreeCreation(projectName); });
+    worktreeBranchInput?.addEventListener('keypress', (e) => { if ((e as KeyboardEvent).key === 'Enter') handleWorktreeCreation(projectName); });
   }
   (document.getElementById('new-worktree-name') as HTMLInputElement | null)!.value = '';
   (document.getElementById('new-worktree-branch') as HTMLInputElement | null)!.value = '';
