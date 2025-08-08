@@ -46,7 +46,7 @@ async function showSessionsAndProjectsList() {
                 <div class="flex items-center justify-between mb-8">
                     <h1 class="text-3xl font-bold">Shell Dashboard</h1>
                     <div class="flex gap-2">
-                        <button class="btn btn-outline btn-sm" onclick="showAliasesManager()">
+                        <button class="btn btn-outline btn-sm" onclick="showSettingsManager()">
                             <span class="text-lg">⚡</span> Shell Settings
                         </button>
                     </div>
