@@ -70,7 +70,8 @@ function setupEnvironmentEventListeners(): void {
 
   clearAllButton?.addEventListener('click', async () => {
     if (confirm('Are you sure you want to clear all environment variables?')) {
-      if (envEditor) envEditor.value = '';
+      const editor = document.getElementById('env-editor') as HTMLTextAreaElement | null;
+      if (editor) editor.value = '';
       hasUnsavedChanges = true;
       await saveEnvironmentVariables();
     }

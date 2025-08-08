@@ -39,48 +39,36 @@ export function setupGlobalUI(): void {
 
   document.addEventListener('DOMContentLoaded', () => {
     const backToSessionsBtn = document.getElementById('back-to-sessions');
-    const browseFilesBtn = document.getElementById('browse-files');
-    const closeBrowserBtn = document.getElementById('close-browser');
-    const newFolderBtn = document.getElementById('new-folder');
-    const newFileBtn = document.getElementById('new-file');
-    const createFileBtn = document.getElementById('create-file-btn');
-    const cancelFileBtn = document.getElementById('cancel-file-btn');
-    const createFolderBtn = document.getElementById('create-folder-btn');
-    const cancelFolderBtn = document.getElementById('cancel-folder-btn');
-    const saveFileBtn = document.getElementById('save-file');
-    const closeEditorBtn = document.getElementById('close-editor');
-    const newFileNameInput = document.getElementById('new-file-name');
-    const newFolderNameInput = document.getElementById('new-folder-name');
-    const fileContentTextarea = document.getElementById('file-content');
-    const fileBrowser = document.getElementById('file-browser');
-    const fileEditor = document.getElementById('file-editor');
-
     backToSessionsBtn?.addEventListener('click', () => {
       cleanupTerminal();
       if (state.currentProject) goBackToProjectList();
       else goBackToSessionList();
     });
 
+    const browseFilesBtn = document.getElementById('browse-files');
     browseFilesBtn?.addEventListener('click', () => void toggleFileBrowser());
-    closeBrowserBtn?.addEventListener('click', () => closeFileBrowser());
-    newFolderBtn?.addEventListener('click', () => createNewFolder());
-    newFileBtn?.addEventListener('click', () => createNewFile());
+    document.getElementById('close-browser')?.addEventListener('click', () => closeFileBrowser());
+    document.getElementById('new-folder')?.addEventListener('click', () => createNewFolder());
+    document.getElementById('new-file')?.addEventListener('click', () => createNewFile());
 
-    createFileBtn?.addEventListener('click', () => void handleFileCreation());
-    cancelFileBtn?.addEventListener('click', () => (document.getElementById('new-file-modal') as HTMLDialogElement | null)?.close());
-    createFolderBtn?.addEventListener('click', () => void handleFolderCreation());
-    cancelFolderBtn?.addEventListener('click', () => (document.getElementById('new-folder-modal') as HTMLDialogElement | null)?.close());
+    document.getElementById('create-file-btn')?.addEventListener('click', () => void handleFileCreation());
+    document.getElementById('cancel-file-btn')?.addEventListener('click', () => (document.getElementById('new-file-modal') as HTMLDialogElement | null)?.close());
+    document.getElementById('create-folder-btn')?.addEventListener('click', () => void handleFolderCreation());
+    document.getElementById('cancel-folder-btn')?.addEventListener('click', () => (document.getElementById('new-folder-modal') as HTMLDialogElement | null)?.close());
 
+    const newFileNameInput = document.getElementById('new-file-name');
     newFileNameInput?.addEventListener('keypress', (e) => {
       if ((e as KeyboardEvent).key === 'Enter') void handleFileCreation();
     });
+    const newFolderNameInput = document.getElementById('new-folder-name');
     newFolderNameInput?.addEventListener('keypress', (e) => {
       if ((e as KeyboardEvent).key === 'Enter') void handleFolderCreation();
     });
 
-    saveFileBtn?.addEventListener('click', () => void saveCurrentFile());
-    closeEditorBtn?.addEventListener('click', () => closeFileEditor());
+    document.getElementById('save-file')?.addEventListener('click', () => void saveCurrentFile());
+    document.getElementById('close-editor')?.addEventListener('click', () => closeFileEditor());
 
+    const fileContentTextarea = document.getElementById('file-content');
     fileContentTextarea?.addEventListener('keydown', (event) => {
       const e = event as KeyboardEvent;
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -105,6 +93,8 @@ export function setupGlobalUI(): void {
     });
 
     document.addEventListener('click', (event) => {
+      const fileBrowser = document.getElementById('file-browser');
+      const fileEditor = document.getElementById('file-editor');
       if (
         state.isFileBrowserOpen &&
         fileBrowser &&
@@ -118,17 +108,18 @@ export function setupGlobalUI(): void {
       }
     });
 
+    const fileBrowser = document.getElementById('file-browser');
     fileBrowser?.addEventListener('click', (event) => event.stopPropagation());
+    const fileEditor = document.getElementById('file-editor');
     fileEditor?.addEventListener('click', (event) => event.stopPropagation());
 
     setupVirtualKeyboard();
     setupCustomCommandInput();
   });
 
-  const onResize = () => resizeTerminal();
-  window.addEventListener('resize', onResize);
+  window.addEventListener('resize', () => resizeTerminal());
 
-  const onVisibilityChange = () => {
+  document.addEventListener('visibilitychange', () => {
     const terminal = (window as any).terminalInstance as any | undefined;
     if (!document.hidden && terminal) {
       terminal.focus?.();
@@ -143,11 +134,10 @@ export function setupGlobalUI(): void {
       const ws = getWebSocket();
       if (ws && ws.readyState === WebSocket.OPEN) ws.close();
     }
-  };
-  document.addEventListener('visibilitychange', onVisibilityChange);
+  });
 
-  const customInputContainer = document.getElementById('custom-input-container');
   document.addEventListener('click', (event) => {
+    const customInputContainer = document.getElementById('custom-input-container');
     if (customInputContainer && !customInputContainer.contains(event.target as Node)) {
       const t = (window as any).terminalInstance as any | undefined;
       t?.focus?.();
