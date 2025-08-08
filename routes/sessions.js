@@ -8,16 +8,27 @@ const router = express.Router();
 router.get('/', (req, res) => {
     const { getSessions } = require('../websocket/terminal');
     const sessions = getSessions();
+
+    // Optional query param to return last N lines of status (defaults to 1)
+    const linesParam = parseInt(req.query.lines, 10);
+    const numLines = Number.isFinite(linesParam) ? Math.max(1, Math.min(linesParam, 20)) : 1;
     
     const allSessions = [];
     sessions.forEach((session, sessionID) => {
-        // Get last line from buffer for status
-        const lines = session.buffer.split('\n');
-        const lastLine = lines[lines.length - 1] || lines[lines.length - 2] || 'No output';
+        // Get last N lines from buffer for status
+        const rawLines = session.buffer.split('\n');
+        // Remove trailing empty line if buffer ends with a newline
+        while (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') {
+            rawLines.pop();
+        }
+        const sliceStart = Math.max(0, rawLines.length - numLines);
+        const lastLines = rawLines.slice(sliceStart).map(l => l.trim());
+        const lastLine = lastLines[lastLines.length - 1] || 'No output';
         
         allSessions.push({
             id: sessionID,
-            status: lastLine.trim() || 'Active session',
+            status: lastLine || 'Active session',
+            statusLines: lastLines,
             created: session.created || new Date().toISOString(),
             projectName: session.projectName || 'Unknown'
         });
