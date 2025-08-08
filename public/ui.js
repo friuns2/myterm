@@ -204,8 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    setupVirtualKeyboard();
+    // Initialize input before virtual keyboard so VK can use input helpers
     setupCustomCommandInput();
+    setupVirtualKeyboard();
 });
 
 // Custom input field handling
@@ -351,6 +352,37 @@ function setupCustomCommandInput() {
             }
         };
 
+        // Helpers to navigate history (used by both keyboard and virtual keyboard)
+        const navigateHistoryUp = () => {
+            if (historyIndex === -1) {
+                currentInput = customCommandInput.value;
+            }
+            if (historyIndex < commandHistory.length - 1) {
+                historyIndex++;
+                customCommandInput.value = commandHistory[historyIndex];
+                hideSuggestions();
+            }
+        };
+
+        const navigateHistoryDown = () => {
+            if (historyIndex > 0) {
+                historyIndex--;
+                customCommandInput.value = commandHistory[historyIndex];
+                hideSuggestions();
+            } else if (historyIndex === 0) {
+                historyIndex = -1;
+                customCommandInput.value = currentInput;
+                hideSuggestions();
+            }
+        };
+
+        // Expose small API for virtual keyboard to use when input is focused
+        window.customInputHistory = {
+            isFocused: () => document.activeElement === customCommandInput,
+            navigateUp: navigateHistoryUp,
+            navigateDown: navigateHistoryDown
+        };
+
         customCommandInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 if (event.shiftKey) {
@@ -367,25 +399,10 @@ function setupCustomCommandInput() {
                 }
             } else if (event.key === 'ArrowUp') {
                 event.preventDefault();
-                if (historyIndex === -1) {
-                    currentInput = customCommandInput.value;
-                }
-                if (historyIndex < commandHistory.length - 1) {
-                    historyIndex++;
-                    customCommandInput.value = commandHistory[historyIndex];
-                    hideSuggestions();
-                }
+                navigateHistoryUp();
             } else if (event.key === 'ArrowDown') {
                 event.preventDefault();
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    customCommandInput.value = commandHistory[historyIndex];
-                    hideSuggestions();
-                } else if (historyIndex === 0) {
-                    historyIndex = -1;
-                    customCommandInput.value = currentInput;
-                    hideSuggestions();
-                }
+                navigateHistoryDown();
             } else if (event.key === 'Escape') {
                 hideSuggestions();
                 historyIndex = -1;
@@ -453,7 +470,6 @@ function setupVirtualKeyboard() {
             if (button) {
                 const keyCode = parseInt(button.dataset.keyCode, 10);
                 let data = '';
-                let shouldFocusTerminalBeforeSend = true;
 
                 switch (keyCode) {
                     case 27: // Esc
@@ -497,42 +513,20 @@ function setupVirtualKeyboard() {
                         data = '\x03';
                         break;
                     case 38: // Up Arrow
-                        {
-                            const customInput = document.getElementById('custom-command-input');
-                            const xtermTextarea = document.querySelector('#terminal .xterm-helper-textarea');
-                            const isInputFocused = customInput && document.activeElement === customInput;
-                            const isTerminalFocused = xtermTextarea && document.activeElement === xtermTextarea;
-
-                            if (isInputFocused) {
-                                customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-                                return; // do not forward to xterm
-                            }
-                            if (isTerminalFocused) {
-                                data = '\x1B[A';
-                                shouldFocusTerminalBeforeSend = false; // already focused
-                                break;
-                            }
-                            return; // neither active: ignore
+                        if (window.customInputHistory && window.customInputHistory.isFocused()) {
+                            window.customInputHistory.navigateUp();
+                            // Do not activate xterm
+                            return;
                         }
+                        data = '\x1B[A';
                         break;
                     case 40: // Down Arrow
-                        {
-                            const customInput = document.getElementById('custom-command-input');
-                            const xtermTextarea = document.querySelector('#terminal .xterm-helper-textarea');
-                            const isInputFocused = customInput && document.activeElement === customInput;
-                            const isTerminalFocused = xtermTextarea && document.activeElement === xtermTextarea;
-
-                            if (isInputFocused) {
-                                customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-                                return; // do not forward to xterm
-                            }
-                            if (isTerminalFocused) {
-                                data = '\x1B[B';
-                                shouldFocusTerminalBeforeSend = false; // already focused
-                                break;
-                            }
-                            return; // neither active: ignore
+                        if (window.customInputHistory && window.customInputHistory.isFocused()) {
+                            window.customInputHistory.navigateDown();
+                            // Do not activate xterm
+                            return;
                         }
+                        data = '\x1B[B';
                         break;
                     case 37: // Left Arrow
                         data = '\x1B[D';
@@ -546,16 +540,16 @@ function setupVirtualKeyboard() {
                 }
 
                 if (isConnected && data) {
+                    // Focus terminal first to ensure it's active
                     if (terminal) {
-                        if (shouldFocusTerminalBeforeSend) {
-                            terminal.focus();
-                        }
+                        terminal.focus();
+                        // Add small delay to ensure focus is properly set
                         setTimeout(() => {
                             ws.send(JSON.stringify({
                                 type: 'input',
                                 data: data
                             }));
-                        }, shouldFocusTerminalBeforeSend ? 50 : 0);
+                        }, 50); // 50ms delay
                     } else {
                         // If no terminal, send immediately
                         ws.send(JSON.stringify({
