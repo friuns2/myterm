@@ -187,6 +187,10 @@ function initializeTerminal() {
     if (fitAddon) {
         fitAddon.fit();
     }
+
+    // Disable automatic line wrapping (DECAWM off)
+    // CSI ? 7 l — Reset mode 7 (Auto-Wrap) so long lines do not wrap
+    terminal.write('\x1b[?7l');
     
     // Set up terminal data handler for the new instance
     terminal.onData((data) => {
