@@ -78,24 +78,8 @@ function updateURLWithSession(sessionId, projectName = null) {
     url.searchParams.set('session', sessionId);
     if (projectName) {
         url.searchParams.set('project', projectName);
-    } else {
-        // Ensure stale project param is removed when not provided
-        url.searchParams.delete('project');
     }
     window.history.pushState({ sessionId: sessionId }, '', url);
-}
-
-// Function to update URL with only project parameter and clear session
-function updateURLWithProject(projectName = null) {
-    const url = new URL(window.location);
-    // Clear session when switching projects
-    url.searchParams.delete('session');
-    if (projectName) {
-        url.searchParams.set('project', projectName);
-    } else {
-        url.searchParams.delete('project');
-    }
-    window.history.pushState({ project: projectName || null }, '', url);
 }
 
 
@@ -104,10 +88,6 @@ function clearURLParams() {
     const url = new URL(window.location);
     url.searchParams.delete('session');
     url.searchParams.delete('project');
-    window.history.pushState({}, '', url);
-}
-
-// Backward-compatible alias (some callers expect this function name)
-function updateURLWithoutSession() {
-    clearURLParams();
+    // Use replaceState so we don't add an extra history entry when clearing params
+    window.history.replaceState({}, '', url);
 }

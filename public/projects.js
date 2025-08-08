@@ -9,7 +9,7 @@ function goBackToSessionList() {
     
     sessionID = null;
     currentProject = null;
-    updateURLWithoutSession();
+    clearURLParams();
     showSessionsAndProjectsList();
 }
 
@@ -20,15 +20,9 @@ function goBackToProjectList() {
     }
     
     sessionID = null;
-    // Preserve project context if it was in the URL, otherwise go to dashboard
-    currentProject = getProjectFromURL();
-    if (currentProject) {
-        updateURLWithProject(currentProject);
-        initializeTerminal();
-    } else {
-        updateURLWithoutSession();
-        showSessionsAndProjectsList();
-    }
+    currentProject = null;
+    clearURLParams();
+    showSessionsAndProjectsList();
 }
 
 // Function to show project list
@@ -263,7 +257,6 @@ async function deleteProject(projectName) {
 function selectProject(projectName) {
     currentProject = projectName;
     sessionID = null;
-    updateURLWithProject(currentProject);
     initializeTerminal();
 }
 
@@ -292,6 +285,7 @@ async function killSession(sessionId) {
         
         if (result.success) {
             // Always go back to the dashboard after killing a session
+            clearURLParams();
             showSessionsAndProjectsList();
         } else {
             await Swal.fire({
@@ -319,6 +313,5 @@ function createNewSessionForProject(projectName) {
     
     sessionID = null;
     currentProject = projectName;
-    updateURLWithProject(currentProject);
     initializeTerminal();
 }
