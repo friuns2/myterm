@@ -5,7 +5,6 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
-const { loadGlobalEnv } = require('../routes/environment');
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -71,21 +70,7 @@ function setupWebSocketServer(server) {
                 }
             }
             
-            // Merge global environment variables with process.env
-            const globalEnv = loadGlobalEnv();
-            
-            // Process global env to handle array values
-            const processedGlobalEnv = {};
-            for (const [key, value] of Object.entries(globalEnv)) {
-                if (Array.isArray(value)) {
-                    // For arrays, use the last value as the environment variable
-                    processedGlobalEnv[key] = value[value.length - 1];
-                } else {
-                    processedGlobalEnv[key] = value;
-                }
-            }
-            
-            const mergedEnv = { ...process.env, ...processedGlobalEnv };
+            const mergedEnv = process.env;
             
             ptyProcess = pty.spawn(shell, [], {
                 name: 'xterm-color',
