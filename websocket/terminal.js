@@ -5,17 +5,27 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
+const { isAuthorizedWebsocket, isAuthConfigured } = require('../middleware/auth');
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer
+const MAX_BUFFER_SIZE = 100 * 1024; // Maximum number of characters to buffer (10kb)
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
 
     wss.on('connection', (ws, req) => {
         console.log('Terminal connected');
+
+        // If auth is configured, validate the websocket handshake
+        if (isAuthConfigured() && !isAuthorizedWebsocket(req)) {
+            try {
+                ws.send(JSON.stringify({ type: 'error', message: 'Unauthorized' }));
+            } catch (e) {}
+            ws.close(1008, 'Unauthorized');
+            return;
+        }
         
         // Parse session ID and project name from query parameters
         const url = new URL(req.url, `http://${req.headers.host}`);

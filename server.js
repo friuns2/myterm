@@ -3,12 +3,16 @@ const { setupWebSocketServer } = require('./websocket/terminal');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { authMiddleware } = require('./middleware/auth');
 
 const app = express();
 const port = 3531;
 
 // Serve static files
 app.use(express.static('public'));
+
+// Protect API routes if auth is configured
+app.use('/api', authMiddleware);
 
 // Import route modules
 const projectsRouter = require('./routes/projects');
