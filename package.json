@@ -2,18 +2,40 @@
   "name": "shell-executor",
   "version": "1.0.0",
   "description": "Web-based terminal emulator with PTY support for nano, tmux, etc.",
-  "main": "shell-executor.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "ngrok": "ngrok http 3551"
   },
   "dependencies": {
-    "ws": "^8.14.2",
     "express": "^4.18.2",
     "node-pty": "^1.0.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "ws": "^8.14.2",
+    "preact": "^10.24.2",
+    "@preact/signals": "^1.2.2",
+    "sweetalert2": "^11.12.4",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.9.0-beta.37"
   },
-  "keywords": ["shell", "command", "execute", "websocket", "terminal", "pty", "nano", "tmux"],
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0",
+    "@preact/preset-vite": "^2.8.2"
+  },
+  "keywords": [
+    "shell",
+    "command",
+    "execute",
+    "websocket",
+    "terminal",
+    "pty",
+    "nano",
+    "tmux"
+  ],
   "author": "",
   "license": "MIT"
 }

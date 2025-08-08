@@ -7,7 +7,8 @@ const os = require('os');
 const app = express();
 const port = 3531;
 
-// Serve static files
+// Serve built client first, then fallback static assets
+app.use(express.static('dist'));
 app.use(express.static('public'));
 
 // Import route modules
