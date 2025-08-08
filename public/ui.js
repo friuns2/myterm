@@ -498,22 +498,28 @@ function setupVirtualKeyboard() {
                     case 38: // Up Arrow
                         {
                             const customInput = document.getElementById('custom-command-input');
-                            if (customInput && document.activeElement === customInput) {
-                                customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+                            if (customInput) {
+                                customInput.focus();
+                                setTimeout(() => {
+                                    customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+                                }, 0);
                                 return; // do not forward to xterm
                             }
+                            data = '\x1B[A';
                         }
-                        data = '\x1B[A';
                         break;
                     case 40: // Down Arrow
                         {
                             const customInput = document.getElementById('custom-command-input');
-                            if (customInput && document.activeElement === customInput) {
-                                customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+                            if (customInput) {
+                                customInput.focus();
+                                setTimeout(() => {
+                                    customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+                                }, 0);
                                 return; // do not forward to xterm
                             }
+                            data = '\x1B[B';
                         }
-                        data = '\x1B[B';
                         break;
                     case 37: // Left Arrow
                         data = '\x1B[D';
