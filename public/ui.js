@@ -305,6 +305,29 @@ function setupCustomCommandInput() {
             }
         });
 
+        // Keep focus on the input after choosing a datalist option (browser-specific quirk)
+        const refocusInputCaretToEnd = () => {
+            customCommandInput.focus();
+            const length = customCommandInput.value.length;
+            try {
+                customCommandInput.setSelectionRange(length, length);
+            } catch (_) {
+                // Some browsers may not support setSelectionRange on certain types
+            }
+        };
+
+        customCommandInput.addEventListener('change', () => {
+            // After a datalist selection, ensure focus stays on the field
+            setTimeout(refocusInputCaretToEnd, 0);
+        });
+
+        customCommandInput.addEventListener('input', () => {
+            // In some browsers, selecting from datalist might blur the input
+            if (document.activeElement !== customCommandInput) {
+                setTimeout(refocusInputCaretToEnd, 0);
+            }
+        });
+
         // Initially render history into datalist
         renderHistoryToDatalist();
     }
