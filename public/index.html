@@ -6,7 +6,7 @@
     <title>Web Terminal2</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.24/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <link rel="stylesheet" href="/xterm/css/xterm.css" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="style.css">
     
@@ -107,8 +107,7 @@
             <button class="btn btn-xs btn-outline" data-key-code="39">→</button>
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script type="module" src="/xterm-shim.js"></script>
     <!-- Load modular JavaScript files -->
     <script src="utils.js"></script>
     <script src="terminal.js"></script>
