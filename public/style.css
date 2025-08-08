@@ -1,10 +1,12 @@
 /* Terminal-specific styles that work with DaisyUI/Tailwind */
 #terminal-container {
-    /* Ensure terminal container takes full available space */
+    /* Enable horizontal scrolling for wide terminals */
+    overflow-x: auto;
 }
 
 #terminal {
-    /* Terminal will be sized by Tailwind classes */
+    /* Prevent terminal from shrinking so horizontal scroll appears when wider than container */
+    min-width: max-content;
 }
 
 /* Virtual keyboard button active states */
@@ -21,7 +23,6 @@
 
 .xterm .xterm-viewport {
     background-color: #000 !important;
-    overflow-y: auto !important; /* allow vertical scrolling */
 }
 
 .xterm .xterm-screen {
