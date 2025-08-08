@@ -1,6 +1,6 @@
 import { h, render } from 'preact';
 import { getProjectFromURL, getSessionIDFromURL, updateURLWithSession, clearURLParams, updateURLWithoutSession } from './utils';
-import { state } from './state';
+import { currentProject, sessionID } from './state';
 import { initializeTerminal, cleanupTerminal, connectWebSocket } from './terminal';
 import { showNavigationBar, hideNavigationBar, setupGlobalUI } from './ui';
 import {
@@ -70,12 +70,12 @@ Object.assign(window as any, {
   deleteWorktree,
 });
 
-state.sessionID = getSessionIDFromURL();
-state.currentProject = getProjectFromURL();
+sessionID.value = getSessionIDFromURL();
+currentProject.value = getProjectFromURL();
 
 setupGlobalUI();
 
-if (state.sessionID) {
+if (sessionID.value) {
   initializeTerminal();
 } else {
   const terminalContainer = document.getElementById('terminal-container');

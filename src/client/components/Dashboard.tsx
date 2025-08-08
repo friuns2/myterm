@@ -1,5 +1,6 @@
 import { h } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { ansiToHtml } from '../utils';
 import { showEnvironmentManager } from '../environment';
 import { showAliasesManager } from '../aliases';
@@ -9,20 +10,21 @@ type Session = { id: string; projectName: string; status: string; created: strin
 type Worktree = { name: string; branch: string; relativePath: string };
 type Project = { name: string; worktrees: Worktree[] };
 
+const sessionsSig = signal<Session[]>([]);
+const projectsSig = signal<Project[]>([]);
+const loadingSig = signal<boolean>(true);
+const projectNameSig = signal<string>('');
+
 export function Dashboard() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [projectName, setProjectName] = useState('');
 
   const fetchData = async () => {
-    setLoading(true);
+    loadingSig.value = true;
     try {
       const [sRes, pRes] = await Promise.all([fetch('/api/sessions'), fetch('/api/projects-with-worktrees')]);
-      setSessions(await sRes.json());
-      setProjects(await pRes.json());
+      sessionsSig.value = await sRes.json();
+      projectsSig.value = await pRes.json();
     } finally {
-      setLoading(false);
+      loadingSig.value = false;
     }
   };
 
@@ -31,6 +33,7 @@ export function Dashboard() {
   }, []);
 
   const sessionsList = useMemo(() => {
+    const sessions = sessionsSig.value;
     if (sessions.length === 0) return <p class="text-center opacity-70 py-4">No active sessions</p>;
     return sessions.map((s) => (
       <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow">
@@ -54,9 +57,10 @@ export function Dashboard() {
         </div>
       </div>
     ));
-  }, [sessions]);
+  }, [sessionsSig.value]);
 
   const projectsList = useMemo(() => {
+    const projects = projectsSig.value;
     if (projects.length === 0) return <p class="text-center opacity-70 py-4">No projects found</p>;
     return projects.map((p) => (
       <div class="card bg-base-300 shadow-lg">
@@ -100,9 +104,9 @@ export function Dashboard() {
         </div>
       </div>
     ));
-  }, [projects]);
+  }, [projectsSig.value]);
 
-  if (loading) return <div class="p-6">Loading…</div>;
+  if (loadingSig.value) return <div class="p-6">Loading…</div>;
 
   return (
     <div class="p-6 max-w-6xl mx-auto h-full flex flex-col overflow-y-auto">
@@ -131,14 +135,7 @@ export function Dashboard() {
         </h2>
         <div class="mb-6">
           <div class="flex gap-2">
-            <input
-              type="text"
-              id="project-name"
-              placeholder="Enter project name"
-              class="input input-bordered flex-1"
-              value={projectName}
-              onInput={(e: any) => setProjectName(e.currentTarget.value)}
-            />
+            <input type="text" id="project-name" placeholder="Enter project name" class="input input-bordered flex-1" value={projectNameSig.value} onInput={(e: any) => (projectNameSig.value = e.currentTarget.value)} />
             <button class="btn btn-primary" onClick={() => void createNewProject()}>
               Create Project
             </button>

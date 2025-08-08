@@ -1,4 +1,4 @@
-import { state } from './state';
+import { currentProject, isConnected, isFileBrowserOpen, isFileEditorOpen, sessionID } from './state';
 import { getProjectFromURL, getSessionIDFromURL } from './utils';
 import {
   closeFileBrowser,
@@ -18,8 +18,8 @@ export function showNavigationBar(): void {
   if (navBar) {
     navBar.classList.remove('hidden');
     const currentPathSpan = document.getElementById('current-path');
-    if (currentPathSpan && state.currentProject) {
-      currentPathSpan.textContent = `Project: ${state.currentProject}`;
+    if (currentPathSpan && currentProject.value) {
+      currentPathSpan.textContent = `Project: ${currentProject.value}`;
     }
   }
 }
@@ -31,9 +31,9 @@ export function hideNavigationBar(): void {
 
 export function setupGlobalUI(): void {
   window.addEventListener('popstate', () => {
-    state.sessionID = getSessionIDFromURL();
-    state.currentProject = getProjectFromURL();
-    if (state.sessionID) initializeTerminal();
+    sessionID.value = getSessionIDFromURL();
+    currentProject.value = getProjectFromURL();
+    if (sessionID.value) initializeTerminal();
     else showSessionsAndProjectsList();
   });
 
@@ -41,7 +41,7 @@ export function setupGlobalUI(): void {
     const backToSessionsBtn = document.getElementById('back-to-sessions');
     backToSessionsBtn?.addEventListener('click', () => {
       cleanupTerminal();
-      if (state.currentProject) goBackToProjectList();
+      if (currentProject.value) goBackToProjectList();
       else goBackToSessionList();
     });
 
@@ -87,8 +87,8 @@ export function setupGlobalUI(): void {
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
-        if (state.isFileEditorOpen) closeFileEditor();
-        else if (state.isFileBrowserOpen) closeFileBrowser();
+        if (isFileEditorOpen.value) closeFileEditor();
+        else if (isFileBrowserOpen.value) closeFileBrowser();
       }
     });
 
@@ -96,14 +96,14 @@ export function setupGlobalUI(): void {
       const fileBrowser = document.getElementById('file-browser');
       const fileEditor = document.getElementById('file-editor');
       if (
-        state.isFileBrowserOpen &&
+        isFileBrowserOpen.value &&
         fileBrowser &&
         !fileBrowser.contains(event.target as Node) &&
         !(event.target as HTMLElement).closest('#browse-files')
       ) {
         closeFileBrowser();
       }
-      if (state.isFileEditorOpen && fileEditor && !fileEditor.contains(event.target as Node)) {
+      if (isFileEditorOpen.value && fileEditor && !fileEditor.contains(event.target as Node)) {
         if (!(event.target as HTMLElement).closest('.file-item')) closeFileEditor();
       }
     });
@@ -123,7 +123,7 @@ export function setupGlobalUI(): void {
     const terminal = (window as any).terminalInstance as any | undefined;
     if (!document.hidden && terminal) {
       terminal.focus?.();
-      if (!state.isConnected) {
+      if (!isConnected.value) {
         const ws = getWebSocket();
         if (!ws || ws.readyState !== WebSocket.OPEN) {
           // reconnect

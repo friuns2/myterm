@@ -1,13 +1,13 @@
 import { ansiToHtml } from './utils';
-import { state } from './state';
+import { currentProject, sessionID } from './state';
 import { cleanupTerminal, initializeTerminal } from './terminal';
 
 export function goBackToSessionList(): void {
   if (typeof (window as any).cleanupTerminal === 'function') {
     (window as any).cleanupTerminal();
   }
-  state.sessionID = null;
-  state.currentProject = null;
+  sessionID.value = null;
+  currentProject.value = null;
   if (typeof (window as any).updateURLWithoutSession === 'function') {
     (window as any).updateURLWithoutSession();
   }
@@ -18,8 +18,8 @@ export function goBackToProjectList(): void {
   if (typeof (window as any).cleanupTerminal === 'function') {
     (window as any).cleanupTerminal();
   }
-  state.sessionID = null;
-  state.currentProject = null;
+  sessionID.value = null;
+  currentProject.value = null;
   showSessionsAndProjectsList();
 }
 
@@ -82,17 +82,17 @@ export async function deleteProject(projectName: string): Promise<void> {
 }
 
 export function selectProject(projectName: string): void {
-  state.currentProject = projectName;
-  state.sessionID = null;
+  currentProject.value = projectName;
+  sessionID.value = null;
   initializeTerminal();
 }
 
 export function connectToSession(sessionId: string, projectName?: string | null): void {
   if (typeof cleanupTerminal === 'function') cleanupTerminal();
-  state.sessionID = sessionId;
-  state.currentProject = projectName ?? state.currentProject;
+  sessionID.value = sessionId;
+  currentProject.value = projectName ?? currentProject.value;
   if (typeof (window as any).updateURLWithSession === 'function')
-    (window as any).updateURLWithSession(sessionId, state.currentProject);
+    (window as any).updateURLWithSession(sessionId, currentProject.value);
   initializeTerminal();
 }
 
