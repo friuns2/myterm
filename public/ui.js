@@ -453,6 +453,7 @@ function setupVirtualKeyboard() {
             if (button) {
                 const keyCode = parseInt(button.dataset.keyCode, 10);
                 let data = '';
+                let shouldFocusTerminalBeforeSend = true;
 
                 switch (keyCode) {
                     case 27: // Esc
@@ -498,27 +499,39 @@ function setupVirtualKeyboard() {
                     case 38: // Up Arrow
                         {
                             const customInput = document.getElementById('custom-command-input');
-                            if (customInput) {
-                                customInput.focus();
-                                setTimeout(() => {
-                                    customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-                                }, 0);
+                            const xtermTextarea = document.querySelector('#terminal .xterm-helper-textarea');
+                            const isInputFocused = customInput && document.activeElement === customInput;
+                            const isTerminalFocused = xtermTextarea && document.activeElement === xtermTextarea;
+
+                            if (isInputFocused) {
+                                customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
                                 return; // do not forward to xterm
                             }
-                            data = '\x1B[A';
+                            if (isTerminalFocused) {
+                                data = '\x1B[A';
+                                shouldFocusTerminalBeforeSend = false; // already focused
+                                break;
+                            }
+                            return; // neither active: ignore
                         }
                         break;
                     case 40: // Down Arrow
                         {
                             const customInput = document.getElementById('custom-command-input');
-                            if (customInput) {
-                                customInput.focus();
-                                setTimeout(() => {
-                                    customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-                                }, 0);
+                            const xtermTextarea = document.querySelector('#terminal .xterm-helper-textarea');
+                            const isInputFocused = customInput && document.activeElement === customInput;
+                            const isTerminalFocused = xtermTextarea && document.activeElement === xtermTextarea;
+
+                            if (isInputFocused) {
+                                customInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
                                 return; // do not forward to xterm
                             }
-                            data = '\x1B[B';
+                            if (isTerminalFocused) {
+                                data = '\x1B[B';
+                                shouldFocusTerminalBeforeSend = false; // already focused
+                                break;
+                            }
+                            return; // neither active: ignore
                         }
                         break;
                     case 37: // Left Arrow
@@ -533,16 +546,16 @@ function setupVirtualKeyboard() {
                 }
 
                 if (isConnected && data) {
-                    // Focus terminal first to ensure it's active
                     if (terminal) {
-                        terminal.focus();
-                        // Add small delay to ensure focus is properly set
+                        if (shouldFocusTerminalBeforeSend) {
+                            terminal.focus();
+                        }
                         setTimeout(() => {
                             ws.send(JSON.stringify({
                                 type: 'input',
                                 data: data
                             }));
-                        }, 50); // 50ms delay
+                        }, shouldFocusTerminalBeforeSend ? 50 : 0);
                     } else {
                         // If no terminal, send immediately
                         ws.send(JSON.stringify({
