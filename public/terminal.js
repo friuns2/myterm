@@ -89,13 +89,7 @@ const connectWebSocket = () => {
         isConnected = true;
         reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         
-        // Force screen refresh on reconnection
-        if (sessionID) {
-            // Clear texture atlas to force redraw
-            terminal.clearTextureAtlas();
-            // Refresh the entire terminal display
-            terminal.refresh(0, terminal.rows - 1);
-        }
+        // Avoid using non-public xterm internals; rely on resize to refresh
         
         // Send initial terminal size
         ws.send(JSON.stringify({
@@ -143,7 +137,7 @@ const connectWebSocket = () => {
             const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts);
             reconnectAttempts++;
             console.log(`Attempting to reconnect in ${delay / 1000} seconds... (Attempt ${reconnectAttempts})`);
-            terminal.write(`\r\nConnection lost. Attempting to reconnect...\r\n`);
+            terminal.write(`\r\nConnection lost. Attempting to reconnect... (${reconnectAttempts})\r\n`);
             setTimeout(connectWebSocket, delay);
         } else {
             terminal.write('\r\nConnection lost. Max reconnect attempts reached. Go back to session list.\r\n');

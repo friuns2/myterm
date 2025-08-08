@@ -10,7 +10,8 @@ const { loadGlobalEnv } = require('../routes/environment');
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 0; // Maximum number of characters to buffer
+// Reasonable buffer to allow status previews in sessions list
+const MAX_BUFFER_SIZE = 5000; // Maximum number of characters to buffer
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
@@ -56,7 +57,7 @@ function setupWebSocketServer(server) {
         } else {
             // Create new PTY process and session
             sessionID = uuidv4();
-            const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
+            const shell = os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || 'zsh';
             
             // Determine working directory
             let cwd = process.cwd();

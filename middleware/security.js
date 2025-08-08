@@ -1,7 +1,8 @@
 const path = require('path');
 const os = require('os');
 
-const PROJECTS_DIR = path.join(__dirname, '..', '..', 'projects'); 
+// Store projects inside the repository's `projects` directory for consistency
+const PROJECTS_DIR = path.join(__dirname, '..', 'projects'); 
 
 // Security check - ensure path is within allowed directories
 function validatePath(filePath) {

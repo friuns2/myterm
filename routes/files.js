@@ -8,7 +8,18 @@ const router = express.Router();
 
 // API endpoint to browse directory contents
 router.get('/browse', (req, res) => {
-    const dirPath = req.query.path || process.cwd();
+    const { path: queryPath, project } = req.query;
+    let dirPath = queryPath;
+    
+    // If project is provided, resolve to that project's root directory
+    if (!dirPath && project) {
+        dirPath = path.join(PROJECTS_DIR, project);
+    }
+    
+    // Default to user's home directory when no path provided
+    if (!dirPath) {
+        dirPath = os.homedir();
+    }
     
     try {
         if (!validatePath(dirPath)) {

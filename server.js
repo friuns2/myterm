@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 
 const app = express();
-const port = 3531;
+const port = process.env.PORT || 3531;
 
 // Serve static files
 app.use(express.static('public'));
@@ -62,8 +62,10 @@ function setupGlobalAlias() {
 
 const server = app.listen(port, () => {
     console.log(`Web Terminal running at http://localhost:${port}`);
-    // Setup global alias on server start
-    setupGlobalAlias();
+    // Setup global alias on server start (opt-in only)
+    if (process.env.MSH_SETUP_ALIAS === '1') {
+        setupGlobalAlias();
+    }
 });
 
 // Set up WebSocket server

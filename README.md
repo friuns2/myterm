@@ -38,7 +38,7 @@ npm start
 ```
 
 4. **Open in browser:**
-Navigate to http://localhost:3000
+Navigate to http://localhost:3531
 
 ## Usage
 
@@ -46,7 +46,7 @@ Navigate to http://localhost:3000
 ```bash
 npm start
 ```
-Then open http://localhost:3000 in your browser
+Then open http://localhost:3531 in your browser
 
 ### Command Line Functions
 ```bash

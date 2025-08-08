@@ -9,7 +9,7 @@ function goBackToSessionList() {
     
     sessionID = null;
     currentProject = null;
-    updateURLWithoutSession();
+    clearURLParams();
     showSessionsAndProjectsList();
 }
 

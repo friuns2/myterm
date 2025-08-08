@@ -18,17 +18,25 @@ async function toggleFileBrowser() {
         fileBrowser.classList.add('flex', 'fullscreen');
         isFileBrowserOpen = true;
         
-        // Load initial directory (project directory or home)
-        const initialPath = currentProject ? 
-            `../projects/${currentProject}` : 
-            process.env.HOME || '~';
-        await loadDirectory(initialPath);
+        // Load initial directory (project directory via server-resolve or user's home)
+        if (currentProject) {
+            await loadDirectory(null, currentProject);
+        } else {
+            await loadDirectory(null);
+        }
     }
 }
 
-async function loadDirectory(dirPath) {
+async function loadDirectory(dirPath, projectName) {
     try {
-        const response = await fetch(`/api/browse?path=${encodeURIComponent(dirPath)}`);
+        const url = new URL('/api/browse', window.location.origin);
+        if (dirPath) {
+            url.searchParams.set('path', dirPath);
+        }
+        if (!dirPath && projectName) {
+            url.searchParams.set('project', projectName);
+        }
+        const response = await fetch(url.toString());
         const data = await response.json();
         
         if (!response.ok) {
