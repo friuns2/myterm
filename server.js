@@ -8,6 +8,26 @@ const { basicAuthMiddleware, rejectUpgradeIfUnauthorized } = require('./middlewa
 const app = express();
 const port = 3531;
 
+// Configure ZDOTDIR so all zsh terminals load from ./settings/.zshrc
+// Resolve absolute path once at server start
+const SETTINGS_DIR = path.resolve(__dirname, 'settings');
+try {
+    fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+} catch (e) {
+    console.error('Failed to create settings directory:', e);
+}
+const SETTINGS_ZSHRC = path.join(SETTINGS_DIR, '.zshrc');
+if (!fs.existsSync(SETTINGS_ZSHRC)) {
+    try {
+        const defaultContent = `# Managed by MyShell24\n${'# === MyShell24 Aliases Start ==='}\n${'# === MyShell24 Aliases End ==='}\n`;
+        fs.writeFileSync(SETTINGS_ZSHRC, defaultContent);
+    } catch (e) {
+        console.error('Failed to initialize settings .zshrc:', e);
+    }
+}
+process.env.ZDOTDIR = SETTINGS_DIR;
+console.log('ZDOTDIR set to', process.env.ZDOTDIR);
+
 // Serve static files
 app.use(basicAuthMiddleware);
 app.use(express.static('public'));

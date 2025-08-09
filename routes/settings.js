@@ -1,14 +1,15 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 const router = express.Router();
-const ZSHRC_PATH = path.join(os.homedir(), '.zshrc');
+// Prefer ZDOTDIR provided at server start; fallback to project ./settings
+const SETTINGS_DIR = process.env.ZDOTDIR || path.resolve(__dirname, '..', 'settings');
+const ZSHRC_PATH = path.join(SETTINGS_DIR, '.zshrc');
 const ALIASES_SECTION_START = '# === MyShell24 Aliases Start ===';
 const ALIASES_SECTION_END = '# === MyShell24 Aliases End ===';
 
-// Read current .zshrc file
+// Read current .zshrc file from settings directory
 function readZshrc() {
     try {
         if (fs.existsSync(ZSHRC_PATH)) {
@@ -39,6 +40,8 @@ function extractManagedAliases(zshrcContent) {
 // Update .zshrc with new aliases
 function updateZshrcWithAliases(aliasesText) {
     try {
+        // Ensure settings directory exists
+        fs.mkdirSync(SETTINGS_DIR, { recursive: true });
         let zshrcContent = readZshrc();
         const startIndex = zshrcContent.indexOf(ALIASES_SECTION_START);
         const endIndex = zshrcContent.indexOf(ALIASES_SECTION_END);
