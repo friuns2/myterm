@@ -7,10 +7,9 @@ const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { execSync } = require('child_process');
 
-// Store active terminal sessions
-const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
-const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 100 * 1024; // Maximum number of characters to buffer (10kb)
+// Store only live attach clients (tmux persists real sessions)
+const sessions = new Map(); // Map: tmuxSessionName -> { ptyProcess, ws, timeoutId, projectName }
+const SESSION_TIMEOUT = 10 * 60 * 1000; // shorter idle window for attach client cleanup
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
@@ -69,7 +68,7 @@ function setupWebSocketServer(server) {
 
         const startPtyForTmux = (tmuxName, cwdForAttach, sendId = true) => {
             ptyProcess = attachToTmux(tmuxName, cwdForAttach);
-            const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
+            const session = { ptyProcess, ws, timeoutId: null, created: new Date().toISOString(), projectName: projectName || null };
             sessions.set(tmuxName, session);
             sessionID = tmuxName;
             console.log(`Attached to tmux session: ${tmuxName} ${projectName ? `(project: ${projectName})` : ''}`);
@@ -78,34 +77,15 @@ function setupWebSocketServer(server) {
             }
 
             // Set up PTY event handlers
-            // Send PTY output to WebSocket and buffer it
+            // Send PTY output to WebSocket (no server-side buffer)
             ptyProcess.onData((data) => {
                 const currentSession = sessions.get(tmuxName);
-                if (currentSession) {
-                    // Add data to buffer
-                    currentSession.buffer += data;
-                    
-                    // Trim buffer if it exceeds maximum size
-                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
-                        // Keep only the last MAX_BUFFER_SIZE characters
-                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
-                    }
-                    
-                    // Send data to connected client if WebSocket is open
-                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                        try {
-                            currentSession.ws.send(JSON.stringify({
-                                type: 'output',
-                                data: data
-                            }));
-                        } catch (error) {
-                            console.error(`Error sending data to session ${tmuxName}:`, error);
-                            // If there's an error sending, the WebSocket is likely closed
-                            // Don't try to use it anymore
-                            if (currentSession.ws.readyState !== WebSocket.OPEN) {
-                                console.log(`WebSocket for session ${tmuxName} is no longer open`);
-                            }
-                        }
+                if (!currentSession) return;
+                if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                    try {
+                        currentSession.ws.send(JSON.stringify({ type: 'output', data }));
+                    } catch (error) {
+                        console.error(`Error sending data to session ${tmuxName}:`, error);
                     }
                 }
             });
@@ -142,14 +122,11 @@ function setupWebSocketServer(server) {
             }
             session.ws = ws;
             console.log(`Reconnected to attach client for tmux session: ${sessionID}`);
-            if (session.buffer && session.buffer.length > 0) {
-                ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
-                console.log(`Sent ${session.buffer.length} characters from buffer`);
-            }
+            // No buffer replay; tmux history persists on its own
         } else if (sessionID && !sessions.has(sessionID)) {
             // If a tmux session exists with this name, attach to it; otherwise error
             if (tmuxSessionExists(sessionID)) {
-                // Determine cwd for attach: use process cwd or project path if resolvable from name
+            // Determine cwd for attach: use tmux session_path if available
                 let cwd = process.cwd();
                 try {
                     // Try to read the session default-path

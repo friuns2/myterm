@@ -23,25 +23,13 @@ router.get('/', (req, res) => {
         tmuxSessions = [];
     }
 
-    const { getSessions } = require('../websocket/terminal');
-    const attachClients = getSessions();
-
-    const NUM_STATUS_LINES = 6;
-    const all = tmuxSessions.map(ts => {
-        const attach = attachClients.get(ts.name);
-        let status = 'Detached';
-        if (attach && attach.buffer) {
-            const lines = attach.buffer.split('\n');
-            const lastLines = lines.slice(-NUM_STATUS_LINES);
-            status = lastLines.join('\n').trim() || 'Attached';
-        }
-        return {
-            id: ts.name,
-            status,
-            created: ts.createdStr || new Date().toISOString(),
-            projectName: (attach && attach.projectName) || 'Unknown'
-        };
-    });
+    // We do not include attach-client buffer; tmux keeps its own history
+    const all = tmuxSessions.map(ts => ({
+        id: ts.name,
+        status: 'Unknown',
+        created: ts.createdStr || new Date().toISOString(),
+        projectName: 'Unknown'
+    }));
 
     res.json(all);
 });
