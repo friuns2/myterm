@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
+const { execSync } = require('child_process');
 
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
@@ -23,77 +24,63 @@ function setupWebSocketServer(server) {
         const projectName = url.searchParams.get('projectName');
         let ptyProcess;
 
-        if (sessionID && sessions.has(sessionID)) {
-            // Reconnect to existing session
-            const session = sessions.get(sessionID);
-            ptyProcess = session.ptyProcess;
-            
-            // Clear previous timeout for this session
-            if (session.timeoutId) {
-                clearTimeout(session.timeoutId);
-                session.timeoutId = null;
+        const TMUX_PREFIX = 'msh-';
+
+        function sanitizeName(name) {
+            return String(name || '')
+                .replace(/[^a-zA-Z0-9_.-]+/g, '-')
+                .replace(/^-+/, '')
+                .slice(0, 64);
+        }
+
+        function generateTmuxSessionName(project) {
+            const shortId = uuidv4().slice(0, 8);
+            return `${TMUX_PREFIX}${shortId}-${sanitizeName(project || 'default')}`;
+        }
+
+        function tmuxSessionExists(name) {
+            try {
+                execSync(`tmux has-session -t ${name}`, { stdio: 'ignore' });
+                return true;
+            } catch (_) {
+                return false;
             }
-            
-            // Close any existing WebSocket connection for this session
-            if (session.ws && session.ws !== ws && session.ws.readyState === WebSocket.OPEN) {
-                console.log(`Closing previous WebSocket connection for session: ${sessionID}`);
-                session.ws.close(1000, 'New connection established');
+        }
+
+        function createTmuxSession(name, cwd) {
+            try {
+                execSync(`tmux new-session -d -s ${name} -c ${JSON.stringify(cwd).slice(1, -1)}`);
+            } catch (error) {
+                console.error('Failed to create tmux session:', error.message);
+                throw error;
             }
-            
-            // Update WebSocket instance
-            session.ws = ws;
-            console.log(`Reconnected to session: ${sessionID}`);
-            
-            // Send buffered content to reconnecting client
-            if (session.buffer && session.buffer.length > 0) {
-                ws.send(JSON.stringify({
-                    type: 'output',
-                    data: session.buffer
-                }));
-                console.log(`Sent ${session.buffer.length} characters from buffer`);
-            }
-        } else if (!sessionID && projectName) {
-            // Create new PTY process and session for a specific project
-            sessionID = uuidv4();
-            const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
-            
-            // Determine working directory
-            let cwd = process.cwd();
-            if (projectName) {
-                const projectPath = path.join(PROJECTS_DIR, projectName);
-                if (fs.existsSync(projectPath)) {
-                    cwd = projectPath;
-                } else {
-                    // Create project directory if it doesn't exist
-                    fs.mkdirSync(projectPath, { recursive: true });
-                    cwd = projectPath;
-                }
-            }
-            
-            const mergedEnv = process.env;
-            
-            ptyProcess = pty.spawn(shell, [], {
+        }
+
+        function attachToTmux(name, cwd) {
+            const env = process.env;
+            return pty.spawn('tmux', ['attach-session', '-t', name], {
                 name: 'xterm-color',
                 cols: 80,
                 rows: 24,
-                cwd: cwd,
-                env: mergedEnv
+                cwd,
+                env
             });
+        }
 
+        const startPtyForTmux = (tmuxName, cwdForAttach, sendId = true) => {
+            ptyProcess = attachToTmux(tmuxName, cwdForAttach);
             const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
-            sessions.set(sessionID, session);
-            console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
+            sessions.set(tmuxName, session);
+            sessionID = tmuxName;
+            console.log(`Attached to tmux session: ${tmuxName} ${projectName ? `(project: ${projectName})` : ''}`);
+            if (sendId) {
+                ws.send(JSON.stringify({ type: 'sessionID', sessionID: tmuxName }));
+            }
 
-            // Send session ID to client
-            ws.send(JSON.stringify({
-                type: 'sessionID',
-                sessionID: sessionID
-            }));
-
-            // Set up PTY event handlers only for new sessions
+            // Set up PTY event handlers
             // Send PTY output to WebSocket and buffer it
             ptyProcess.onData((data) => {
-                const currentSession = sessions.get(sessionID);
+                const currentSession = sessions.get(tmuxName);
                 if (currentSession) {
                     // Add data to buffer
                     currentSession.buffer += data;
@@ -112,11 +99,11 @@ function setupWebSocketServer(server) {
                                 data: data
                             }));
                         } catch (error) {
-                            console.error(`Error sending data to session ${sessionID}:`, error);
+                            console.error(`Error sending data to session ${tmuxName}:`, error);
                             // If there's an error sending, the WebSocket is likely closed
                             // Don't try to use it anymore
                             if (currentSession.ws.readyState !== WebSocket.OPEN) {
-                                console.log(`WebSocket for session ${sessionID} is no longer open`);
+                                console.log(`WebSocket for session ${tmuxName} is no longer open`);
                             }
                         }
                     }
@@ -125,8 +112,8 @@ function setupWebSocketServer(server) {
 
             // Handle PTY exit
             ptyProcess.onExit(({ exitCode, signal }) => {
-                console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
-                const currentSession = sessions.get(sessionID);
+                console.log(`Attach client exited with code: ${exitCode}, signal: ${signal}`);
+                const currentSession = sessions.get(tmuxName);
                 if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
                     try {
                         currentSession.ws.send(JSON.stringify({
@@ -135,23 +122,70 @@ function setupWebSocketServer(server) {
                             signal
                         }));
                     } catch (error) {
-                        console.error(`Error sending exit message to session ${sessionID}:`, error);
+                        console.error(`Error sending exit message to session ${tmuxName}:`, error);
                     }
                 }
-                sessions.delete(sessionID); // Clean up session on exit
+                sessions.delete(tmuxName); // Clean up in-memory attach client on exit; tmux session persists
             });
-        } else {
-            // Do NOT auto-create sessions when no valid sessionID is provided and no project is specified
-            // Send an error to the client and close the connection
-            try {
-                let message = 'Missing sessionID in query string';
-                if (sessionID && !sessions.has(sessionID)) {
-                    message = `Session not found: ${sessionID}`;
-                }
-                ws.send(JSON.stringify({ type: 'error', message }));
-            } catch (e) {
-                // ignore send errors
+        };
+        if (sessionID && sessions.has(sessionID)) {
+            // Reconnect to existing attach client (single active ws per attach)
+            const session = sessions.get(sessionID);
+            ptyProcess = session.ptyProcess;
+            if (session.timeoutId) {
+                clearTimeout(session.timeoutId);
+                session.timeoutId = null;
             }
+            if (session.ws && session.ws !== ws && session.ws.readyState === WebSocket.OPEN) {
+                console.log(`Closing previous WebSocket connection for session: ${sessionID}`);
+                session.ws.close(1000, 'New connection established');
+            }
+            session.ws = ws;
+            console.log(`Reconnected to attach client for tmux session: ${sessionID}`);
+            if (session.buffer && session.buffer.length > 0) {
+                ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
+                console.log(`Sent ${session.buffer.length} characters from buffer`);
+            }
+        } else if (sessionID && !sessions.has(sessionID)) {
+            // If a tmux session exists with this name, attach to it; otherwise error
+            if (tmuxSessionExists(sessionID)) {
+                // Determine cwd for attach: use process cwd or project path if resolvable from name
+                let cwd = process.cwd();
+                try {
+                    // Try to read the session default-path
+                    const sessionPath = execSync(`tmux display-message -p -t ${sessionID} "#{session_path}"`, { encoding: 'utf8' }).trim();
+                    if (sessionPath) cwd = sessionPath;
+                } catch (_) {}
+                startPtyForTmux(sessionID, cwd, false);
+            } else {
+                try {
+                    const message = `Session not found: ${sessionID}`;
+                    ws.send(JSON.stringify({ type: 'error', message }));
+                } catch (e) {}
+                ws.close(1008, 'Invalid session');
+                return;
+            }
+        } else if (!sessionID && projectName) {
+            // Determine working directory
+            let cwd = process.cwd();
+            const projectPath = path.join(PROJECTS_DIR, projectName);
+            if (fs.existsSync(projectPath)) {
+                cwd = projectPath;
+            } else {
+                fs.mkdirSync(projectPath, { recursive: true });
+                cwd = projectPath;
+            }
+
+            // Create a new tmux session and attach to it
+            const tmuxName = generateTmuxSessionName(projectName);
+            createTmuxSession(tmuxName, cwd);
+            startPtyForTmux(tmuxName, cwd, true);
+        } else {
+            // Missing information; do not create anything
+            try {
+                let message = 'Missing sessionID or projectName in query string';
+                ws.send(JSON.stringify({ type: 'error', message }));
+            } catch (e) {}
             ws.close(1008, 'Invalid session');
             return;
         }
@@ -198,7 +232,7 @@ function setupWebSocketServer(server) {
             if (session && session.ws === ws) {
                 // Only set timeout if this is the active WebSocket for the session
                 session.timeoutId = setTimeout(() => {
-                    console.log(`Session ${sessionID} timed out. Killing process.`);
+                    console.log(`Session ${sessionID} timed out. Closing attach client.`);
                     if (session.ptyProcess && !session.ptyProcess.killed) {
                         session.ptyProcess.kill();
                     }
