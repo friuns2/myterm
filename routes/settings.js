@@ -1,47 +1,46 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const router = express.Router();
-// Prefer ZDOTDIR provided at server start; fallback to project ./settings
-const SETTINGS_DIR = process.env.ZDOTDIR || path.resolve(__dirname, '..', 'settings');
-const ZSHRC_PATH = path.join(SETTINGS_DIR, '.zshrc');
-const ALIASES_SECTION_START = '# === MyShell24 Aliases Start ===';
-const ALIASES_SECTION_END = '# === MyShell24 Aliases End ===';
 
-// Read current .zshrc file from settings directory
-function readZshrc() {
+// Store settings locally under the project directory
+const SETTINGS_DIR = path.join(__dirname, '..', 'settings');
+const SETTINGS_FILE = path.join(SETTINGS_DIR, 'aliases.zsh');
+
+// Read current local settings file
+function readLocalSettings() {
     try {
-        if (fs.existsSync(ZSHRC_PATH)) {
-            return fs.readFileSync(ZSHRC_PATH, 'utf8');
+        if (!fs.existsSync(SETTINGS_DIR)) {
+            fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+        }
+        if (fs.existsSync(SETTINGS_FILE)) {
+            return fs.readFileSync(SETTINGS_FILE, 'utf8');
         }
     } catch (error) {
-        console.error('Error reading .zshrc file:', error);
+        console.error('Error reading local settings file:', error);
     }
     return '';
 }
 
-// Extract aliases from .zshrc managed by MyShell24
-function extractManagedAliases(zshrcContent) {
-    const startIndex = zshrcContent.indexOf(ALIASES_SECTION_START);
-    const endIndex = zshrcContent.indexOf(ALIASES_SECTION_END);
-    
-    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-        const aliasesSection = zshrcContent.substring(
-            startIndex + ALIASES_SECTION_START.length,
-            endIndex
-        );
-        return aliasesSection;
+// Write local settings file with given text
+function writeLocalSettings(aliasesText) {
+    try {
+        if (!fs.existsSync(SETTINGS_DIR)) {
+            fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+        }
+        fs.writeFileSync(SETTINGS_FILE, aliasesText || '');
+        return true;
+    } catch (error) {
+        console.error('Error writing local settings file:', error);
+        return false;
     }
-    
-    return '';
 }
 
 // Update .zshrc with new aliases
 function updateZshrcWithAliases(aliasesText) {
     try {
-        // Ensure settings directory exists
-        fs.mkdirSync(SETTINGS_DIR, { recursive: true });
         let zshrcContent = readZshrc();
         const startIndex = zshrcContent.indexOf(ALIASES_SECTION_START);
         const endIndex = zshrcContent.indexOf(ALIASES_SECTION_END);
@@ -72,13 +71,16 @@ function updateZshrcWithAliases(aliasesText) {
 // Get all managed aliases as plain text
 router.get('/', (req, res) => {
     try {
-        const zshrcContent = readZshrc();
-        const aliasesText = extractManagedAliases(zshrcContent);
-        
-        res.json({ 
+        const aliasesText = readLocalSettings();
+        const exists = fs.existsSync(SETTINGS_FILE);
+        res.json({
             text: aliasesText,
-            zshrcPath: ZSHRC_PATH,
-            hasZshrc: fs.existsSync(ZSHRC_PATH)
+            // Keep legacy fields for the UI: point to local settings file
+            zshrcPath: SETTINGS_FILE,
+            hasZshrc: exists,
+            // New explicit fields
+            settingsPath: SETTINGS_FILE,
+            hasSettings: exists
         });
     } catch (error) {
         console.error('Error getting aliases:', error);
@@ -96,7 +98,7 @@ router.post('/', express.json(), (req, res) => {
         }
         
         // Save the text exactly as provided without parsing/formatting
-        if (updateZshrcWithAliases(text)) {
+        if (writeLocalSettings(text)) {
             const aliasCount = (text.match(/^\s*alias\s+/gm) || []).length;
             res.json({ 
                 success: true, 
@@ -115,7 +117,7 @@ router.post('/', express.json(), (req, res) => {
 // Clear all managed aliases
 router.delete('/all', (req, res) => {
     try {
-        if (updateZshrcWithAliases('')) {
+        if (writeLocalSettings('')) {
             res.json({ success: true, message: 'All aliases cleared successfully' });
         } else {
             res.status(500).json({ error: 'Failed to clear aliases' });
