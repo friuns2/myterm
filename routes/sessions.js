@@ -23,12 +23,13 @@ router.get('/', (req, res) => {
         tmuxSessions = [];
     }
 
-    // Build response using tmux capture-pane for recent status
+    // Build response using tmux capture-pane + filter pipeline for recent status
     const all = tmuxSessions.map(ts => {
         let status = '';
         try {
-            // Capture last 3 lines from the active pane of the session
-            const out = execSync(`tmux capture-pane -pt ${JSON.stringify(ts.name).slice(1, -1)} -S -3`, { encoding: 'utf8' });
+            const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
+            const cmd = `tmux capture-pane -pt ${safeName} | grep -vE '^(╭|╰|│|─{5,})|^$' | tail -n 3 || true`;
+            const out = execSync(cmd, { encoding: 'utf8' });
             status = (out || '').trim();
         } catch (_) {
             status = '';
