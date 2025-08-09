@@ -23,7 +23,7 @@ router.get('/', (req, res) => {
         tmuxSessions = [];
     }
 
-    // We do not include attach-client buffer; tmux keeps its own history
+    // Use tmux sessions as the source of truth. No attach-client buffer.
     const all = tmuxSessions.map(ts => ({
         id: ts.name,
         status: 'Unknown',
