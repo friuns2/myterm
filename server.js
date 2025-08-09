@@ -64,28 +64,11 @@ function setupGlobalAlias() {
 function ensureLocalSettingsIncluded() {
     try {
         const settingsFilePath = path.join(__dirname, 'settings', 'aliases.zsh');
-
-        let zshrcContent = '';
-        if (fs.existsSync(ZSHRC_PATH)) {
-            zshrcContent = fs.readFileSync(ZSHRC_PATH, 'utf8');
-        }
-
-        // Migration: remove any old tagged block if present
-        zshrcContent = zshrcContent.replace(/# === MyShell24 Settings Start ===[\s\S]*?# === MyShell24 Settings End ===\n?/g, '');
-
-        // Ensure a single include exists; avoid duplicates
-        const escapedPath = settingsFilePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const includeRegex = new RegExp(`^\\s*(source|\\.)\\s+"?${escapedPath}"?\\s*$`, 'm');
-        if (!includeRegex.test(zshrcContent)) {
-            const includeSnippet = [
-                '# Load MyShell24 settings',
-                `if [ -f "${settingsFilePath}" ]; then`,
-                `  source "${settingsFilePath}"`,
-                'fi'
-            ].join('\n');
-            const newContent = zshrcContent + (zshrcContent.endsWith('\n') ? '' : '\n') + '\n' + includeSnippet + '\n';
+        let zshrcContent = fs.existsSync(ZSHRC_PATH) ? fs.readFileSync(ZSHRC_PATH, 'utf8') : '';
+        const includeLine = `[ -f "${settingsFilePath}" ] && source "${settingsFilePath}"`;
+        if (!zshrcContent.includes(settingsFilePath)) {
+            const newContent = zshrcContent + (zshrcContent.endsWith('\n') ? '' : '\n') + includeLine + '\n';
             fs.writeFileSync(ZSHRC_PATH, newContent);
-            console.log('Added MyShell24 settings include to ~/.zshrc');
         }
     } catch (error) {
         console.error('Error ensuring local settings include in ~/.zshrc:', error.message);
