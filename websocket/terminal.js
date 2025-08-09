@@ -186,7 +186,7 @@ function setupWebSocketServer(server) {
         ws.on('close', () => {
             console.log(`Terminal disconnected for session: ${sessionID || 'new'}`);
             if (ptyProcess && !ptyProcess.killed) {
-                try { ptyProcess.kill(); } catch (_) {}
+                try { ptyProcess.kill(); } catch (_) { console.error('Failed to kill pty process'); }
             }
         });
 
@@ -194,7 +194,7 @@ function setupWebSocketServer(server) {
         ws.on('error', (error) => {
             console.error(`WebSocket error for session ${sessionID || 'new'}:`, error);
             if (ptyProcess && !ptyProcess.killed) {
-                try { ptyProcess.kill(); } catch (_) {}
+                try { ptyProcess.kill(); } catch (_) { console.error('Failed to kill pty process'); }
             }
         });
     });
