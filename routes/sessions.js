@@ -33,8 +33,10 @@ router.get('/', (req, res) => {
             const out = execSync(cmd, { encoding: 'utf8' });
             const ansiRegex = /\x1B\[[0-9;?]*[ -\/]*[@-~]/g; // strip ANSI CSI sequences
             let cleaned = (out || '').replace(ansiRegex, '');
-            // Keep only printable ASCII and whitespace (words and punctuation); drop box-drawing and control chars
+            // Keep only printable ASCII; drop control chars
             cleaned = cleaned.replace(/[^\x20-\x7E\n\r\t]/g, '');
+            // Remove newlines/tabs and collapse whitespace
+            cleaned = cleaned.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
             // Return only last 200 characters
             status = cleaned.length > 200 ? cleaned.slice(-200) : cleaned;
         } catch (_) {
