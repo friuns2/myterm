@@ -63,7 +63,7 @@ function setupGlobalAlias() {
 // Ensure ~/.zshrc sources local settings file under this project
 function ensureLocalSettingsIncluded() {
     try {
-        const settingsFilePath = path.join(__dirname, 'settings', 'aliases.zsh');
+        const settingsFilePath = path.join(__dirname, 'settings', 'settings.zsh');
         let zshrcContent = fs.existsSync(ZSHRC_PATH) ? fs.readFileSync(ZSHRC_PATH, 'utf8') : '';
         const includeLine = `[ -f "${settingsFilePath}" ] && source "${settingsFilePath}"`;
         if (!zshrcContent.includes(settingsFilePath)) {

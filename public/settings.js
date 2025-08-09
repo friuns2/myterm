@@ -31,7 +31,7 @@ async function showSettingsManager() {
                     <div class="flex items-center justify-between p-4 border-b border-base-300">
                         <h2 class="text-xl font-semibold">Shell Settings</h2>
                         <div class="flex gap-2">
-                            <button id="clear-all-aliases" class="btn btn-error btn-sm" hidden>Clear All</button>
+                            <button id="clear-all-aliases" class="btn btn-error btn-sm" hidden>Clear Settings</button>
                             <button id="save-aliases-manually" class="btn btn-primary btn-sm">Save Now</button>
                         </div>
                     </div>
@@ -40,7 +40,7 @@ async function showSettingsManager() {
                         <textarea 
                             id="aliases-editor" 
                             class="textarea textarea-bordered w-full h-full resize-none font-mono text-sm" 
-                            placeholder="# Add your shell aliases here\n# Format: alias name='command' or just name=command\n# Examples:\nalias ll='ls -la'\nalias gs='git status'\nalias ..='cd ..'\nalias grep='grep --color=auto'\nalias h='history'\nalias c='clear'"
+                            placeholder="# Add your shell settings here\n# Examples:\nalias ll='ls -la'\nalias gs='git status'\nalias ..='cd ..'\nalias grep='grep --color=auto'\nalias h='history'\nalias c='clear'"
                             spellcheck="false"
                         >${data.text || ''}</textarea>
                     </div>
@@ -60,7 +60,7 @@ async function showSettingsManager() {
 // Setup event listeners for aliases management
 function setupAliasesEventListeners() {
     const backButton = document.getElementById('back-to-dashboard');
-    const aliasesEditor = document.getElementById('aliases-editor');
+    const settingsEditor = document.getElementById('aliases-editor');
     const clearAllButton = document.getElementById('clear-all-aliases');
     const saveButton = document.getElementById('save-aliases-manually');
     
@@ -73,7 +73,7 @@ function setupAliasesEventListeners() {
     });
     
     // Auto-save on text change
-    aliasesEditor.addEventListener('input', () => {
+    settingsEditor.addEventListener('input', () => {
         aliasHasUnsavedChanges = true;
         
         // Clear existing timeout
@@ -94,9 +94,9 @@ function setupAliasesEventListeners() {
     
     // Clear all aliases
     clearAllButton.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to clear all aliases? This will remove all MyShell24-managed aliases from your .zshrc file.')) {
-            const aliasesEditor = document.getElementById('aliases-editor');
-            aliasesEditor.value = '';
+        if (confirm('Are you sure you want to clear all shell settings? This will remove all MyShell24-managed settings from your configuration.')) {
+            const settingsEditor = document.getElementById('aliases-editor');
+            settingsEditor.value = '';
             aliasHasUnsavedChanges = true;
             await saveAliases();
         }
@@ -114,8 +114,8 @@ function setupAliasesEventListeners() {
 // Save aliases
 async function saveAliases() {
     try {
-        const aliasesEditor = document.getElementById('aliases-editor');
-        const text = aliasesEditor.value;
+        const settingsEditor = document.getElementById('aliases-editor');
+        const text = settingsEditor.value;
         
         const response = await fetch('/api/settings', {
             method: 'POST',

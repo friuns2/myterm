@@ -7,7 +7,7 @@ const router = express.Router();
 
 // Store settings locally under the project directory
 const SETTINGS_DIR = path.join(__dirname, '..', 'settings');
-const SETTINGS_FILE = path.join(SETTINGS_DIR, 'aliases.zsh');
+const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.zsh');
 
 // Read current local settings file
 function readLocalSettings() {
