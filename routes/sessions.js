@@ -27,8 +27,8 @@ router.get('/', (req, res) => {
     const all = tmuxSessions.map(ts => {
         let status = '';
         try {
-            // Capture last 10 lines from the active pane of the session
-            const out = execSync(`tmux capture-pane -pt ${JSON.stringify(ts.name).slice(1, -1)} -S -10`, { encoding: 'utf8' });
+            // Capture last 3 lines from the active pane of the session
+            const out = execSync(`tmux capture-pane -pt ${JSON.stringify(ts.name).slice(1, -1)} -S -3`, { encoding: 'utf8' });
             status = (out || '').trim();
         } catch (_) {
             status = '';
