@@ -3,7 +3,6 @@
 const fs = require('fs');
 const path = require('path');
 const { PROJECTS_DIR } = require('./middleware/security');
-const http = require('http');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -12,7 +11,7 @@ function showHelp() {
     console.log('MSH - MyShell Project Manager');
     console.log('Usage:');
     console.log('  node msh.js -p <path>                 Add a project folder');
-    console.log('  node msh.js -s <project> <command>    Create session for project and run command (HTTP)');
+    console.log('  node msh.js -s <project> <command>    Create session for project and run command');
     console.log('  node msh.js --help       Show this help message');
     console.log('');
     console.log('Examples:');
@@ -113,59 +112,24 @@ if (sIndex !== -1) {
     }
     const commandLine = commandParts.join(' ');
 
-    // Basic Auth credentials must match the server's settings
-    const USERNAME = 'friuns';
-    const PASSWORD = 'er54s4';
-    const authHeader = 'Basic ' + Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');
+    const { createSession } = require('./websocket/terminal');
+    try {
+        const { sessionID, ptyProcess } = createSession(projectName, commandLine);
+        console.log(`Session created: ${sessionID} (project: ${projectName})`);
 
-    const postData = JSON.stringify({ projectName, command: commandLine });
-    const options = {
-        hostname: 'localhost',
-        port: 3531,
-        path: '/api/sessions',
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-            'Authorization': authHeader
-        }
-    };
-
-    const req = http.request(options, (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => { body += chunk; });
-        res.on('end', () => {
-            try {
-                const data = JSON.parse(body || '{}');
-                if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-                    if (data.sessionID) {
-                        console.log(`Session created: ${data.sessionID} (project: ${projectName})`);
-                    }
-                    if (data.output) {
-                        process.stdout.write(data.output);
-                    }
-                    process.exit(0);
-                } else {
-                    console.error('Request failed:', data.error || body || `HTTP ${res.statusCode}`);
-                    process.exit(1);
-                }
-            } catch (e) {
-                console.error('Invalid response from server:', e.message || String(e));
-                process.exit(1);
-            }
+        // Stream output to stdout
+        ptyProcess.onData((data) => {
+            process.stdout.write(data);
         });
-    });
 
-    req.on('error', (e) => {
-        console.error(`Request error: ${e.message}`);
+        // Exit with child code
+        ptyProcess.onExit(({ exitCode }) => {
+            process.exit(exitCode ?? 0);
+        });
+    } catch (e) {
+        console.error('Failed to create session:', e && e.message ? e.message : String(e));
         process.exit(1);
-    });
-
-    req.write(postData);
-    req.end();
-    
-    // Do not fall through to the unknown command handler
+    }
     return;
 } else {
     console.error('Error: Unknown command or missing arguments');
