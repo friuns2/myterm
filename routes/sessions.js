@@ -54,22 +54,4 @@ router.delete('/:sessionId', (req, res) => {
     }
 });
 
-// API endpoint to create a session and optionally run a command (no WebSocket required)
-router.post('/', express.json(), (req, res) => {
-    const { projectName, command } = req.body || {};
-    if (!projectName || typeof projectName !== 'string') {
-        return res.status(400).json({ error: 'projectName is required' });
-    }
-    try {
-        const { createSession, getSessions } = require('../websocket/terminal');
-        const { sessionID } = createSession(projectName, command);
-        const sessions = getSessions();
-        const session = sessions.get(sessionID);
-        return res.json({ sessionID, output: (session && session.buffer) || '' });
-    } catch (err) {
-        console.error('Failed to create session:', err);
-        return res.status(500).json({ error: 'Failed to create session' });
-    }
-});
-
 module.exports = router;

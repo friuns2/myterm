@@ -9,7 +9,7 @@ const { PROJECTS_DIR } = require('../middleware/security');
 // Store active terminal sessions
 const sessions = new Map(); // Map to store sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName }
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-const MAX_BUFFER_SIZE = 100 * 80 * 24; // 100 lines of 80 characters (24 rows)
+const MAX_BUFFER_SIZE = 100 * 1024; // Maximum number of characters to buffer (10kb)
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
@@ -54,12 +54,92 @@ function setupWebSocketServer(server) {
             }
         } else if (!sessionID && projectName) {
             // Create new PTY process and session for a specific project
-            const created = createSession(projectName);
-            sessionID = created.sessionID;
-            ptyProcess = created.ptyProcess;
+            sessionID = uuidv4();
+            const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
+            
+            // Determine working directory
+            let cwd = process.cwd();
+            if (projectName) {
+                const projectPath = path.join(PROJECTS_DIR, projectName);
+                if (fs.existsSync(projectPath)) {
+                    cwd = projectPath;
+                } else {
+                    // Create project directory if it doesn't exist
+                    fs.mkdirSync(projectPath, { recursive: true });
+                    cwd = projectPath;
+                }
+            }
+            
+            const mergedEnv = process.env;
+            
+            ptyProcess = pty.spawn(shell, [], {
+                name: 'xterm-color',
+                cols: 80,
+                rows: 24,
+                cwd: cwd,
+                env: mergedEnv
+            });
+
+            const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
+            sessions.set(sessionID, session);
+            console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
             // Send session ID to client
-            ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
+            ws.send(JSON.stringify({
+                type: 'sessionID',
+                sessionID: sessionID
+            }));
+
+            // Set up PTY event handlers only for new sessions
+            // Send PTY output to WebSocket and buffer it
+            ptyProcess.onData((data) => {
+                const currentSession = sessions.get(sessionID);
+                if (currentSession) {
+                    // Add data to buffer
+                    currentSession.buffer += data;
+                    
+                    // Trim buffer if it exceeds maximum size
+                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+                        // Keep only the last MAX_BUFFER_SIZE characters
+                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+                    }
+                    
+                    // Send data to connected client if WebSocket is open
+                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                        try {
+                            currentSession.ws.send(JSON.stringify({
+                                type: 'output',
+                                data: data
+                            }));
+                        } catch (error) {
+                            console.error(`Error sending data to session ${sessionID}:`, error);
+                            // If there's an error sending, the WebSocket is likely closed
+                            // Don't try to use it anymore
+                            if (currentSession.ws.readyState !== WebSocket.OPEN) {
+                                console.log(`WebSocket for session ${sessionID} is no longer open`);
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Handle PTY exit
+            ptyProcess.onExit(({ exitCode, signal }) => {
+                console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
+                const currentSession = sessions.get(sessionID);
+                if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                    try {
+                        currentSession.ws.send(JSON.stringify({
+                            type: 'exit',
+                            exitCode,
+                            signal
+                        }));
+                    } catch (error) {
+                        console.error(`Error sending exit message to session ${sessionID}:`, error);
+                    }
+                }
+                sessions.delete(sessionID); // Clean up session on exit
+            });
         } else {
             // Do NOT auto-create sessions when no valid sessionID is provided and no project is specified
             // Send an error to the client and close the connection
@@ -168,88 +248,8 @@ function deleteSession(sessionId) {
     sessions.delete(sessionId);
 }
 
-// Programmatic session creation (no WebSocket required). Optionally run an initial command.
-function createSession(projectName, initialCommand) {
-    const sessionID = uuidv4();
-    const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
-
-    // Determine working directory
-    let cwd = process.cwd();
-    if (projectName) {
-        const projectPath = path.join(PROJECTS_DIR, projectName);
-        if (fs.existsSync(projectPath)) {
-            cwd = projectPath;
-        } else {
-            fs.mkdirSync(projectPath, { recursive: true });
-            cwd = projectPath;
-        }
-    }
-
-    const mergedEnv = process.env;
-    const ptyProcess = pty.spawn(shell, [], {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 24,
-        cwd,
-        env: mergedEnv
-    });
-
-    const session = {
-        ptyProcess,
-        ws: null,
-        timeoutId: null,
-        buffer: '',
-        created: new Date().toISOString(),
-        projectName: projectName || null
-    };
-    sessions.set(sessionID, session);
-    console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
-
-    // Buffer PTY output and send to WS if later connected
-    ptyProcess.onData((data) => {
-        const currentSession = sessions.get(sessionID);
-        if (currentSession) {
-            currentSession.buffer += data;
-            if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
-                currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
-            }
-            if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                try {
-                    currentSession.ws.send(JSON.stringify({ type: 'output', data }));
-                } catch (error) {
-                    console.error(`Error sending data to session ${sessionID}:`, error);
-                }
-            }
-        }
-    });
-
-    ptyProcess.onExit(({ exitCode, signal }) => {
-        console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
-        const currentSession = sessions.get(sessionID);
-        if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-            try {
-                currentSession.ws.send(JSON.stringify({ type: 'exit', exitCode, signal }));
-            } catch (error) {
-                console.error(`Error sending exit message to session ${sessionID}:`, error);
-            }
-        }
-        sessions.delete(sessionID);
-    });
-
-    if (initialCommand && typeof initialCommand === 'string' && initialCommand.trim().length > 0) {
-        try {
-            ptyProcess.write(initialCommand + '\n');
-        } catch (e) {
-            console.error('Failed to write initial command:', e);
-        }
-    }
-
-    return { sessionID, ptyProcess };
-}
-
 module.exports = {
     setupWebSocketServer,
     getSessions,
-    deleteSession,
-    createSession
+    deleteSession
 };
