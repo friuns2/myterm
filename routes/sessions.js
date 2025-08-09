@@ -23,14 +23,20 @@ router.get('/', (req, res) => {
         tmuxSessions = [];
     }
 
-    // Build response using tmux capture-pane + filter pipeline for recent status
+    // Build response using tmux capture-pane, keep only words/punctuation, then last 200 chars
     const all = tmuxSessions.map(ts => {
         let status = '';
         try {
             const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
-            const cmd = `tmux capture-pane -pt ${safeName} | grep -vE '^(╭|╰|│|─{5,})|^$' | tail -n 3 || true`;
+            // Capture a reasonable number of recent lines, then clean in JS
+            const cmd = `tmux capture-pane -pt ${safeName} -S -200 || true`;
             const out = execSync(cmd, { encoding: 'utf8' });
-            status = (out || '').trim();
+            const ansiRegex = /\x1B\[[0-9;?]*[ -\/]*[@-~]/g; // strip ANSI CSI sequences
+            let cleaned = (out || '').replace(ansiRegex, '');
+            // Keep only printable ASCII and whitespace (words and punctuation); drop box-drawing and control chars
+            cleaned = cleaned.replace(/[^\x20-\x7E\n\r\t]/g, '');
+            // Return only last 200 characters
+            status = cleaned.length > 200 ? cleaned.slice(-200) : cleaned;
         } catch (_) {
             status = '';
         }
