@@ -21,6 +21,15 @@ function setupWebSocketServer(server) {
 
         const TMUX_PREFIX = 'msh-';
 
+        function isTmuxAvailable() {
+            try {
+                execSync('tmux -V', { stdio: 'ignore' });
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+
         function sanitizeName(name) {
             return String(name || '')
                 .replace(/[^a-zA-Z0-9_.-]+/g, '-')
@@ -45,9 +54,10 @@ function setupWebSocketServer(server) {
         function createTmuxSession(name, cwd) {
             try {
                 execSync(`tmux new-session -d -s ${name} -c ${JSON.stringify(cwd).slice(1, -1)}`);
+                return true;
             } catch (error) {
                 console.error('Failed to create tmux session:', error.message);
-                throw error;
+                return false;
             }
         }
 
@@ -63,7 +73,14 @@ function setupWebSocketServer(server) {
         }
 
         function attachAndWire(tmuxName, cwdForAttach, sendId) {
-            ptyProcess = attachToTmux(tmuxName, cwdForAttach);
+            try {
+                ptyProcess = attachToTmux(tmuxName, cwdForAttach);
+            } catch (error) {
+                console.error('Failed to spawn tmux attach:', error.message || String(error));
+                try { ws.send(JSON.stringify({ type: 'error', message: 'Failed to attach to tmux. Is tmux installed?' })); } catch (_) {}
+                try { ws.close(1011, 'Attach failed'); } catch (_) {}
+                return false;
+            }
             console.log(`Attached to tmux session: ${tmuxName} ${projectName ? `(project: ${projectName})` : ''}`);
             if (sendId) {
                 ws.send(JSON.stringify({ type: 'sessionID', sessionID: tmuxName }));
@@ -89,6 +106,14 @@ function setupWebSocketServer(server) {
                     }
                 }
             });
+            return true;
+        }
+
+        // Ensure tmux is available
+        if (!isTmuxAvailable()) {
+            try { ws.send(JSON.stringify({ type: 'error', message: 'tmux is not installed or not in PATH on the server' })); } catch (_) {}
+            try { ws.close(1011, 'tmux missing'); } catch (_) {}
+            return;
         }
 
         if (sessionID) {
@@ -98,7 +123,8 @@ function setupWebSocketServer(server) {
                     const sessionPath = execSync(`tmux display-message -p -t ${sessionID} "#{session_path}"`, { encoding: 'utf8' }).trim();
                     if (sessionPath) cwd = sessionPath;
                 } catch (_) {}
-                attachAndWire(sessionID, cwd, false);
+                const ok = attachAndWire(sessionID, cwd, false);
+                if (!ok) return;
             } else {
                 try { ws.send(JSON.stringify({ type: 'error', message: `Session not found: ${sessionID}` })); } catch (e) {}
                 ws.close(1008, 'Invalid session');
@@ -114,8 +140,14 @@ function setupWebSocketServer(server) {
                 cwd = projectPath;
             }
             const tmuxName = generateTmuxSessionName(projectName);
-            createTmuxSession(tmuxName, cwd);
-            attachAndWire(tmuxName, cwd, true);
+            const created = createTmuxSession(tmuxName, cwd);
+            if (!created) {
+                try { ws.send(JSON.stringify({ type: 'error', message: 'Failed to create tmux session' })); } catch (_) {}
+                try { ws.close(1011, 'tmux create failed'); } catch (_) {}
+                return;
+            }
+            const ok = attachAndWire(tmuxName, cwd, true);
+            if (!ok) return;
         } else {
             try { ws.send(JSON.stringify({ type: 'error', message: 'Missing sessionID or projectName in query string' })); } catch (e) {}
             ws.close(1008, 'Invalid session');
