@@ -9,9 +9,9 @@ let terminal = null;
 let fitAddon = null;
 let ws;
 let isConnected = false;
-let reconnectAttempts = 0; // kept minimal, but we won't auto-retry
-const MAX_RECONNECT_ATTEMPTS = 0;
-const RECONNECT_BASE_DELAY = 0;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_BASE_DELAY = 1000; // 1 second
 
 // Function to properly cleanup existing WebSocket connection
 function cleanupWebSocket() {
@@ -89,7 +89,15 @@ const connectWebSocket = () => {
     ws.onopen = () => {
         console.log('Connected to terminal');
         isConnected = true;
-        reconnectAttempts = 0;
+        reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+        
+        // Force screen refresh on reconnection
+        if (sessionID) {
+            // Clear texture atlas to force redraw
+            terminal.clearTextureAtlas();
+            // Refresh the entire terminal display
+            terminal.refresh(0, terminal.rows - 1);
+        }
         
         // Send initial terminal size
         ws.send(JSON.stringify({
@@ -143,13 +151,21 @@ const connectWebSocket = () => {
     ws.onclose = () => {
         console.log('WebSocket connection closed');
         isConnected = false;
-        terminal.write('\r\nConnection closed. Use Back to Sessions and re-open to reattach.\r\n');
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts);
+            reconnectAttempts++;
+            console.log(`Attempting to reconnect in ${delay / 1000} seconds... (Attempt ${reconnectAttempts})`);
+            terminal.write(`\r\nConnection lost. Attempting to reconnect...\r\n`);
+            setTimeout(connectWebSocket, delay);
+        } else {
+            terminal.write('\r\nConnection lost. Max reconnect attempts reached. Go back to session list.\r\n');
+        }
     };
 
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        terminal.write('\r\nWebSocket error occurred.\r\n');
-        ws.close();
+        terminal.write('\r\nWebSocket error occurred. Attempting to reconnect.\r\n');
+        ws.close(); // Force close to trigger onclose and reconnect logic
     };
 };
 
@@ -218,7 +234,11 @@ document.addEventListener('visibilitychange', () => {
     if (!document.hidden && terminal) {
         terminal.focus();
         
-        // No auto-reconnect; user can trigger a new connection via UI
+        // If we have a terminal but no connection, try to reconnect
+        if (!isConnected) {
+            console.log('Page visible again, reconnecting');
+            connectWebSocket();
+        }
     } else if (document.hidden) {
         // Page is being hidden, but don't cleanup completely
         // Just close WebSocket to free up resources on mobile/background tabs
