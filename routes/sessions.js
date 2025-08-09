@@ -23,36 +23,27 @@ router.get('/', (req, res) => {
         tmuxSessions = [];
     }
 
-    // Compose response with status captured from tmux active pane
-    const NUM_STATUS_LINES = 6;
+    // Build response using tmux capture-pane for recent status
     const all = tmuxSessions.map(ts => {
-        let status = 'No output';
+        let status = '';
         try {
-            // Capture last ~200 lines, then trim to last NUM_STATUS_LINES to keep payload small
-            const captured = execSync(`tmux capture-pane -p -J -t ${ts.name}: -S -200`, { encoding: 'utf8' });
-            const lines = (captured || '').split('\n');
-            const last = lines.slice(-NUM_STATUS_LINES).join('\n').trim();
-            if (last) status = last;
-        } catch (e) {
-            status = 'Unavailable';
+            // Capture last 10 lines from the active pane of the session
+            const out = execSync(`tmux capture-pane -pt ${JSON.stringify(ts.name).slice(1, -1)} -S -10`, { encoding: 'utf8' });
+            status = (out || '').trim();
+        } catch (_) {
+            status = '';
         }
 
-        // Derive project name from our tmux naming convention: msh-<id>-<project>
+        // Try to infer project name from our tmux naming scheme: msh-<id>-<project>
         let projectName = 'Unknown';
-        try {
-            const prefix = 'msh-';
-            if (ts.name && ts.name.startsWith(prefix)) {
-                const tail = ts.name.slice(prefix.length);
-                const firstDash = tail.indexOf('-');
-                if (firstDash !== -1) {
-                    projectName = tail.slice(firstDash + 1) || 'Unknown';
-                }
-            }
-        } catch (_) {}
+        const parts = ts.name.split('-');
+        if (parts[0] === 'msh' && parts.length >= 3) {
+            projectName = parts.slice(2).join('-');
+        }
 
         return {
             id: ts.name,
-            status,
+            status: status || 'No output',
             created: ts.createdStr || new Date().toISOString(),
             projectName
         };
