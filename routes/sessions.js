@@ -34,7 +34,26 @@ router.get('/', (req, res) => {
 
         let status = 'No output';
         try {
-            const captured = execSync(`tmux capture-pane -p -J -S -200 -t ${ts.name}:`, {
+            // Resolve active window and pane for the session
+            let winIdx = '0';
+            try {
+                const winList = execSync(`tmux list-windows -F "#{window_index} #{window_active}" -t ${ts.name}`, { encoding: 'utf8' })
+                    .trim()
+                    .split('\n');
+                const activeWin = winList.find(l => l.split(' ')[1] === '1') || winList[0];
+                if (activeWin) winIdx = activeWin.split(' ')[0];
+            } catch (_) {}
+
+            let paneIdx = '0';
+            try {
+                const paneList = execSync(`tmux list-panes -F "#{pane_index} #{pane_active}" -t ${ts.name}:${winIdx}`, { encoding: 'utf8' })
+                    .trim()
+                    .split('\n');
+                const activePane = paneList.find(l => l.split(' ')[1] === '1') || paneList[0];
+                if (activePane) paneIdx = activePane.split(' ')[0];
+            } catch (_) {}
+
+            const captured = execSync(`tmux capture-pane -p -J -S -1200 -t ${ts.name}:${winIdx}.${paneIdx}`, {
                 encoding: 'utf8',
                 stdio: ['ignore', 'pipe', 'ignore']
             });
