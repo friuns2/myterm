@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { PROJECTS_DIR } = require('./middleware/security');
-const WebSocket = require('ws');
+const http = require('http');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -12,7 +12,7 @@ function showHelp() {
     console.log('MSH - MyShell Project Manager');
     console.log('Usage:');
     console.log('  node msh.js -p <path>                 Add a project folder');
-    console.log('  node msh.js -s <project> <command>    Create session for project and run command');
+    console.log('  node msh.js -s <project> <command>    Create session for project and run command (HTTP)');
     console.log('  node msh.js --help       Show this help message');
     console.log('');
     console.log('Examples:');
@@ -118,75 +118,52 @@ if (sIndex !== -1) {
     const PASSWORD = 'er54s4';
     const authHeader = 'Basic ' + Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');
 
-    const protocol = 'ws:';
-    const host = 'localhost:3531';
-    const url = `${protocol}//${host}?projectName=${encodeURIComponent(projectName)}`;
-
-    const ws = new WebSocket(url, {
-        headers: { Authorization: authHeader }
-    });
-
-    let sessionIdFromServer = null;
-    let lastOutputAt = Date.now();
-    let idleTimer = null;
-    const IDLE_CLOSE_MS = 1500;
-
-    const scheduleCloseIfIdle = () => {
-        if (idleTimer) clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-            try { ws.close(); } catch (_) {}
-        }, IDLE_CLOSE_MS);
+    const postData = JSON.stringify({ projectName, command: commandLine });
+    const options = {
+        hostname: 'localhost',
+        port: 3531,
+        path: '/api/sessions',
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+            'Authorization': authHeader
+        }
     };
 
-    ws.on('open', () => {
-        // Send the command to the shell (with newline to execute)
-        const payload = { type: 'input', data: `${commandLine}\n` };
-        ws.send(JSON.stringify(payload));
-        scheduleCloseIfIdle();
-    });
-
-    ws.on('message', (data) => {
-        try {
-            const msg = JSON.parse(String(data));
-            switch (msg.type) {
-                case 'sessionID':
-                    sessionIdFromServer = msg.sessionID;
-                    console.log(`Session created: ${sessionIdFromServer} (project: ${projectName})`);
-                    break;
-                case 'output':
-                    process.stdout.write(msg.data);
-                    lastOutputAt = Date.now();
-                    scheduleCloseIfIdle();
-                    break;
-                case 'exit':
-                    console.log(`\nProcess exited with code ${msg.exitCode ?? ''}`);
-                    try { ws.close(); } catch (_) {}
-                    break;
-                case 'error':
-                    console.error(`Error: ${msg.message}`);
-                    try { ws.close(); } catch (_) {}
-                    process.exitCode = 1;
-                    break;
-                default:
-                    // ignore
-                    break;
+    const req = http.request(options, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                    if (data.sessionID) {
+                        console.log(`Session created: ${data.sessionID} (project: ${projectName})`);
+                    }
+                    if (data.output) {
+                        process.stdout.write(data.output);
+                    }
+                    process.exit(0);
+                } else {
+                    console.error('Request failed:', data.error || body || `HTTP ${res.statusCode}`);
+                    process.exit(1);
+                }
+            } catch (e) {
+                console.error('Invalid response from server:', e.message || String(e));
+                process.exit(1);
             }
-        } catch (e) {
-            // Non-JSON data should not occur; ignore
-        }
+        });
     });
 
-    ws.on('close', () => {
-        if (sessionIdFromServer) {
-            console.log(`\nDetached from session ${sessionIdFromServer}. It will stay alive for a while.`);
-        }
-        process.exit(0);
-    });
-
-    ws.on('error', (err) => {
-        console.error('WebSocket error:', err.message || String(err));
+    req.on('error', (e) => {
+        console.error(`Request error: ${e.message}`);
         process.exit(1);
     });
+
+    req.write(postData);
+    req.end();
     
     // Do not fall through to the unknown command handler
     return;
