@@ -7,46 +7,56 @@ const router = express.Router();
 
 // API endpoint to get all sessions across all projects
 router.get('/', (req, res) => {
-    // Source of truth: tmux
+    // Source of truth: list tmux sessions; augment with in-memory attach clients if any
     let tmuxSessions = [];
     try {
-        const fmt = [
-            '#{session_name}',
-            '#{session_created_string}',
-            '#{session_path}',
-            '#{session_attached}',
-            '#{session_windows}',
-            '#{session_last_attached}',
-            '#{session_activity}'
-        ].join('|');
-        const out = execSync(`tmux list-sessions -F "${fmt}"`, { encoding: 'utf8' });
+        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created_string}|#{session_path}"', { encoding: 'utf8' });
         tmuxSessions = out
             .split('\n')
             .filter(Boolean)
             .map(line => {
-                const [name, createdStr, pathStr, attachedStr, windowsStr, lastAttachedEpoch, activityEpoch] = line.split('|');
-                const attachedClients = parseInt(attachedStr, 10) || 0;
-                const windows = parseInt(windowsStr, 10) || 0;
-                const lastAttached = lastAttachedEpoch ? new Date(parseInt(lastAttachedEpoch, 10) * 1000).toISOString() : null;
-                const lastActivity = activityEpoch ? new Date(parseInt(activityEpoch, 10) * 1000).toISOString() : null;
-                const status = attachedClients > 0 ? `Attached (${attachedClients})` : 'Detached';
-                return {
-                    id: name,
-                    status,
-                    created: createdStr || new Date().toISOString(),
-                    projectName: 'Unknown',
-                    path: pathStr,
-                    attachedClients,
-                    windows,
-                    lastAttached,
-                    lastActivity
-                };
+                const [name, createdStr, pathStr] = line.split('|');
+                return { name, createdStr, pathStr };
             });
     } catch (e) {
+        // No tmux or no sessions
         tmuxSessions = [];
     }
 
-    res.json(tmuxSessions);
+    // Use tmux sessions as the source of truth. Fetch last 3 lines from pane for status.
+    const all = tmuxSessions.map(ts => {
+        // Infer project name from msh-<id>-<project>
+        let projectName = 'Unknown';
+        const match = ts.name && ts.name.match(/^msh-[0-9a-f]{8}-(.+)$/i);
+        if (match) {
+            projectName = match[1];
+        }
+
+        let status = 'No output';
+        try {
+            const captured = execSync(`tmux capture-pane -p -J -S -200 -t ${ts.name}:`, {
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'ignore']
+            });
+            if (captured && typeof captured === 'string') {
+                const lines = captured.split('\n');
+                const lastLines = lines.slice(-3);
+                const joined = lastLines.join('\n').trim();
+                if (joined) status = joined;
+            }
+        } catch (_) {
+            // ignore errors
+        }
+
+        return {
+            id: ts.name,
+            status,
+            created: ts.createdStr || new Date().toISOString(),
+            projectName
+        };
+    });
+
+    res.json(all);
 });
 
 
