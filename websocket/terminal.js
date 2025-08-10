@@ -61,6 +61,16 @@ function setupWebSocketServer(server) {
             }
         }
 
+        function enableMouseForSession(name) {
+            try {
+                execSync(`tmux set-option -t ${name} mouse on`);
+                return true;
+            } catch (error) {
+                console.error('Failed to enable tmux mouse:', error.message);
+                return false;
+            }
+        }
+
         function attachToTmux(name, cwd) {
             const env = process.env;
             return pty.spawn('tmux', ['attach-session', '-t', name], {
@@ -123,6 +133,7 @@ function setupWebSocketServer(server) {
                     const sessionPath = execSync(`tmux display-message -p -t ${sessionID} "#{session_path}"`, { encoding: 'utf8' }).trim();
                     if (sessionPath) cwd = sessionPath;
                 } catch (_) {}
+                enableMouseForSession(sessionID);
                 const ok = attachAndWire(sessionID, cwd, false);
                 if (!ok) return;
             } else {
@@ -146,6 +157,7 @@ function setupWebSocketServer(server) {
                 try { ws.close(1011, 'tmux create failed'); } catch (_) {}
                 return;
             }
+            enableMouseForSession(tmuxName);
             const ok = attachAndWire(tmuxName, cwd, true);
             if (!ok) return;
         } else {
