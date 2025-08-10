@@ -23,22 +23,22 @@ router.get('/', (req, res) => {
         tmuxSessions = [];
     }
 
-    // Build response using tmux capture-pane, keep printable text, collapse blank lines, and show last 5 lines
+    // Build response using tmux capture-pane, keep only words/punctuation, then last 200 chars
     const all = tmuxSessions.map(ts => {
         let status = '';
         try {
             const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
+            // Capture a reasonable number of recent lines, then clean in JS
             const cmd = `tmux capture-pane -pt ${safeName} -S -200 || true`;
             const out = execSync(cmd, { encoding: 'utf8' });
             const ansiRegex = /\x1B\[[0-9;?]*[ -\/]*[@-~]/g; // strip ANSI CSI sequences
             let cleaned = (out || '').replace(ansiRegex, '');
-            // Normalize newlines and keep only printable ASCII and newlines
-            cleaned = cleaned.replace(/\r\n?/g, '\n').replace(/[^\x20-\x7E\n]/g, '');
-            // Collapse multiple blank lines
-            cleaned = cleaned.replace(/\n{2,}/g, '\n');
-            // Keep last 5 lines
-            const lines = cleaned.trim().split('\n');
-            status = lines.slice(-5).join('\n');
+            // Keep only printable ASCII; drop control chars
+            cleaned = cleaned.replace(/[^\x20-\x7E\n\r\t]/g, '');
+            // Remove newlines/tabs and collapse whitespace
+            cleaned = cleaned.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            // Return only last 200 characters
+            status = cleaned.length > 500 ? cleaned.slice(-500) : cleaned;
         } catch (_) {
             status = '';
         }
