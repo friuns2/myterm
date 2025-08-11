@@ -23,12 +23,17 @@ router.get('/', (req, res) => {
         tmuxSessions = [];
     }
 
-    // Build response using tmux capture-pane, keep only words/punctuation, then last 200 chars
+    // Build response: include raw pane thumbnail (visible screen with ANSI)
     const all = tmuxSessions.map(ts => {
         let status = '';
+        let thumbnail = '';
         try {
             const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
-            // Capture a reasonable number of recent lines, then clean in JS
+            // Capture visible pane with ANSI for thumbnail
+            const thumbCmd = `tmux capture-pane -pet ${safeName}`; // -p print, -e include escapes, -t target
+            thumbnail = execSync(thumbCmd, { encoding: 'utf8' });
+
+            // Also build legacy short status text (ANSI stripped, collapsed)
             const cmd = `tmux capture-pane -pt ${safeName} -S -200 || true`;
             const out = execSync(cmd, { encoding: 'utf8' });
             const ansiRegex = /\x1B\[[0-9;?]*[ -\/]*[@-~]/g; // strip ANSI CSI sequences
@@ -41,6 +46,7 @@ router.get('/', (req, res) => {
             status = cleaned.length > 500 ? cleaned.slice(-500) : cleaned;
         } catch (_) {
             status = '';
+            thumbnail = '';
         }
 
         // Try to infer project name from our tmux naming scheme: msh-<id>-<project>
@@ -53,6 +59,7 @@ router.get('/', (req, res) => {
         return {
             id: ts.name,
             status: status || 'No output',
+            thumbnail: thumbnail || '',
             created: ts.createdStr || new Date().toISOString(),
             projectName
         };
