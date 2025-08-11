@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const pty = require('node-pty');
+const pty = require('node-pty-prebuilt-multiarch');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
