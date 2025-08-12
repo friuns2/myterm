@@ -19,8 +19,12 @@ function startSessionsStatusAutoRefresh() {
             const sessions = await res.json();
             sessions.forEach(session => {
                 const el = document.getElementById(`session-thumb-${session.id}`);
-                if (el) {
-                    el.innerHTML = ansiToHtml(session.thumbnail || '');
+                if (el) el.innerHTML = ansiToHtml(session.thumbnail || '');
+                const commitEl = document.getElementById(`session-commit-${session.id}`);
+                if (commitEl) {
+                    const subject = session.lastCommitSubject || '';
+                    const hash = session.lastCommitShortHash || '';
+                    commitEl.textContent = subject && hash ? `${hash} — ${subject}` : '';
                 }
             });
         } catch (e) {
@@ -98,6 +102,7 @@ async function showSessionsAndProjectsList() {
                                                 <div class="session-thumb">
                                                     <pre id="session-thumb-${session.id}">${ansiToHtml(session.thumbnail || '')}</pre>
                                                 </div>
+                                                <p class="text-xs opacity-70 mt-2" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
                                             <div class="flex gap-2">

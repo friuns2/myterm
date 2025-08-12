@@ -27,6 +27,8 @@ router.get('/', (req, res) => {
     const all = tmuxSessions.map(ts => {
         let status = '';
         let thumbnail = '';
+        let lastCommitSubject = '';
+        let lastCommitShortHash = '';
         try {
             const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
             // Capture visible pane with ANSI for thumbnail
@@ -49,6 +51,19 @@ router.get('/', (req, res) => {
             thumbnail = '';
         }
 
+        // Try to fetch last commit details if inside a git repo
+        try {
+            if (ts.pathStr) {
+                const isGit = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} rev-parse --is-inside-work-tree 2>/dev/null || echo no`, { encoding: 'utf8' }).trim();
+                if (isGit === 'true') {
+                    lastCommitSubject = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} log -1 --pretty=%s`, { encoding: 'utf8' }).trim();
+                    lastCommitShortHash = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} log -1 --pretty=%h`, { encoding: 'utf8' }).trim();
+                }
+            }
+        } catch (_) {
+            // ignore git errors
+        }
+
         // Try to infer project name from our tmux naming scheme: msh-<id>-<project>
         let projectName = 'Unknown';
         const parts = ts.name.split('-');
@@ -60,6 +75,8 @@ router.get('/', (req, res) => {
             id: ts.name,
             status: status || 'No output',
             thumbnail: thumbnail || '',
+            lastCommitSubject,
+            lastCommitShortHash,
             created: ts.createdStr || new Date().toISOString(),
             projectName
         };
