@@ -82,6 +82,15 @@ function listAbducoSessions() {
     }
 }
 
+function hasCommand(cmd) {
+    try {
+        execSync(process.platform === 'win32' ? `where ${cmd}` : `command -v ${cmd}`, { stdio: 'ignore' });
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
 function rehydrateSessionsFromAbduco() {
     const names = listAbducoSessions();
     names.forEach(name => {
@@ -227,7 +236,12 @@ function setupWebSocketServer(server) {
             const mergedEnv = process.env;
             
             // Use abduco to create or attach the session
-            ptyProcess = pty.spawn('abduco', ['-A', sessionName, shell], {
+            // Prefer tmux for scrollback preservation if available
+            const useTmux = hasCommand('tmux');
+            const abducoArgs = useTmux
+                ? ['-A', sessionName, 'tmux', 'new-session', '-A', '-s', sessionName]
+                : ['-A', sessionName, shell];
+            ptyProcess = pty.spawn('abduco', abducoArgs, {
                 name: 'xterm-color',
                 cols: 80,
                 rows: 24,
