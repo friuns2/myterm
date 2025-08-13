@@ -28,35 +28,11 @@ router.get('/', (req, res) => {
 		let thumbnail = '';
 		let lastCommitSubject = '';
 		let lastCommitShortHash = '';
-		let gitBranch = '';
-		let gitDirty = false;
 		try {
 			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
-			// Try to resize pane to 200x200 cells (best effort; may not apply if target differs)
-			try { execSync(`tmux resize-pane -t ${safeName}:0.0 -x 200 -y 200`); } catch (_) { try { execSync(`tmux resize-pane -t ${safeName} -x 200 -y 200`); } catch (_) {} }
-			// Capture last 200 lines with ANSI
-			const thumbCmd = `tmux capture-pane -pet ${safeName} -S -200`;
+			// Capture last 24 lines with ANSI, join wraps for smaller payload
+			const thumbCmd = `tmux capture-pane -epJ -S -24 -t ${safeName}`; // -p print, -e escapes, -J join wraps
 			thumbnail = execSync(thumbCmd, { encoding: 'utf8' });
-			// Enforce 200 cols x 200 lines while preserving ANSI sequences
-			const maxCols = 200, maxLines = 200;
-			const csi = /\x1B\[[0-9;?]*[ -\/]*[@-~]/y;
-			function trimAnsiLine(line) {
-				let out = '', cols = 0;
-				for (let i = 0; i < line.length && cols < maxCols; ) {
-					if (line.charCodeAt(i) === 27) { // ESC
-						csi.lastIndex = i;
-						const m = csi.exec(line);
-						if (m) { out += m[0]; i += m[0].length; continue; }
-					}
-					const ch = line[i];
-					if (ch === '\r') { i++; continue; }
-					out += ch; i++; cols++;
-				}
-				return out;
-			}
-			const lines = (thumbnail || '').split('\n');
-			const trimmed = lines.slice(Math.max(0, lines.length - maxLines)).map(trimAnsiLine);
-			thumbnail = trimmed.join('\n') + '\x1b[0m';
 		} catch (_) {
 			thumbnail = '';
 		}
@@ -87,26 +63,11 @@ router.get('/', (req, res) => {
 			}
 		} catch (_) {}
 
-		// Git branch and dirty status
-		try {
-			if (ts.pathStr) {
-				const isGit = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} rev-parse --is-inside-work-tree 2>/dev/null || echo no`, { encoding: 'utf8' }).trim();
-				if (isGit === 'true') {
-					gitBranch = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} rev-parse --abbrev-ref HEAD`, { encoding: 'utf8' }).trim();
-					const porcelain = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} status --porcelain`, { encoding: 'utf8' });
-					gitDirty = porcelain.trim().length > 0;
-				}
-			}
-		} catch (_) {}
-
 		return {
 			id: ts.name,
 			thumbnail: thumbnail || '',
 			lastCommitSubject,
 			lastCommitShortHash,
-			title: projectName || ts.name,
-			gitBranch,
-			gitDirty,
 			created: ts.createdStr || new Date().toISOString(),
 			projectName
 		};

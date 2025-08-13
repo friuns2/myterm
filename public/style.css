@@ -51,8 +51,8 @@
 
 /* Session thumbnail styling */
 .session-thumb {
-    width: 200ch; /* 200 characters width */
-    height: 200em; /* approximate 200 lines; adjusted via pre line-height */
+    width: 420px;
+    height: 300px;
     overflow: hidden;
     background: #000;
     border-radius: 6px;
@@ -61,10 +61,10 @@
 
 .session-thumb pre {
     margin: 0;
-    padding: 4px;
-    line-height: 1.0;
+    padding: 8px;
+    line-height: 1.05;
     font-family: "Courier New", monospace;
-    font-size: 8px; /* small font to fit more text */
+    font-size: 7px; /* smaller font to fit more text */
     color: #ddd;
     white-space: pre; /* preserve layout */
 }
