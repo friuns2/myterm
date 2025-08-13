@@ -23,7 +23,14 @@ router.get('/', (req, res) => {
             const lastStatusLines = lines.slice(-NUM_STATUS_LINES);
             status = lastStatusLines.join('\n').trim() || 'Active session';
             const lastScreenLines = lines.slice(-NUM_SCREEN_LINES);
-            screen = lastScreenLines.join('\n').trim() || status;
+            // Strip ANSI escape codes and normalize width to cols
+            const ansiRegex = /\x1b\[[0-9;]*m/g;
+            const normalized = lastScreenLines.map(l => {
+                const noAnsi = (l || '').replace(ansiRegex, '');
+                const cut = noAnsi.slice(0, cols);
+                return cut.padEnd(cols, ' ');
+            });
+            screen = normalized.join('\n').trimEnd() || status;
         }
         
         allSessions.push({
