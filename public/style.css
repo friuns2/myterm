@@ -72,7 +72,7 @@
     padding: 8px;
 	line-height: 1em;
     font-family: "Courier New", monospace;
-	font-size: 8px; /* small font to fit more text */
+	font-size: 1.2px; /* 200ch x 200em ~ 240x240px */
     color: #ddd;
     white-space: pre; /* preserve layout */
 	width: 200ch;
