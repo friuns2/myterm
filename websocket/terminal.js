@@ -67,9 +67,9 @@ function setupWebSocketServer(server) {
             }
         }
 
-        function attachToTmux(name, cwd) {
+        function spawnInteractiveZsh(cwd) {
             const env = process.env;
-            return pty.spawn('tmux', ['attach-session', '-t', name], {
+            return pty.spawn('zsh', ['-i'], {
                 name: 'xterm-color',
                 cols: 80,
                 rows: 24,
@@ -80,7 +80,7 @@ function setupWebSocketServer(server) {
 
         function attachAndWire(tmuxName, cwdForAttach, sendId) {
             try {
-                ptyProcess = attachToTmux(tmuxName, cwdForAttach);
+                ptyProcess = spawnInteractiveZsh(cwdForAttach);
             } catch (error) {
                 console.error('Failed to spawn tmux attach:', error.message || String(error));
                 try { ws.send(JSON.stringify({ type: 'error', message: 'Failed to attach to tmux. Is tmux installed?' })); } catch (_) {}
@@ -91,6 +91,11 @@ function setupWebSocketServer(server) {
             if (sendId) {
                 ws.send(JSON.stringify({ type: 'sessionID', sessionID: tmuxName }));
             }
+
+            // Run tmux attach inside zsh after a tiny delay to let zsh initialize
+            setTimeout(() => {
+                try { ptyProcess.write(`tmux attach-session -t ${tmuxName}\r`); } catch (_) {}
+            }, 50);
 
             ptyProcess.onData((data) => {
                 if (ws.readyState === WebSocket.OPEN) {
