@@ -12,8 +12,7 @@ router.get('/', (req, res) => {
     const allSessions = [];
     sessions.forEach((session, sessionID) => {
         // Get last several lines from buffer for status (multiline)
-        const buf = (session.buffer && session.buffer.length > 0) ? session.buffer : '';
-        const lines = buf.split('\n');
+        const lines = session.buffer.split('\n');
         const NUM_STATUS_LINES = 6; // keep it aligned with UI clamp
         let status = 'No output';
         if (lines.length > 0) {
@@ -33,27 +32,22 @@ router.get('/', (req, res) => {
 
 
 
-// API endpoint to kill a session
-router.delete('/:sessionId', async (req, res) => {
+// API endpoint to kill a session (dtach-aware)
+router.delete('/:sessionId', (req, res) => {
     const sessionId = req.params.sessionId;
     const { getSessions, deleteSession } = require('../websocket/terminal');
     const sessions = getSessions();
     const session = sessions.get(sessionId);
-    
-    if (session) {
-        try {
-            await deleteSession(sessionId);
-            res.json({ success: true, message: 'Session killed successfully' });
-        } catch (e) {
-            res.status(500).json({ success: false, message: e.message });
-        }
-    } else {
-        try {
-            await deleteSession(sessionId);
-            res.json({ success: true, message: 'Session killed if existed' });
-        } catch (e) {
-            res.status(404).json({ success: false, message: 'Session not found' });
-        }
+
+    if (!session) {
+        return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    try {
+        deleteSession(sessionId);
+        return res.json({ success: true, message: 'Session killed successfully' });
+    } catch (e) {
+        return res.status(500).json({ success: false, message: e.message });
     }
 });
 

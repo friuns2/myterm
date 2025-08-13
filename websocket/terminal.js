@@ -3,173 +3,124 @@ const pty = require('node-pty');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
 
 // Store active terminal sessions
-// session map value shape:
-// { ptyProcess, ws, buffer, created, projectName, sessionName, socketPath, logPath }
-const sessions = new Map();
-const MAX_BUFFER_SIZE = 100 * 1024; // 100kb
+const sessions = new Map(); // Map: sessionID -> { ptyProcess, ws, timeoutId, buffer, projectName, socketPath, logPath, pidPath, metaPath }
+const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
+const MAX_BUFFER_SIZE = 100 * 1024; // Maximum number of characters to buffer (10kb)
 
-const LOGS_DIR = path.join(__dirname, '..', 'worktrees', 'logs');
-const SOCKETS_DIR = path.join(__dirname, '..', 'worktrees', 'sockets');
-function ensureLogsDir() {
+// dtach storage directory
+const DTACH_DIR = path.join(os.tmpdir(), 'myshell23-dtach');
+ensureDir(DTACH_DIR);
+
+function hasDtach() {
     try {
-        fs.mkdirSync(LOGS_DIR, { recursive: true });
+        execFileSync('which', ['dtach'], { stdio: 'ignore' });
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function ensureDir(dirPath) {
+    try {
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+    } catch (e) {
+        console.error('Failed to ensure directory:', dirPath, e);
+    }
+}
+
+function sessionPaths(sessionID) {
+    const socketPath = path.join(DTACH_DIR, `${sessionID}.sock`);
+    const logPath = path.join(DTACH_DIR, `${sessionID}.log`);
+    const pidPath = path.join(DTACH_DIR, `${sessionID}.pid`);
+    const metaPath = path.join(DTACH_DIR, `${sessionID}.json`);
+    return { socketPath, logPath, pidPath, metaPath };
+}
+
+function tailFile(filePath, maxBytes) {
+    try {
+        const stats = fs.existsSync(filePath) ? fs.statSync(filePath) : null;
+        if (!stats) return '';
+        const size = stats.size;
+        const start = Math.max(0, size - maxBytes);
+        const fd = fs.openSync(filePath, 'r');
+        const buf = Buffer.alloc(size - start);
+        fs.readSync(fd, buf, 0, buf.length, start);
+        fs.closeSync(fd);
+        return buf.toString('utf8');
+    } catch (e) {
+        return '';
+    }
+}
+
+function appendToFile(filePath, data) {
+    try {
+        fs.appendFileSync(filePath, data);
     } catch (e) {
         // ignore
     }
 }
 
-function ensureSocketsDir() {
+function writeJSON(filePath, obj) {
     try {
-        fs.mkdirSync(SOCKETS_DIR, { recursive: true });
+        fs.writeFileSync(filePath, JSON.stringify(obj, null, 2));
     } catch (e) {
         // ignore
     }
 }
 
-function buildSessionName(sessionID, projectName) {
-    const proj = projectName ? encodeURIComponent(projectName) : 'default';
-    return `msh_${sessionID}_${proj}`;
-}
-
-function parseProjectFromSessionName(sessionName) {
-    const parts = sessionName.split('_');
-    if (parts.length >= 3 && parts[0] === 'msh') {
-        try {
-            return decodeURIComponent(parts.slice(2).join('_'));
-        } catch (e) {
-            return parts.slice(2).join('_');
-        }
-    }
-    return null;
-}
-
-function getLogPath(sessionID) {
-    ensureLogsDir();
-    return path.join(LOGS_DIR, `${sessionID}.log`);
-}
-
-function getSocketPath(sessionID, projectName) {
-    ensureSocketsDir();
-    const base = buildSessionName(sessionID, projectName);
-    return path.join(SOCKETS_DIR, `${base}.sock`);
-}
-
-function readLogTail(logPath) {
+function readJSON(filePath) {
     try {
-        if (fs.existsSync(logPath)) {
-            const data = fs.readFileSync(logPath, 'utf8');
-            if (data.length > MAX_BUFFER_SIZE) {
-                return data.slice(-MAX_BUFFER_SIZE);
-            }
-            return data;
-        }
+        if (!fs.existsSync(filePath)) return null;
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch (e) {
-        // ignore
+        return null;
     }
-    return '';
 }
 
-function appendToLog(logPath, data) {
+function fileIsSocket(filePath) {
     try {
-        fs.appendFile(logPath, data, () => {});
+        const s = fs.statSync(filePath);
+        return s.isSocket();
     } catch (e) {
-        // ignore
+        return false;
     }
-}
-
-function listDtachSockets() {
-    ensureSocketsDir();
-    try {
-        return fs.readdirSync(SOCKETS_DIR)
-            .filter(f => f.startsWith('msh_') && f.endsWith('.sock'))
-            .map(f => f.replace(/\.sock$/, ''));
-    } catch (e) {
-        return [];
-    }
-}
-
-function rehydrateSessionsFromDtach() {
-    const names = listDtachSockets();
-    names.forEach(name => {
-        const parts = name.split('_');
-        if (parts.length >= 3 && parts[0] === 'msh') {
-            const sessionID = parts[1];
-            const projectName = parseProjectFromSessionName(name);
-            if (!sessions.has(sessionID)) {
-                const logPath = getLogPath(sessionID);
-                const buffer = readLogTail(logPath);
-                const socketPath = path.join(SOCKETS_DIR, `${name}.sock`);
-                sessions.set(sessionID, {
-                    ptyProcess: null,
-                    ws: null,
-                    buffer,
-                    created: new Date().toISOString(),
-                    projectName,
-                    sessionName: name,
-                    socketPath,
-                    logPath
-                });
-            }
-        }
-    });
-}
-
-function wirePtyHandlers(sessionID) {
-    const session = sessions.get(sessionID);
-    if (!session || !session.ptyProcess) return;
-    const proc = session.ptyProcess;
-    // Avoid double wiring by marking a symbol on the proc
-    if (proc.__mshWired) return;
-    proc.__mshWired = true;
-    proc.onData((data) => {
-        const s = sessions.get(sessionID);
-        if (!s) return;
-        s.buffer = (s.buffer || '') + data;
-        if (s.buffer.length > MAX_BUFFER_SIZE) s.buffer = s.buffer.slice(-MAX_BUFFER_SIZE);
-        appendToLog(s.logPath || getLogPath(sessionID), data);
-        if (s.ws && s.ws.readyState === WebSocket.OPEN) {
-            try { s.ws.send(JSON.stringify({ type: 'output', data })); } catch (_) {}
-        }
-    });
-    proc.onExit(({ exitCode, signal }) => {
-        const s = sessions.get(sessionID);
-        if (s) s.ptyProcess = null;
-        if (s && s.ws && s.ws.readyState === WebSocket.OPEN) {
-            try { s.ws.send(JSON.stringify({ type: 'exit', exitCode, signal })); } catch (_) {}
-        }
-    });
-}
-
-function killDtachSessionBySocket(socketPath) {
-    return new Promise((resolve) => {
-        try {
-            const killer = pty.spawn('dtach', ['-a', socketPath], {
-                name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
-            });
-            let settled = false;
-            const tidy = (ok) => { if (!settled) { settled = true; resolve(ok); } };
-            const timer = setTimeout(() => {
-                try { killer.kill(); } catch (_) {}
-                tidy(false);
-            }, 4000);
-            killer.onData(() => {});
-            setTimeout(() => { try { killer.write('exit\r'); } catch (_) {} }, 50);
-            killer.onExit(() => { clearTimeout(timer); tidy(true); });
-        } catch (e) {
-            resolve(false);
-        }
-    });
 }
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
-    // Attempt to recover any existing dtach sessions on startup
-    rehydrateSessionsFromDtach();
+
+    // On startup, auto-register any lingering dtach sessions
+    if (hasDtach()) {
+        try {
+            const files = fs.readdirSync(DTACH_DIR);
+            files.filter(f => f.endsWith('.sock')).forEach(sockFile => {
+                const sessionID = sockFile.replace(/\.sock$/, '');
+                const { socketPath, logPath, pidPath, metaPath } = sessionPaths(sessionID);
+                if (fileIsSocket(socketPath)) {
+                    const meta = readJSON(metaPath) || {};
+                    sessions.set(sessionID, {
+                        ptyProcess: null,
+                        ws: null,
+                        timeoutId: null,
+                        buffer: tailFile(logPath, MAX_BUFFER_SIZE),
+                        created: meta.created || new Date().toISOString(),
+                        projectName: meta.projectName || 'Unknown',
+                        socketPath,
+                        logPath,
+                        pidPath,
+                        metaPath
+                    });
+                }
+            });
+        } catch (e) {
+            // ignore
+        }
+    }
 
     wss.on('connection', (ws, req) => {
         console.log('Terminal connected');
@@ -181,50 +132,85 @@ function setupWebSocketServer(server) {
         let ptyProcess;
 
         if (sessionID && sessions.has(sessionID)) {
-            // Reconnect to existing session; re-attach to dtach if needed
+            // Attach to existing dtach session by spawning a dtach client under a PTY
             const session = sessions.get(sessionID);
-            if (!session.sessionName) {
-                session.sessionName = buildSessionName(sessionID, session.projectName);
-            }
-            if (!session.ptyProcess) {
-                const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
-                const socketPath = session.socketPath || getSocketPath(sessionID, session.projectName);
-                session.socketPath = socketPath;
-                ptyProcess = pty.spawn('dtach', ['-a', socketPath], {
-                    name: 'xterm-color',
-                    cols: 80,
-                    rows: 24,
-                    cwd: process.cwd(),
-                    env: process.env
-                });
-                session.ptyProcess = ptyProcess;
-                wirePtyHandlers(sessionID);
-            } else {
+            const { socketPath, logPath } = session;
+            if (!hasDtach()) {
+                // Fallback: no dtach available; just rewire ws to existing PTY process if any
+                // Clear previous timeout
+                if (session.timeoutId) { clearTimeout(session.timeoutId); session.timeoutId = null; }
+                if (session.ws && session.ws !== ws && session.ws.readyState === WebSocket.OPEN) {
+                    session.ws.close(1000, 'New connection established');
+                }
+                session.ws = ws;
                 ptyProcess = session.ptyProcess;
-                wirePtyHandlers(sessionID);
+                if (session.buffer && session.buffer.length > 0) {
+                    ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
+                }
+            } else {
+            // If previous client exists, kill it
+            if (session.ptyProcess && !session.ptyProcess.killed) {
+                try { session.ptyProcess.kill(); } catch (e) {}
             }
-            
+
             // Clear previous timeout for this session
             if (session.timeoutId) {
                 clearTimeout(session.timeoutId);
                 session.timeoutId = null;
             }
-            
+
             // Close any existing WebSocket connection for this session
             if (session.ws && session.ws !== ws && session.ws.readyState === WebSocket.OPEN) {
                 console.log(`Closing previous WebSocket connection for session: ${sessionID}`);
                 session.ws.close(1000, 'New connection established');
             }
-            
-            // Update WebSocket instance
+
+            // Spawn dtach attach client under a PTY; resizing this PTY will propagate
+            ptyProcess = pty.spawn('dtach', ['-a', socketPath], {
+                name: 'xterm-color',
+                cols: 80,
+                rows: 24,
+                cwd: process.cwd(),
+                env: process.env
+            });
+
+            // Update session
+            session.ptyProcess = ptyProcess;
             session.ws = ws;
-            console.log(`Reconnected to session: ${sessionID}`);
-            // Do not send preloaded logs when PTY is active; rely on abduco's screen state
+            console.log(`Reattached to dtach session: ${sessionID}`);
+
+            // Send buffered content to reconnecting client
+            if (session.buffer && session.buffer.length > 0) {
+                ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
+            }
+
+            // Hook data events for this new client
+            ptyProcess.onData((data) => {
+                const currentSession = sessions.get(sessionID);
+                if (!currentSession) return;
+                currentSession.buffer += data;
+                if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+                    currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+                }
+                appendToFile(logPath, data);
+                if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                    try { currentSession.ws.send(JSON.stringify({ type: 'output', data })); } catch (e) {}
+                }
+            });
+
+            ptyProcess.onExit(() => {
+                const currentSession = sessions.get(sessionID);
+                if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                    try { currentSession.ws.send(JSON.stringify({ type: 'exit', exitCode: 0 })); } catch (e) {}
+                }
+                // Do not delete session here; dtach server persists
+            });
+            }
         } else if (!sessionID && projectName) {
             // Create new PTY process and session for a specific project
             sessionID = uuidv4();
             const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
-            const sessionName = buildSessionName(sessionID, projectName);
+
             // Determine working directory
             let cwd = process.cwd();
             if (projectName) {
@@ -232,95 +218,88 @@ function setupWebSocketServer(server) {
                 if (fs.existsSync(projectPath)) {
                     cwd = projectPath;
                 } else {
-                    // Create project directory if it doesn't exist
                     fs.mkdirSync(projectPath, { recursive: true });
                     cwd = projectPath;
                 }
             }
-            
-            const mergedEnv = process.env;
-            
-            // Use dtach to create or attach the session
-            const socketPath = getSocketPath(sessionID, projectName);
-            ptyProcess = pty.spawn('dtach', ['-A', socketPath, shell], {
-                name: 'xterm-color',
-                cols: 80,
-                rows: 24,
-                cwd: cwd,
-                env: mergedEnv
-            });
 
-            const logPath = getLogPath(sessionID);
-            const session = { ptyProcess, ws, buffer: readLogTail(logPath), created: new Date().toISOString(), projectName: projectName || null, sessionName, socketPath, logPath };
-            sessions.set(sessionID, session);
-            console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
-
-            // Send session ID to client
-            ws.send(JSON.stringify({
-                type: 'sessionID',
-                sessionID: sessionID
-            }));
-
-            wirePtyHandlers(sessionID);
-
-            // Handle PTY exit
-            // exit handler wired in wirePtyHandlers
+            if (!hasDtach()) {
+                // Fallback: original PTY spawning without dtach
+                const mergedEnv = process.env;
+                ptyProcess = pty.spawn(shell, [], { name: 'xterm-color', cols: 80, rows: 24, cwd, env: mergedEnv });
+                const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
+                sessions.set(sessionID, session);
+                console.log(`New session created (no dtach): ${sessionID} for project: ${projectName || 'default'}`);
+                ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
+                ptyProcess.onData((data) => {
+                    const currentSession = sessions.get(sessionID);
+                    if (!currentSession) return;
+                    currentSession.buffer += data;
+                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+                    }
+                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                        try { currentSession.ws.send(JSON.stringify({ type: 'output', data })); } catch (error) {}
+                    }
+                });
+                ptyProcess.onExit(({ exitCode, signal }) => {
+                    console.log(`Process exited with code: ${exitCode}, signal: ${signal}`);
+                    const currentSession = sessions.get(sessionID);
+                    if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                        try { currentSession.ws.send(JSON.stringify({ type: 'exit', exitCode, signal })); } catch (error) {}
+                    }
+                    sessions.delete(sessionID);
+                });
+            } else {
+                const { socketPath, logPath, pidPath, metaPath } = sessionPaths(sessionID);
+                // Persist meta for recovery
+                writeJSON(metaPath, { sessionID, projectName: projectName || null, created: new Date().toISOString() });
+                // Ensure empty log file exists
+                appendToFile(logPath, '');
+                // Start a dtach server detached in project cwd
+                try {
+                    try {
+                        execFileSync('dtach', ['-n', socketPath, 'sh', '-lc', `echo $$ > "${pidPath}"; export HISTFILE="${path.join(cwd, '.zsh_history')}"; setopt APPEND_HISTORY INC_APPEND_HISTORY SHARE_HISTORY 2>/dev/null; exec ${shell} -l`], { cwd });
+                    } catch (e) {
+                        spawn('dtach', ['-A', socketPath, 'sh', '-lc', `echo $$ > "${pidPath}"; export HISTFILE="${path.join(cwd, '.zsh_history')}"; setopt APPEND_HISTORY INC_APPEND_HISTORY SHARE_HISTORY 2>/dev/null; exec ${shell} -l`], { cwd, detached: true, stdio: 'ignore' }).unref();
+                    }
+                } catch (e) {
+                    console.error('Failed to start dtach session:', e.message);
+                }
+                // Now attach a client under our PTY for this websocket
+                ptyProcess = pty.spawn('dtach', ['-a', socketPath], { name: 'xterm-color', cols: 80, rows: 24, cwd, env: process.env });
+                const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null, socketPath, logPath, pidPath, metaPath };
+                sessions.set(sessionID, session);
+                console.log(`New dtach session created: ${sessionID} for project: ${projectName || 'default'}`);
+                ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
+                ptyProcess.onData((data) => {
+                    const currentSession = sessions.get(sessionID);
+                    if (!currentSession) return;
+                    currentSession.buffer += data;
+                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+                    }
+                    appendToFile(logPath, data);
+                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                        try { currentSession.ws.send(JSON.stringify({ type: 'output', data })); } catch (error) {}
+                    }
+                });
+                ptyProcess.onExit(({ exitCode, signal }) => {
+                    console.log(`Attach client exited with code: ${exitCode}, signal: ${signal}`);
+                    const currentSession = sessions.get(sessionID);
+                    if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                        try { currentSession.ws.send(JSON.stringify({ type: 'exit', exitCode, signal })); } catch (error) {}
+                    }
+                    // Do not delete session; dtach server keeps running until killed
+                });
+            }
         } else {
             // Do NOT auto-create sessions when no valid sessionID is provided and no project is specified
             // Send an error to the client and close the connection
             try {
                 let message = 'Missing sessionID in query string';
                 if (sessionID && !sessions.has(sessionID)) {
-                    // Try to see if a dtach socket exists with this id and rehydrate
-                    const candidates = listDtachSockets().filter(name => name.startsWith(`msh_${sessionID}_`));
-                    if (candidates.length > 0) {
-                        const name = candidates[0];
-                        const project = parseProjectFromSessionName(name);
-                        const logPath = getLogPath(sessionID);
-                        const socketPath = path.join(SOCKETS_DIR, `${name}.sock`);
-                        sessions.set(sessionID, {
-                            ptyProcess: null,
-                            ws: ws,
-                            buffer: readLogTail(logPath),
-                            created: new Date().toISOString(),
-                            projectName: project,
-                            sessionName: name,
-                            socketPath,
-                            logPath
-                        });
-                        // Re-run handler logic by simulating existing path
-                        // Attach now
-                        const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
-                        const session = sessions.get(sessionID);
-                        const proc = pty.spawn('dtach', ['-a', session.socketPath], {
-                            name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
-                        });
-                        session.ptyProcess = proc;
-                        // Do not send preloaded logs now; rely on abduco output
-                        // Wire handlers
-                        proc.onData((data) => {
-                            const s = sessions.get(sessionID);
-                            if (!s) return;
-                            s.buffer += data;
-                            if (s.buffer.length > MAX_BUFFER_SIZE) s.buffer = s.buffer.slice(-MAX_BUFFER_SIZE);
-                            appendToLog(s.logPath || getLogPath(sessionID), data);
-                            if (s.ws && s.ws.readyState === WebSocket.OPEN) {
-                                try { s.ws.send(JSON.stringify({ type: 'output', data })); } catch (_) {}
-                            }
-                        });
-                        proc.onExit(({ exitCode, signal }) => {
-                            const s = sessions.get(sessionID);
-                            if (s) s.ptyProcess = null;
-                            if (s && s.ws && s.ws.readyState === WebSocket.OPEN) {
-                                try { s.ws.send(JSON.stringify({ type: 'exit', exitCode, signal })); } catch (_) {}
-                            }
-                        });
-                        // Also send sessionID to client now
-                        ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
-                        return; // early return; we've set up the session
-                    } else {
-                        message = `Session not found: ${sessionID}`;
-                    }
+                    message = `Session not found: ${sessionID}`;
                 }
                 ws.send(JSON.stringify({ type: 'error', message }));
             } catch (e) {
@@ -357,10 +336,6 @@ function setupWebSocketServer(server) {
                         }
                         break;
 
-                    case 'requestBuffer':
-                        // Deprecated: avoid double-drawing causing cursor jump
-                        break;
-
                     default:
                         console.log('Unknown message type:', msg.type);
                 }
@@ -369,16 +344,19 @@ function setupWebSocketServer(server) {
             }
         });
 
-        // Clean up on WebSocket close: detach from dtach by killing the attach PTY, keep session metadata
+        // Clean up on WebSocket close
         ws.on('close', () => {
             console.log(`Terminal disconnected for session: ${sessionID}`);
             const session = sessions.get(sessionID);
             if (session && session.ws === ws) {
-                if (session.ptyProcess && !session.ptyProcess.killed) {
-                    try { session.ptyProcess.kill(); } catch (e) {}
-                }
-                session.ptyProcess = null;
-                session.ws = null;
+                // Only set timeout if this is the active WebSocket for the session
+                session.timeoutId = setTimeout(() => {
+                    console.log(`Session ${sessionID} idle timeout. Closing attach client.`);
+                    if (session.ptyProcess && !session.ptyProcess.killed) {
+                        try { session.ptyProcess.kill(); } catch (e) {}
+                    }
+                    // Keep dtach server alive; do not delete session entry
+                }, SESSION_TIMEOUT);
             }
         });
 
@@ -387,11 +365,14 @@ function setupWebSocketServer(server) {
             console.error(`WebSocket error for session ${sessionID}:`, error);
             const session = sessions.get(sessionID);
             if (session && session.ws === ws) {
-                if (session.ptyProcess && !session.ptyProcess.killed) {
-                    try { session.ptyProcess.kill(); } catch (e) {}
-                }
-                session.ptyProcess = null;
-                session.ws = null;
+                // Only set timeout if this is the active WebSocket for the session
+                session.timeoutId = setTimeout(() => {
+                    console.log(`Session ${sessionID} error timeout. Closing attach client.`);
+                    if (session.ptyProcess && !session.ptyProcess.killed) {
+                        try { session.ptyProcess.kill(); } catch (e) {}
+                    }
+                    // Keep dtach server alive
+                }, SESSION_TIMEOUT);
             }
         });
     });
@@ -403,31 +384,40 @@ function getSessions() {
     return sessions;
 }
 
-async function deleteSession(sessionId) {
+function deleteSession(sessionId) {
     const session = sessions.get(sessionId);
     if (session) {
         try {
-            if (session.ws && session.ws.readyState === WebSocket.OPEN) {
-                session.ws.close();
-            }
+            if (session.timeoutId) clearTimeout(session.timeoutId);
+            if (session.ws && session.ws.readyState === WebSocket.OPEN) session.ws.close();
             if (session.ptyProcess && !session.ptyProcess.killed) {
-                try { session.ptyProcess.kill(); } catch (_) {}
-                session.ptyProcess = null;
+                try { session.ptyProcess.kill(); } catch (e) {}
             }
-            if (session.sessionName) {
-                await killAbducoSessionByName(session.sessionName);
+
+            // Attempt to kill the underlying dtach-managed shell via PID file
+            if (session.pidPath && fs.existsSync(session.pidPath)) {
+                try {
+                    const pid = parseInt(fs.readFileSync(session.pidPath, 'utf8').trim(), 10);
+                    if (!Number.isNaN(pid)) process.kill(pid, 'TERM');
+                } catch (e) {
+                    // ignore
+                }
             }
+
+            // Cleanup files
+            try { if (session.socketPath && fs.existsSync(session.socketPath)) fs.unlinkSync(session.socketPath); } catch (e) {}
+            try { if (session.pidPath && fs.existsSync(session.pidPath)) fs.unlinkSync(session.pidPath); } catch (e) {}
+            try { if (session.metaPath && fs.existsSync(session.metaPath)) fs.unlinkSync(session.metaPath); } catch (e) {}
+            // Keep log for inspection; do not delete log file
         } finally {
             sessions.delete(sessionId);
         }
     } else {
-        // Try to find by dtach socket listing
-        const candidates = listDtachSockets().filter(name => name.startsWith(`msh_${sessionId}_`));
-        if (candidates.length > 0) {
-            const socketPath = path.join(SOCKETS_DIR, `${candidates[0]}.sock`);
-            await killDtachSessionBySocket(socketPath);
-        }
-        sessions.delete(sessionId);
+        // Fallback: remove stray files if exist
+        const { socketPath, pidPath, metaPath } = sessionPaths(sessionId);
+        try { if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath); } catch (e) {}
+        try { if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath); } catch (e) {}
+        try { if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath); } catch (e) {}
     }
 }
 
