@@ -6,6 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { execSync } = require('child_process');
+const mux = require('../lib/mux');
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
@@ -21,14 +22,7 @@ function setupWebSocketServer(server) {
 
         const TMUX_PREFIX = 'msh-';
 
-        function isTmuxAvailable() {
-            try {
-                execSync('tmux -V', { stdio: 'ignore' });
-                return true;
-            } catch (_) {
-                return false;
-            }
-        }
+        function isTmuxAvailable() { return false; }
 
         function sanitizeName(name) {
             return String(name || '')
@@ -42,56 +36,29 @@ function setupWebSocketServer(server) {
             return `${TMUX_PREFIX}${shortId}-${sanitizeName(project || 'default')}`;
         }
 
-        function tmuxSessionExists(name) {
-            try {
-                execSync(`tmux has-session -t ${name}`, { stdio: 'ignore' });
-                return true;
-            } catch (_) {
-                return false;
-            }
-        }
+        function tmuxSessionExists(name) { return mux.hasSession(name); }
 
-        function createTmuxSession(name, cwd) {
-            try {
-                execSync(`tmux new-session -d -s ${name} -c ${JSON.stringify(cwd).slice(1, -1)}`);
-                return true;
-            } catch (error) {
-                console.error('Failed to create tmux session:', error.message);
-                return false;
-            }
-        }
+        function createTmuxSession(name, cwd) { return !!mux.createSession(name, cwd, { cols: 120, rows: 40 }); }
 
-        function enableMouseForSession(name) {
-            try {
-                execSync(`tmux set-option -t ${name} mouse on`);
-                return true;
-            } catch (error) {
-                console.error('Failed to enable tmux mouse:', error.message);
-                return false;
-            }
-        }
+        function enableMouseForSession() { return true; }
 
-        function attachToTmux(name, cwd) {
-            const env = process.env;
-            return pty.spawn('tmux', ['attach-session', '-t', name], {
-                name: 'xterm-color',
-                cols: 80,
-                rows: 24,
-                cwd,
-                env
-            });
+        function attachToSession(name) {
+            const s = mux.getSession(name);
+            if (!s) return null;
+            return s.pty;
         }
 
         function attachAndWire(tmuxName, cwdForAttach, sendId) {
             try {
-                ptyProcess = attachToTmux(tmuxName, cwdForAttach);
+                ptyProcess = attachToSession(tmuxName);
+                if (!ptyProcess) throw new Error('No session');
             } catch (error) {
-                console.error('Failed to spawn tmux attach:', error.message || String(error));
-                try { ws.send(JSON.stringify({ type: 'error', message: 'Failed to attach to tmux. Is tmux installed?' })); } catch (_) {}
+                console.error('Failed to attach session:', error.message || String(error));
+                try { ws.send(JSON.stringify({ type: 'error', message: 'Failed to attach session' })); } catch (_) {}
                 try { ws.close(1011, 'Attach failed'); } catch (_) {}
                 return false;
             }
-            console.log(`Attached to tmux session: ${tmuxName} ${projectName ? `(project: ${projectName})` : ''}`);
+            console.log(`Attached to session: ${tmuxName} ${projectName ? `(project: ${projectName})` : ''}`);
             if (sendId) {
                 ws.send(JSON.stringify({ type: 'sessionID', sessionID: tmuxName }));
             }
@@ -120,19 +87,13 @@ function setupWebSocketServer(server) {
         }
 
         // Ensure tmux is available
-        if (!isTmuxAvailable()) {
-            try { ws.send(JSON.stringify({ type: 'error', message: 'tmux is not installed or not in PATH on the server' })); } catch (_) {}
-            try { ws.close(1011, 'tmux missing'); } catch (_) {}
-            return;
-        }
+        // Using built-in mux; tmux not required
 
         if (sessionID) {
             if (tmuxSessionExists(sessionID)) {
                 let cwd = process.cwd();
-                try {
-                    const sessionPath = execSync(`tmux display-message -p -t ${sessionID} "#{session_path}"`, { encoding: 'utf8' }).trim();
-                    if (sessionPath) cwd = sessionPath;
-                } catch (_) {}
+                const s = mux.getSession(sessionID);
+                if (s) cwd = s.cwd;
                 enableMouseForSession(sessionID);
                 const ok = attachAndWire(sessionID, cwd, false);
                 if (!ok) return;
