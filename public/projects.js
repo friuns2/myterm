@@ -17,11 +17,10 @@ function startSessionsStatusAutoRefresh() {
             const res = await fetch('/api/sessions');
             if (!res.ok) return;
             const sessions = await res.json();
-            sessions.forEach(session => {
+                    sessions.forEach(session => {
                 const el = document.getElementById(`session-status-${session.id}`);
                 if (el) {
-                    // Convert ANSI to HTML and preserve newlines
-                    const html = ansiToHtml(session.status).replace(/\n/g, '<br/>');
+                    const html = ansiToHtml(session.screen || session.status).replace(/\n/g, '<br/>');
                     el.innerHTML = html;
                 }
             });
@@ -97,7 +96,7 @@ async function showSessionsAndProjectsList() {
                                                     <h3 class="font-semibold text-sm">${session.id}</h3>
                                                     <span class="badge badge-primary badge-sm">${session.projectName}</span>
                                                 </div>
-                                                <p class="text-xs opacity-70 line-clamp-6 break-all">Status: <span id="session-status-${session.id}">${ansiToHtml(session.status).replace(/\n/g, '<br/>')}</span></p>
+                                                <div class="session-thumb"><span id="session-status-${session.id}">${ansiToHtml((session.screen || session.status)).replace(/\n/g, '<br/>')}</span></div>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
                                             <div class="flex gap-2">

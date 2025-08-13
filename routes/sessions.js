@@ -13,16 +13,21 @@ router.get('/', (req, res) => {
     sessions.forEach((session, sessionID) => {
         // Get last several lines from buffer for status (multiline)
         const lines = session.buffer.split('\n');
-        const NUM_STATUS_LINES = 6; // keep it aligned with UI clamp
+        const NUM_STATUS_LINES = 6; // short preview
+        const NUM_SCREEN_LINES = 24; // approximate full screen rows
         let status = 'No output';
+        let screen = 'No output';
         if (lines.length > 0) {
-            const lastLines = lines.slice(-NUM_STATUS_LINES);
-            status = lastLines.join('\n').trim() || 'Active session';
+            const lastStatusLines = lines.slice(-NUM_STATUS_LINES);
+            status = lastStatusLines.join('\n').trim() || 'Active session';
+            const lastScreenLines = lines.slice(-NUM_SCREEN_LINES);
+            screen = lastScreenLines.join('\n').trim() || status;
         }
         
         allSessions.push({
             id: sessionID,
             status,
+            screen,
             created: session.created || new Date().toISOString(),
             projectName: session.projectName || 'Unknown'
         });
