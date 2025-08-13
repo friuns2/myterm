@@ -117,8 +117,17 @@ function setupWebSocketServer(server) {
             };
             sessions.set(sessionID, session);
 
-            // Inform client of sessionID if it was created client-side
-            ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
+            // Inform client of sessionID only if it's a new session (no sessionID provided by client)
+            if (!url.searchParams.get('sessionID')) {
+                ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
+            }
+
+            // Send buffered history immediately on connect
+            if (session.buffer && session.buffer.length > 0) {
+                try {
+                    ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
+                } catch (_) {}
+            }
 
             // Pipe abduco client output to ws and buffer
             ptyProcess.onData((data) => {
