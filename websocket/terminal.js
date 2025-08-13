@@ -8,6 +8,8 @@ const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { registerSession, unregisterSession, getSessionInfo, getAllSessionsInfo } = require('./sessionRegistry');
 
+const SESSIONS_LOG_DIR = path.join(__dirname, '..', 'sessions');
+
 // Store active websocket-attached client state and rolling buffers
 const sessions = new Map(); // Map: sessionID -> { ws, buffer, projectName, created }
 const MAX_BUFFER_SIZE = 100 * 1024; // Maximum number of characters to buffer (100kb)
@@ -87,7 +89,14 @@ function setupWebSocketServer(server) {
             }
         }
 
-        const createArgs = ['-c', sessionID, os.platform() === 'win32' ? 'powershell.exe' : 'zsh'];
+        if (!fs.existsSync(SESSIONS_LOG_DIR)) {
+            try { fs.mkdirSync(SESSIONS_LOG_DIR, { recursive: true }); } catch (_) {}
+        }
+
+        const logPath = path.join(SESSIONS_LOG_DIR, `${sessionID}.log`);
+        const createArgs = os.platform() === 'win32'
+            ? ['-c', sessionID, 'powershell.exe']
+            : ['-c', sessionID, 'script', '-q', '-f', logPath, 'zsh'];
         const attachArgs = ['-a', sessionID];
 
         const ensureAttached = () => {
@@ -122,10 +131,27 @@ function setupWebSocketServer(server) {
                 ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
             }
 
-            // Send buffered history immediately on connect
+            // Send buffered history or log tail immediately on connect
+            let sentHistory = false;
             if (session.buffer && session.buffer.length > 0) {
                 try {
                     ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
+                    sentHistory = true;
+                } catch (_) {}
+            }
+            if (!sentHistory) {
+                try {
+                    const stats = fs.existsSync(logPath) ? fs.statSync(logPath) : null;
+                    if (stats && stats.size > 0) {
+                        const bytesToRead = Math.min(stats.size, MAX_BUFFER_SIZE);
+                        const fd = fs.openSync(logPath, 'r');
+                        const buf = Buffer.alloc(bytesToRead);
+                        fs.readSync(fd, buf, 0, bytesToRead, stats.size - bytesToRead);
+                        fs.closeSync(fd);
+                        const prehistory = buf.toString('utf8');
+                        session.buffer = prehistory;
+                        ws.send(JSON.stringify({ type: 'output', data: prehistory }));
+                    }
                 } catch (_) {}
             }
 
