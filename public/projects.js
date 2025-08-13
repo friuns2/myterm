@@ -3,6 +3,41 @@
 // Function to navigate back to session list
 let sessionsStatusIntervalId = null;
 
+// Cache for no-flicker dashboard rendering
+let dashboardCacheHTML = '';
+let dashboardScrollTop = 0;
+
+function getDashboardScroller() {
+    return document.getElementById('dashboard-scroll');
+}
+
+function saveDashboardSnapshot() {
+    try {
+        const terminalContainer = document.getElementById('terminal-container');
+        if (terminalContainer) {
+            dashboardCacheHTML = terminalContainer.innerHTML;
+        }
+    } catch (_) {}
+}
+
+function saveDashboardScroll() {
+    try {
+        const scroller = getDashboardScroller();
+        if (scroller) dashboardScrollTop = scroller.scrollTop;
+    } catch (_) {}
+}
+
+function restoreDashboardScroll() {
+    try {
+        const scroller = getDashboardScroller();
+        if (!scroller) return;
+        // Restore after layout
+        requestAnimationFrame(() => {
+            try { scroller.scrollTop = dashboardScrollTop || 0; } catch (_) {}
+        });
+    } catch (_) {}
+}
+
 function stopSessionsStatusAutoRefresh() {
     if (sessionsStatusIntervalId) {
         clearInterval(sessionsStatusIntervalId);
@@ -60,7 +95,17 @@ function goBackToProjectList() {
 async function showSessionsAndProjectsList() {
     // Hide navigation bar when showing sessions and projects list
     hideNavigationBar();
-    
+    // If we have a cached dashboard, render it immediately to avoid flicker
+    try {
+        if (dashboardCacheHTML) {
+            const terminalContainer = document.getElementById('terminal-container');
+            if (terminalContainer) {
+                terminalContainer.innerHTML = dashboardCacheHTML;
+                restoreDashboardScroll();
+            }
+        }
+    } catch (_) {}
+
     try {
         // Fetch all sessions and projects with worktrees in parallel
         const [sessionsResponse, projectsResponse] = await Promise.all([
@@ -73,7 +118,7 @@ async function showSessionsAndProjectsList() {
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
-            <div class="p-6 max-w-6xl mx-auto h-full flex flex-col overflow-y-auto">
+            <div id="dashboard-scroll" class="p-6 max-w-6xl mx-auto h-full flex flex-col overflow-y-auto">
                 <div class="flex items-center justify-between mb-8">
                     <h1 class="text-3xl font-bold">Shell Dashboard</h1>
                     <div class="flex gap-2">
@@ -193,6 +238,9 @@ async function showSessionsAndProjectsList() {
                 </div>
             </div>
         `;
+        // Update cache and restore scroll
+        dashboardCacheHTML = terminalContainer.innerHTML;
+        restoreDashboardScroll();
         startSessionsStatusAutoRefresh();
     } catch (error) {
         console.error('Failed to load sessions and projects:', error);
@@ -290,6 +338,8 @@ async function deleteProject(projectName) {
 }
 
 function selectProject(projectName) {
+    saveDashboardScroll();
+    saveDashboardSnapshot();
     currentProject = projectName;
     sessionID = null;
     stopSessionsStatusAutoRefresh();
@@ -301,6 +351,8 @@ function selectProject(projectName) {
 // Function to connect to existing session
 function connectToSession(sessionId, projectName = null) {
     // Cleanup existing terminal before connecting to new session
+    saveDashboardScroll();
+    saveDashboardSnapshot();
     if (typeof cleanupTerminal === 'function') {
         cleanupTerminal();
     }
@@ -322,6 +374,8 @@ async function killSession(sessionId) {
         
         if (result.success) {
             // Always go back to the dashboard after killing a session
+            saveDashboardScroll();
+            saveDashboardSnapshot();
             clearURLParams();
             showSessionsAndProjectsList();
         } else {
