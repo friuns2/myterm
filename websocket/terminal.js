@@ -51,22 +51,30 @@ function setupWebSocketServer(server) {
             }
         }
 
+        let areTmuxOverridesApplied = false;
+
+        function ensureTmuxTerminalOverrides() {
+            if (areTmuxOverridesApplied) return;
+            try {
+                const current = execSync('tmux show -g -v terminal-overrides', { encoding: 'utf8' }).trim();
+                const hasXtermNoAlt = /xterm\*:.*smcup@.*rmcup@/.test(current);
+                if (!hasXtermNoAlt) {
+                    execSync("tmux set -g -a terminal-overrides ',xterm*:smcup@:rmcup@'");
+                }
+            } catch (_) {
+                // ignore if tmux server not started yet; setting below will create it
+                try { execSync("tmux set -g -a terminal-overrides ',xterm*:smcup@:rmcup@'"); } catch (_) {}
+            }
+            areTmuxOverridesApplied = true;
+        }
+
         function createTmuxSession(name, cwd) {
             try {
+                ensureTmuxTerminalOverrides();
                 execSync(`tmux new-session -d -s ${name} -c ${JSON.stringify(cwd).slice(1, -1)}`);
                 return true;
             } catch (error) {
                 console.error('Failed to create tmux session:', error.message);
-                return false;
-            }
-        }
-
-        function enableMouseForSession(name) {
-            try {
-                execSync(`tmux set-option -t ${name} mouse on`);
-                return true;
-            } catch (error) {
-                console.error('Failed to enable tmux mouse:', error.message);
                 return false;
             }
         }
@@ -84,6 +92,7 @@ function setupWebSocketServer(server) {
 
         function attachAndWire(tmuxName, cwdForAttach, sendId) {
             try {
+                ensureTmuxTerminalOverrides();
                 ptyProcess = attachToTmux(tmuxName, cwdForAttach);
             } catch (error) {
                 console.error('Failed to spawn tmux attach:', error.message || String(error));
@@ -133,7 +142,6 @@ function setupWebSocketServer(server) {
                     const sessionPath = execSync(`tmux display-message -p -t ${sessionID} "#{session_path}"`, { encoding: 'utf8' }).trim();
                     if (sessionPath) cwd = sessionPath;
                 } catch (_) {}
-                enableMouseForSession(sessionID);
                 const ok = attachAndWire(sessionID, cwd, false);
                 if (!ok) return;
             } else {
@@ -157,7 +165,6 @@ function setupWebSocketServer(server) {
                 try { ws.close(1011, 'tmux create failed'); } catch (_) {}
                 return;
             }
-            enableMouseForSession(tmuxName);
             const ok = attachAndWire(tmuxName, cwd, true);
             if (!ok) return;
         } else {
