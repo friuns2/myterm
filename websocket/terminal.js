@@ -214,7 +214,16 @@ function setupWebSocketServer(server) {
             // Update WebSocket instance
             session.ws = ws;
             console.log(`Reconnected to session: ${sessionID}`);
-            // Do not send preloaded logs when PTY is active; rely on abduco's screen state
+            // Send preloaded logs only when not using tmux to approximate scrollback
+            if (!session.usesTmux) {
+                const preload = session.buffer && session.buffer.length > 0
+                    ? session.buffer
+                    : readLogTail(session.logPath || getLogPath(sessionID));
+                if (preload && preload.length > 0) {
+                    session.buffer = preload.slice(-MAX_BUFFER_SIZE);
+                    try { ws.send(JSON.stringify({ type: 'output', data: session.buffer })); } catch (_) {}
+                }
+            }
         } else if (!sessionID && projectName) {
             // Create new PTY process and session for a specific project
             sessionID = uuidv4();
@@ -250,7 +259,7 @@ function setupWebSocketServer(server) {
             });
 
             const logPath = getLogPath(sessionID);
-            const session = { ptyProcess, ws, buffer: readLogTail(logPath), created: new Date().toISOString(), projectName: projectName || null, sessionName, logPath };
+            const session = { ptyProcess, ws, buffer: readLogTail(logPath), created: new Date().toISOString(), projectName: projectName || null, sessionName, logPath, usesTmux: useTmux };
             sessions.set(sessionID, session);
             console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
@@ -293,7 +302,12 @@ function setupWebSocketServer(server) {
                             name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
                         });
                         session.ptyProcess = proc;
-                        // Do not send preloaded logs now; rely on abduco output
+                        // For unknown/legacy sessions, default to sending logs to seed scrollback
+                        const s = sessions.get(sessionID);
+                        const preload = s.buffer && s.buffer.length > 0 ? s.buffer : readLogTail(s.logPath || getLogPath(sessionID));
+                        if (preload && preload.length > 0) {
+                            try { ws.send(JSON.stringify({ type: 'output', data: preload })); } catch (_) {}
+                        }
                         // Wire handlers
                         proc.onData((data) => {
                             const s = sessions.get(sessionID);
