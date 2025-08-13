@@ -204,45 +204,44 @@ function getSessions() {
 }
 
 async function deleteSession(sessionId) {
-    // Attempt graceful termination by attaching and sending 'exit' then closing client
-    return new Promise((resolve) => {
-        try {
-            if (!abducoSessionExists(sessionId)) {
-                unregisterSession(sessionId);
-                sessions.delete(sessionId);
-                resolve(true);
-                return;
-            }
-            const client = pty.spawn('abduco', ['-a', sessionId], {
-                name: 'xterm-color',
-                cols: 80,
-                rows: 24,
-                cwd: process.cwd(),
-                env: process.env
-            });
-            let done = false;
-            const timer = setTimeout(() => {
-                if (done) return;
-                try { client.kill(); } catch (_) {}
-                resolve(false);
-            }, 2000);
-            client.onData(() => {});
-            client.onExit(() => {
-                // After attach client exit, check if session still exists
-                clearTimeout(timer);
-                setTimeout(() => {
-                    const still = abducoSessionExists(sessionId);
-                    if (!still) unregisterSession(sessionId);
-                    sessions.delete(sessionId);
-                    resolve(!still);
-                }, 200);
-            });
-            // send exit to shell
-            client.write('exit\r');
-        } catch (_) {
-            resolve(false);
+    // Kill supervising abduco process for this session by matching its command line
+    try {
+        if (!abducoSessionExists(sessionId)) {
+            unregisterSession(sessionId);
+            sessions.delete(sessionId);
+            return true;
         }
-    });
+
+        // Find a matching abduco PID (first match)
+        let pid = null;
+        try {
+            const cmd = `pgrep -fl '^abduco( |$).* ${sessionId}( |$)' | awk '{print $1}' | head -n1`;
+            const out = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+            pid = out || null;
+        } catch (_) {
+            pid = null;
+        }
+
+        if (pid) {
+            try { execSync(`kill ${pid}`, { stdio: 'ignore' }); } catch (_) {}
+        }
+
+        // Give it a brief moment, then re-check; escalate if needed
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        await wait(200);
+        if (abducoSessionExists(sessionId)) {
+            // Try a broader pkill as fallback
+            try { execSync(`pkill -f 'abduco.* ${sessionId}( |$)'`, { stdio: 'ignore', shell: '/bin/zsh' }); } catch (_) {}
+            await wait(200);
+        }
+
+        const gone = !abducoSessionExists(sessionId);
+        if (gone) unregisterSession(sessionId);
+        sessions.delete(sessionId);
+        return gone;
+    } catch (_) {
+        return false;
+    }
 }
 
 module.exports = {
