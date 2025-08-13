@@ -5,12 +5,7 @@
   "main": "shell-executor.js",
   "scripts": {
     "start": "node server.js",
-    "ngrok": "ngrok http 3551",
-    "ntmuxd": "node bin/ntmuxd"
-  },
-  "bin": {
-    "tmux": "bin/tmux",
-    "ntmuxd": "bin/ntmuxd"
+    "ngrok": "ngrok http 3551"
   },
   "dependencies": {
     "ws": "^8.14.2",

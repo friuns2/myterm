@@ -2,29 +2,53 @@ const express = require('express');
 const path = require('path');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { execSync } = require('child_process');
-const mux = require('../lib/mux');
 
 const router = express.Router();
 
 // API endpoint to get all sessions across all projects
 router.get('/', (req, res) => {
     // Source of truth: list tmux sessions; augment with in-memory attach clients if any
-    let tmuxSessions = mux.listSessions().map(s => ({ name: s.name, createdStr: s.createdStr, pathStr: s.pathStr }));
+    let tmuxSessions = [];
+    try {
+        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created_string}|#{session_path}"', { encoding: 'utf8' });
+        tmuxSessions = out
+            .split('\n')
+            .filter(Boolean)
+            .map(line => {
+                const [name, createdStr, pathStr] = line.split('|');
+                return { name, createdStr, pathStr };
+            });
+    } catch (e) {
+        // No tmux or no sessions
+        tmuxSessions = [];
+    }
 
 	// Build response: include raw pane thumbnail (visible screen with ANSI)
 	const all = tmuxSessions.map(ts => {
 		let thumbnail = '';
 		let lastCommitSubject = '';
 		let lastCommitShortHash = '';
-        try {
-            const name = ts.name;
-            const s = mux.getSession(name);
-            const origW = s?.cols || 120;
-            const origH = s?.rows || 40;
-            mux.resizeWindow(name, 80, 24);
-            thumbnail = mux.capturePane(name, { includeEscapes: true, lastLines: 24 }) || '';
-            mux.resizeWindow(name, origW, origH);
-        } catch (_) { thumbnail = ''; }
+		try {
+			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
+			// Temporarily shrink window for smaller thumbnail, then restore
+			let origWinW, origWinH;
+			try {
+				origWinW = parseInt(execSync(`tmux display -p -t ${safeName} "#{window_width}"`, { encoding: 'utf8' }).trim(), 10);
+				origWinH = parseInt(execSync(`tmux display -p -t ${safeName} "#{window_height}"`, { encoding: 'utf8' }).trim(), 10);
+			} catch (_) {}
+			try {
+				execSync(`tmux resize-window -t ${safeName} -x 80 -y 24`);				
+			} catch (_) {}
+			thumbnail = execSync(`tmux capture-pane -ep -S -24 -t ${safeName}`, { encoding: 'utf8' });
+			// Restore original window size
+			try {
+				if (Number.isFinite(origWinW) && Number.isFinite(origWinH)) {
+					execSync(`tmux resize-window -t ${safeName} -x ${origWinW} -y ${origWinH}`);
+				}
+			} catch (_) {}
+		} catch (_) {
+			thumbnail = '';
+		}
 
         // Try to fetch last commit details if inside a git repo
         try {
@@ -71,9 +95,7 @@ router.get('/', (req, res) => {
 router.delete('/:sessionId', (req, res) => {
     const sessionId = req.params.sessionId;
     try {
-        if (!mux.killSession(sessionId)) {
-            throw new Error('not found');
-        }
+        execSync(`tmux kill-session -t ${sessionId}`);
         res.json({ success: true, message: 'Tmux session killed successfully' });
     } catch (e) {
         res.status(404).json({ success: false, message: 'Session not found or failed to kill' });
