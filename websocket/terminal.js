@@ -94,9 +94,14 @@ function setupWebSocketServer(server) {
         }
 
         const logPath = path.join(SESSIONS_LOG_DIR, `${sessionID}.log`);
-        const createArgs = os.platform() === 'win32'
+        const isWin = os.platform() === 'win32';
+        const isDarwin = os.platform() === 'darwin';
+        const scriptCmd = isDarwin
+            ? ['script', '-q', logPath, 'zsh']
+            : ['script', '-q', '-f', logPath, 'zsh'];
+        const createArgs = isWin
             ? ['-c', sessionID, 'powershell.exe']
-            : ['-c', sessionID, 'script', '-q', '-f', logPath, 'zsh'];
+            : ['-c', sessionID, ...scriptCmd];
         const attachArgs = ['-a', sessionID];
 
         const ensureAttached = () => {
