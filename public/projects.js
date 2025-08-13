@@ -17,16 +17,24 @@ function startSessionsStatusAutoRefresh() {
             const res = await fetch('/api/sessions');
             if (!res.ok) return;
             const sessions = await res.json();
-            sessions.forEach(session => {
-                const el = document.getElementById(`session-thumb-${session.id}`);
-                if (el) el.innerHTML = ansiToHtml(session.thumbnail || '');
-                const commitEl = document.getElementById(`session-commit-${session.id}`);
-                if (commitEl) {
-                    const subject = session.lastCommitSubject || '';
-                    const hash = session.lastCommitShortHash || '';
-                    commitEl.textContent = subject && hash ? `${hash} — ${subject}` : '';
-                }
-            });
+    sessions.forEach(session => {
+        const el = document.getElementById(`session-thumb-${session.id}`);
+        if (el) el.innerHTML = ansiToHtml(session.thumbnail || '');
+        const commitEl = document.getElementById(`session-commit-${session.id}`);
+        if (commitEl) {
+            const subject = session.lastCommitSubject || '';
+            const hash = session.lastCommitShortHash || '';
+            commitEl.textContent = subject && hash ? `${hash} — ${subject}` : '';
+        }
+        const titleEl = document.getElementById(`session-title-${session.id}`);
+        if (titleEl) titleEl.textContent = session.title || session.id;
+        const gitEl = document.getElementById(`session-git-${session.id}`);
+        if (gitEl) {
+            const branch = session.gitBranch || '';
+            const dirty = session.gitDirty ? '*' : '';
+            gitEl.textContent = branch ? `${branch}${dirty}` : '';
+        }
+    });
         } catch (e) {
             // ignore transient errors
         }
@@ -88,22 +96,31 @@ async function showSessionsAndProjectsList() {
                     <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
                         <span class="text-primary">🖥️</span> All Active Sessions
                     </h2>
-                    <div class="grid gap-3 mb-6 sessions-grid">
+                    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
                         ${allSessions.length === 0 ? '<p class="text-center opacity-70 py-4">No active sessions</p>' : 
                             allSessions.map(session => `
-                                <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow cursor-pointer" onclick="connectToSession('${session.id}', '${session.projectName}')">
-                                    <div class="card-body p-3">
-                                        <div class="flex items-start gap-2">
-                                            <div class="session-thumb">
-                                                <pre id="session-thumb-${session.id}">${ansiToHtml(session.thumbnail || '')}</pre>
-                                            </div>
-                                            <div class="flex flex-col min-w-0">
-                                                <div class="flex items-center gap-2">
-                                                    <h3 class="font-semibold text-xs truncate max-w-[160px]">${session.id}</h3>
-                                                    <span class="badge badge-primary badge-xs">${session.projectName}</span>
+                                <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow">
+                                    <div class="card-body p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    <h3 class="font-semibold text-sm" id="session-title-${session.id}">${session.title || session.id}</h3>
+                                                    <span class="badge badge-primary badge-sm">${session.projectName}</span>
+                                                    <span class="badge badge-outline badge-xs" id="session-git-${session.id}">${session.gitBranch ? `${session.gitBranch}${session.gitDirty ? '*' : ''}` : ''}</span>
                                                 </div>
-                                                <p class="text-[10px] opacity-70 mt-1 truncate max-w-[180px]" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
-                                                <p class="text-[10px] opacity-50">${new Date(session.created).toLocaleString()}</p>
+                                                <div class="session-thumb">
+                                                    <pre id="session-thumb-${session.id}">${ansiToHtml(session.thumbnail || '')}</pre>
+                                                </div>
+                                                <p class="text-xs opacity-70 mt-2" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
+                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                                    Connect
+                                                </button>
+                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                    Kill
+                                                </button>
                                             </div>
                                         </div>
                                     </div>

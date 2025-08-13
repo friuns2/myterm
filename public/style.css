@@ -49,18 +49,10 @@
     scrollbar-width: thin;
 }
 
-/* Sessions grid for tiling thumbnails */
-.sessions-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-	gap: 0.75rem;
-}
-
 /* Session thumbnail styling */
 .session-thumb {
-	width: auto;
-	height: auto;
-	display: inline-block;
+    width: 200ch; /* 200 characters width */
+    height: 200em; /* approximate 200 lines; adjusted via pre line-height */
     overflow: hidden;
     background: #000;
     border-radius: 6px;
@@ -69,15 +61,12 @@
 
 .session-thumb pre {
     margin: 0;
-    padding: 8px;
-	line-height: 1em;
+    padding: 4px;
+    line-height: 1.0;
     font-family: "Courier New", monospace;
-	font-size: 1.2px; /* 200ch x 200em ~ 240x240px */
+    font-size: 8px; /* small font to fit more text */
     color: #ddd;
     white-space: pre; /* preserve layout */
-	width: 200ch;
-	height: 200em;
-	overflow: hidden;
 }
 
 .projects-container::-webkit-scrollbar {

@@ -28,9 +28,12 @@ router.get('/', (req, res) => {
 		let thumbnail = '';
 		let lastCommitSubject = '';
 		let lastCommitShortHash = '';
+		let gitBranch = '';
+		let gitDirty = false;
 		try {
 			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
-			// Capture visible pane with ANSI for thumbnail
+			// Resize pane to 200x200 cells and capture visible pane with ANSI for thumbnail
+			try { execSync(`tmux resize-pane -t ${safeName} -x 200 -y 200`); } catch (_) {}
 			const thumbCmd = `tmux capture-pane -pet ${safeName}`; // -p print, -e include escapes, -t target
 			thumbnail = execSync(thumbCmd, { encoding: 'utf8' });
 		} catch (_) {
@@ -63,11 +66,26 @@ router.get('/', (req, res) => {
 			}
 		} catch (_) {}
 
+		// Git branch and dirty status
+		try {
+			if (ts.pathStr) {
+				const isGit = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} rev-parse --is-inside-work-tree 2>/dev/null || echo no`, { encoding: 'utf8' }).trim();
+				if (isGit === 'true') {
+					gitBranch = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} rev-parse --abbrev-ref HEAD`, { encoding: 'utf8' }).trim();
+					const porcelain = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} status --porcelain`, { encoding: 'utf8' });
+					gitDirty = porcelain.trim().length > 0;
+				}
+			}
+		} catch (_) {}
+
 		return {
 			id: ts.name,
 			thumbnail: thumbnail || '',
 			lastCommitSubject,
 			lastCommitShortHash,
+			title: projectName || ts.name,
+			gitBranch,
+			gitDirty,
 			created: ts.createdStr || new Date().toISOString(),
 			projectName
 		};
