@@ -12,6 +12,7 @@ const SESSIONS_LOG_DIR = path.join(__dirname, '..', 'sessions');
 
 // Store active websocket-attached client state and rolling buffers
 const sessions = new Map(); // Map: sessionID -> { ws, buffer, projectName, created }
+const loggerClients = new Map(); // Map: sessionID -> persistent abduco attach pty that feeds buffer
 const MAX_BUFFER_SIZE = 100 * 1024; // Maximum number of characters to buffer (100kb)
 
 function listAbducoSessions() {
@@ -38,6 +39,36 @@ function listAbducoSessions() {
 
 function abducoSessionExists(sessionID) {
     return listAbducoSessions().some(s => s.id === sessionID);
+}
+
+function ensureLoggerAttached(sessionID) {
+    if (loggerClients.has(sessionID)) return;
+    if (!abducoSessionExists(sessionID)) return;
+    try {
+        const logger = pty.spawn('abduco', ['-a', sessionID], {
+            name: 'xterm-color',
+            cols: 80,
+            rows: 24,
+            cwd: process.cwd(),
+            env: process.env
+        });
+        logger.onData((data) => {
+            const entry = sessions.get(sessionID);
+            if (!entry) return;
+            entry.buffer += data;
+            if (entry.buffer.length > MAX_BUFFER_SIZE) {
+                entry.buffer = entry.buffer.slice(-MAX_BUFFER_SIZE);
+            }
+        });
+        logger.onExit(() => {
+            loggerClients.delete(sessionID);
+            // Optionally, try to reattach if session still exists
+            setTimeout(() => {
+                if (abducoSessionExists(sessionID)) ensureLoggerAttached(sessionID);
+            }, 500);
+        });
+        loggerClients.set(sessionID, logger);
+    } catch (_) {}
 }
 
 function setupWebSocketServer(server) {
@@ -156,14 +187,10 @@ function setupWebSocketServer(server) {
                 } catch (_) {}
             }
 
-            // Pipe abduco client output to ws and buffer
+            // Pipe abduco client output to ws; buffer via logger only to avoid duplicates
             ptyProcess.onData((data) => {
                 const currentSession = sessions.get(sessionID);
                 if (!currentSession) return;
-                currentSession.buffer += data;
-                if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
-                    currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
-                }
                 if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
                     try {
                         currentSession.ws.send(JSON.stringify({ type: 'output', data }));
@@ -186,6 +213,8 @@ function setupWebSocketServer(server) {
 
         // Start abduco attach/create client
         ensureAttached();
+        // Ensure background logger is attached to collect history
+        ensureLoggerAttached(sessionID);
 
         // Handle WebSocket messages
         ws.on('message', (message) => {
