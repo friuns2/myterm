@@ -9,14 +9,23 @@ const { PROJECTS_DIR } = require('../middleware/security');
 
 // Store active terminal sessions
 // session map value shape:
-// { ptyProcess, ws, buffer, created, projectName, sessionName, logPath }
+// { ptyProcess, ws, buffer, created, projectName, sessionName, socketPath, logPath }
 const sessions = new Map();
 const MAX_BUFFER_SIZE = 100 * 1024; // 100kb
 
 const LOGS_DIR = path.join(__dirname, '..', 'worktrees', 'logs');
+const SOCKETS_DIR = path.join(__dirname, '..', 'worktrees', 'sockets');
 function ensureLogsDir() {
     try {
         fs.mkdirSync(LOGS_DIR, { recursive: true });
+    } catch (e) {
+        // ignore
+    }
+}
+
+function ensureSocketsDir() {
+    try {
+        fs.mkdirSync(SOCKETS_DIR, { recursive: true });
     } catch (e) {
         // ignore
     }
@@ -44,6 +53,12 @@ function getLogPath(sessionID) {
     return path.join(LOGS_DIR, `${sessionID}.log`);
 }
 
+function getSocketPath(sessionID, projectName) {
+    ensureSocketsDir();
+    const base = buildSessionName(sessionID, projectName);
+    return path.join(SOCKETS_DIR, `${base}.sock`);
+}
+
 function readLogTail(logPath) {
     try {
         if (fs.existsSync(logPath)) {
@@ -67,34 +82,20 @@ function appendToLog(logPath, data) {
     }
 }
 
-function listAbducoSessions() {
+function listDtachSockets() {
+    ensureSocketsDir();
     try {
-        // abduco -l prints a table; last column is the name
-        const out = execSync('abduco -l', { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
-        return out
-            .split('\n')
-            .map(l => l.trim())
-            .filter(l => l && l.includes('msh_'))
-            .map(l => l.split(/\s+/).pop())
-            .filter(Boolean);
+        return fs.readdirSync(SOCKETS_DIR)
+            .filter(f => f.startsWith('msh_') && f.endsWith('.sock'))
+            .map(f => f.replace(/\.sock$/, ''));
     } catch (e) {
         return [];
     }
 }
 
-function hasCommand(cmd) {
-    try {
-        execSync(process.platform === 'win32' ? `where ${cmd}` : `command -v ${cmd}`, { stdio: 'ignore' });
-        return true;
-    } catch (_) {
-        return false;
-    }
-}
-
-function rehydrateSessionsFromAbduco() {
-    const names = listAbducoSessions();
+function rehydrateSessionsFromDtach() {
+    const names = listDtachSockets();
     names.forEach(name => {
-        // sessionID is middle segment between first and second underscore
         const parts = name.split('_');
         if (parts.length >= 3 && parts[0] === 'msh') {
             const sessionID = parts[1];
@@ -102,6 +103,7 @@ function rehydrateSessionsFromAbduco() {
             if (!sessions.has(sessionID)) {
                 const logPath = getLogPath(sessionID);
                 const buffer = readLogTail(logPath);
+                const socketPath = path.join(SOCKETS_DIR, `${name}.sock`);
                 sessions.set(sessionID, {
                     ptyProcess: null,
                     ws: null,
@@ -109,6 +111,7 @@ function rehydrateSessionsFromAbduco() {
                     created: new Date().toISOString(),
                     projectName,
                     sessionName: name,
+                    socketPath,
                     logPath
                 });
             }
@@ -142,10 +145,10 @@ function wirePtyHandlers(sessionID) {
     });
 }
 
-function killAbducoSessionByName(sessionName) {
+function killDtachSessionBySocket(socketPath) {
     return new Promise((resolve) => {
         try {
-            const killer = pty.spawn('abduco', ['-a', sessionName], {
+            const killer = pty.spawn('dtach', ['-a', socketPath], {
                 name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
             });
             let settled = false;
@@ -165,8 +168,8 @@ function killAbducoSessionByName(sessionName) {
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
-    // Attempt to recover any existing abduco sessions on startup
-    rehydrateSessionsFromAbduco();
+    // Attempt to recover any existing dtach sessions on startup
+    rehydrateSessionsFromDtach();
 
     wss.on('connection', (ws, req) => {
         console.log('Terminal connected');
@@ -178,14 +181,16 @@ function setupWebSocketServer(server) {
         let ptyProcess;
 
         if (sessionID && sessions.has(sessionID)) {
-            // Reconnect to existing session; re-attach to abduco if needed
+            // Reconnect to existing session; re-attach to dtach if needed
             const session = sessions.get(sessionID);
             if (!session.sessionName) {
                 session.sessionName = buildSessionName(sessionID, session.projectName);
             }
             if (!session.ptyProcess) {
                 const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
-                ptyProcess = pty.spawn('abduco', ['-a', session.sessionName], {
+                const socketPath = session.socketPath || getSocketPath(sessionID, session.projectName);
+                session.socketPath = socketPath;
+                ptyProcess = pty.spawn('dtach', ['-a', socketPath], {
                     name: 'xterm-color',
                     cols: 80,
                     rows: 24,
@@ -214,16 +219,7 @@ function setupWebSocketServer(server) {
             // Update WebSocket instance
             session.ws = ws;
             console.log(`Reconnected to session: ${sessionID}`);
-            // Send preloaded logs only when not using tmux to approximate scrollback
-            if (!session.usesTmux) {
-                const preload = session.buffer && session.buffer.length > 0
-                    ? session.buffer
-                    : readLogTail(session.logPath || getLogPath(sessionID));
-                if (preload && preload.length > 0) {
-                    session.buffer = preload.slice(-MAX_BUFFER_SIZE);
-                    try { ws.send(JSON.stringify({ type: 'output', data: session.buffer })); } catch (_) {}
-                }
-            }
+            // Do not send preloaded logs when PTY is active; rely on abduco's screen state
         } else if (!sessionID && projectName) {
             // Create new PTY process and session for a specific project
             sessionID = uuidv4();
@@ -244,13 +240,9 @@ function setupWebSocketServer(server) {
             
             const mergedEnv = process.env;
             
-            // Use abduco to create or attach the session
-            // Prefer tmux for scrollback preservation if available
-            const useTmux = hasCommand('tmux');
-            const abducoArgs = useTmux
-                ? ['-A', sessionName, 'tmux', 'new-session', '-A', '-s', sessionName]
-                : ['-A', sessionName, shell];
-            ptyProcess = pty.spawn('abduco', abducoArgs, {
+            // Use dtach to create or attach the session
+            const socketPath = getSocketPath(sessionID, projectName);
+            ptyProcess = pty.spawn('dtach', ['-A', socketPath, shell], {
                 name: 'xterm-color',
                 cols: 80,
                 rows: 24,
@@ -259,7 +251,7 @@ function setupWebSocketServer(server) {
             });
 
             const logPath = getLogPath(sessionID);
-            const session = { ptyProcess, ws, buffer: readLogTail(logPath), created: new Date().toISOString(), projectName: projectName || null, sessionName, logPath, usesTmux: useTmux };
+            const session = { ptyProcess, ws, buffer: readLogTail(logPath), created: new Date().toISOString(), projectName: projectName || null, sessionName, socketPath, logPath };
             sessions.set(sessionID, session);
             console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
@@ -279,12 +271,13 @@ function setupWebSocketServer(server) {
             try {
                 let message = 'Missing sessionID in query string';
                 if (sessionID && !sessions.has(sessionID)) {
-                    // Try to see if an abduco session exists with this id and rehydrate
-                    const candidates = listAbducoSessions().filter(name => name.startsWith(`msh_${sessionID}_`));
+                    // Try to see if a dtach socket exists with this id and rehydrate
+                    const candidates = listDtachSockets().filter(name => name.startsWith(`msh_${sessionID}_`));
                     if (candidates.length > 0) {
                         const name = candidates[0];
                         const project = parseProjectFromSessionName(name);
                         const logPath = getLogPath(sessionID);
+                        const socketPath = path.join(SOCKETS_DIR, `${name}.sock`);
                         sessions.set(sessionID, {
                             ptyProcess: null,
                             ws: ws,
@@ -292,22 +285,18 @@ function setupWebSocketServer(server) {
                             created: new Date().toISOString(),
                             projectName: project,
                             sessionName: name,
+                            socketPath,
                             logPath
                         });
                         // Re-run handler logic by simulating existing path
                         // Attach now
                         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
                         const session = sessions.get(sessionID);
-                        const proc = pty.spawn('abduco', ['-a', session.sessionName], {
+                        const proc = pty.spawn('dtach', ['-a', session.socketPath], {
                             name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
                         });
                         session.ptyProcess = proc;
-                        // For unknown/legacy sessions, default to sending logs to seed scrollback
-                        const s = sessions.get(sessionID);
-                        const preload = s.buffer && s.buffer.length > 0 ? s.buffer : readLogTail(s.logPath || getLogPath(sessionID));
-                        if (preload && preload.length > 0) {
-                            try { ws.send(JSON.stringify({ type: 'output', data: preload })); } catch (_) {}
-                        }
+                        // Do not send preloaded logs now; rely on abduco output
                         // Wire handlers
                         proc.onData((data) => {
                             const s = sessions.get(sessionID);
@@ -380,7 +369,7 @@ function setupWebSocketServer(server) {
             }
         });
 
-        // Clean up on WebSocket close: detach from abduco by killing the attach PTY, keep session metadata
+        // Clean up on WebSocket close: detach from dtach by killing the attach PTY, keep session metadata
         ws.on('close', () => {
             console.log(`Terminal disconnected for session: ${sessionID}`);
             const session = sessions.get(sessionID);
@@ -432,10 +421,11 @@ async function deleteSession(sessionId) {
             sessions.delete(sessionId);
         }
     } else {
-        // Try to find by abduco listing
-        const candidates = listAbducoSessions().filter(name => name.startsWith(`msh_${sessionId}_`));
+        // Try to find by dtach socket listing
+        const candidates = listDtachSockets().filter(name => name.startsWith(`msh_${sessionId}_`));
         if (candidates.length > 0) {
-            await killAbducoSessionByName(candidates[0]);
+            const socketPath = path.join(SOCKETS_DIR, `${candidates[0]}.sock`);
+            await killDtachSessionBySocket(socketPath);
         }
         sessions.delete(sessionId);
     }
