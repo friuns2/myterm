@@ -80,7 +80,7 @@ function setupWebSocketServer(server) {
                 env: mergedEnv
             });
 
-            const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null, cols: 80, rows: 24 };
+            const session = { ptyProcess, ws, timeoutId: null, buffer: '', created: new Date().toISOString(), projectName: projectName || null };
             sessions.set(sessionID, session);
             console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
 
@@ -180,10 +180,6 @@ function setupWebSocketServer(server) {
                         // Resize PTY
                         if (ptyProcess && !ptyProcess.killed) {
                             ptyProcess.resize(msg.cols, msg.rows);
-                        }
-                        if (currentSession) {
-                            currentSession.cols = msg.cols;
-                            currentSession.rows = msg.rows;
                         }
                         break;
 

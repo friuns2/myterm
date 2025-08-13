@@ -1,5 +1,11 @@
 /* Terminal-specific styles that work with DaisyUI/Tailwind */
-/* Terminal container and terminal are sized by layout utilities */
+#terminal-container {
+    /* Ensure terminal container takes full available space */
+}
+
+#terminal {
+    /* Terminal will be sized by Tailwind classes */
+}
 
 /* Virtual keyboard button active states */
 #virtual-keyboard button:active {
@@ -176,23 +182,4 @@
 
 #virtual-keyboard {
     padding-bottom: 50px;
-}
-
-
-/* Session thumbnail */
-.session-thumb {
-    font-family: 'Courier New', monospace;
-    background: #000;
-    color: #ddd;
-    width: 640px;
-    height: 480px;
-    overflow: hidden;
-    border-radius: 6px;
-    padding: 6px 8px;
-}
-
-.session-thumb pre {
-    margin: 0;
-    white-space: pre;
-    line-height: 1.0;
 }

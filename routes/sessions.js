@@ -13,32 +13,16 @@ router.get('/', (req, res) => {
     sessions.forEach((session, sessionID) => {
         // Get last several lines from buffer for status (multiline)
         const lines = session.buffer.split('\n');
-        const NUM_STATUS_LINES = 6; // short preview
-        const rows = session.rows || 24;
-        const cols = session.cols || 80;
-        const NUM_SCREEN_LINES = rows; // full screen rows
+        const NUM_STATUS_LINES = 6; // keep it aligned with UI clamp
         let status = 'No output';
-        let screen = 'No output';
         if (lines.length > 0) {
-            const lastStatusLines = lines.slice(-NUM_STATUS_LINES);
-            status = lastStatusLines.join('\n').trim() || 'Active session';
-            const lastScreenLines = lines.slice(-NUM_SCREEN_LINES);
-            // Strip ANSI escape codes and normalize width to cols
-            const ansiRegex = /\x1b\[[0-9;]*m/g;
-            const normalized = lastScreenLines.map(l => {
-                const noAnsi = (l || '').replace(ansiRegex, '');
-                const cut = noAnsi.slice(0, cols);
-                return cut.padEnd(cols, ' ');
-            });
-            screen = normalized.join('\n').trimEnd() || status;
+            const lastLines = lines.slice(-NUM_STATUS_LINES);
+            status = lastLines.join('\n').trim() || 'Active session';
         }
         
         allSessions.push({
             id: sessionID,
             status,
-            screen,
-            rows,
-            cols,
             created: session.created || new Date().toISOString(),
             projectName: session.projectName || 'Unknown'
         });

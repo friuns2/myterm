@@ -17,40 +17,18 @@ function startSessionsStatusAutoRefresh() {
             const res = await fetch('/api/sessions');
             if (!res.ok) return;
             const sessions = await res.json();
-                    sessions.forEach(session => {
+            sessions.forEach(session => {
                 const el = document.getElementById(`session-status-${session.id}`);
                 if (el) {
-                    updateSessionThumbnail(el, session);
+                    // Convert ANSI to HTML and preserve newlines
+                    const html = ansiToHtml(session.status).replace(/\n/g, '<br/>');
+                    el.innerHTML = html;
                 }
             });
         } catch (e) {
             // ignore transient errors
         }
     }, 2000);
-}
-function computeThumbnailFontSize(rows, cols, containerWidth, containerHeight, lineHeight = 1.0, charAspect = 0.6) {
-    // Approximate character cell size: width = fontSize * charAspect, height = fontSize * lineHeight
-    // Fit cols across containerWidth and rows across containerHeight
-    const sizeByWidth = containerWidth / (cols * charAspect);
-    const sizeByHeight = containerHeight / (rows * lineHeight);
-    return Math.floor(Math.min(sizeByWidth, sizeByHeight));
-}
-
-function renderScreenText(session) {
-    const text = session.screen || session.status || '';
-    // Remove ANSI for sizing; keep original for display if desired
-    return text;
-}
-
-function updateSessionThumbnail(preEl, session) {
-    const container = preEl.parentElement;
-    const width = 640;
-    const height = 480;
-    const rows = session.rows || 24;
-    const cols = session.cols || 80;
-    const fontSize = computeThumbnailFontSize(rows, cols, width - 12, height - 12);
-    preEl.style.fontSize = fontSize + 'px';
-    preEl.textContent = renderScreenText(session);
 }
 function goBackToSessionList() {
     // Cleanup terminal before navigating away
@@ -119,7 +97,7 @@ async function showSessionsAndProjectsList() {
                                                     <h3 class="font-semibold text-sm">${session.id}</h3>
                                                     <span class="badge badge-primary badge-sm">${session.projectName}</span>
                                                 </div>
-                                                <div class="session-thumb"><pre id="session-status-${session.id}"></pre></div>
+                                                <p class="text-xs opacity-70 line-clamp-6 break-all">Status: <span id="session-status-${session.id}">${ansiToHtml(session.status).replace(/\n/g, '<br/>')}</span></p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
                                             <div class="flex gap-2">
