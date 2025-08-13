@@ -30,6 +30,10 @@ router.get('/', (req, res) => {
 		let lastCommitShortHash = '';
 		try {
 			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
+			// Resize pane to ~640x480 equivalent (80x30 cells) before capture
+			try {
+				execSync(`tmux resize-pane -t ${safeName} -x 80 -y 30`);
+			} catch (_) {}
 			// Capture visible pane with ANSI for thumbnail
 			const thumbCmd = `tmux capture-pane -pet ${safeName}`; // -p print, -e include escapes, -t target
 			thumbnail = execSync(thumbCmd, { encoding: 'utf8' });
