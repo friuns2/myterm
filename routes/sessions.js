@@ -50,12 +50,18 @@ router.get('/', (req, res) => {
             // ignore git errors
         }
 
-        // Try to infer project name from our tmux naming scheme: msh-<id>-<project>
-        let projectName = 'Unknown';
-        const parts = ts.name.split('-');
-        if (parts[0] === 'msh' && parts.length >= 3) {
-            projectName = parts.slice(2).join('-');
-        }
+		// Derive project name from session path relative to PROJECTS_DIR to preserve slashes
+		let projectName = 'Unknown';
+		try {
+			if (ts.pathStr) {
+				const rel = path.relative(PROJECTS_DIR, ts.pathStr);
+				if (rel && !rel.startsWith('..')) {
+					projectName = rel.split(path.sep).join('/');
+				} else {
+					projectName = path.basename(ts.pathStr);
+				}
+			}
+		} catch (_) {}
 
 		return {
 			id: ts.name,
