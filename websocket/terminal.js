@@ -107,6 +107,32 @@ function rehydrateSessionsFromAbduco() {
     });
 }
 
+function wirePtyHandlers(sessionID) {
+    const session = sessions.get(sessionID);
+    if (!session || !session.ptyProcess) return;
+    const proc = session.ptyProcess;
+    // Avoid double wiring by marking a symbol on the proc
+    if (proc.__mshWired) return;
+    proc.__mshWired = true;
+    proc.onData((data) => {
+        const s = sessions.get(sessionID);
+        if (!s) return;
+        s.buffer = (s.buffer || '') + data;
+        if (s.buffer.length > MAX_BUFFER_SIZE) s.buffer = s.buffer.slice(-MAX_BUFFER_SIZE);
+        appendToLog(s.logPath || getLogPath(sessionID), data);
+        if (s.ws && s.ws.readyState === WebSocket.OPEN) {
+            try { s.ws.send(JSON.stringify({ type: 'output', data })); } catch (_) {}
+        }
+    });
+    proc.onExit(({ exitCode, signal }) => {
+        const s = sessions.get(sessionID);
+        if (s) s.ptyProcess = null;
+        if (s && s.ws && s.ws.readyState === WebSocket.OPEN) {
+            try { s.ws.send(JSON.stringify({ type: 'exit', exitCode, signal })); } catch (_) {}
+        }
+    });
+}
+
 function killAbducoSessionByName(sessionName) {
     return new Promise((resolve) => {
         try {
@@ -158,8 +184,10 @@ function setupWebSocketServer(server) {
                     env: process.env
                 });
                 session.ptyProcess = ptyProcess;
+                wirePtyHandlers(sessionID);
             } else {
                 ptyProcess = session.ptyProcess;
+                wirePtyHandlers(sessionID);
             }
             
             // Clear previous timeout for this session
@@ -227,42 +255,10 @@ function setupWebSocketServer(server) {
                 sessionID: sessionID
             }));
 
-            // Set up PTY event handlers only for new sessions
-            // Send PTY output to WebSocket and buffer it
-            ptyProcess.onData((data) => {
-                const currentSession = sessions.get(sessionID);
-                if (currentSession) {
-                    currentSession.buffer += data;
-                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
-                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
-                    }
-                    appendToLog(currentSession.logPath || getLogPath(sessionID), data);
-                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                        try {
-                            currentSession.ws.send(JSON.stringify({ type: 'output', data }));
-                        } catch (error) {
-                            console.error(`Error sending data to session ${sessionID}:`, error);
-                        }
-                    }
-                }
-            });
+            wirePtyHandlers(sessionID);
 
             // Handle PTY exit
-            ptyProcess.onExit(({ exitCode, signal }) => {
-                console.log(`PTY detached/exited with code: ${exitCode}, signal: ${signal}`);
-                const currentSession = sessions.get(sessionID);
-                if (currentSession) {
-                    // Do not delete the session; underlying abduco-managed shell may still run
-                    currentSession.ptyProcess = null;
-                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                        try {
-                            currentSession.ws.send(JSON.stringify({ type: 'exit', exitCode, signal }));
-                        } catch (error) {
-                            // ignore
-                        }
-                    }
-                }
-            });
+            // exit handler wired in wirePtyHandlers
         } else {
             // Do NOT auto-create sessions when no valid sessionID is provided and no project is specified
             // Send an error to the client and close the connection
