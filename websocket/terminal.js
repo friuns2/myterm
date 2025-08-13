@@ -205,16 +205,7 @@ function setupWebSocketServer(server) {
             // Update WebSocket instance
             session.ws = ws;
             console.log(`Reconnected to session: ${sessionID}`);
-            
-            // Send buffered content to reconnecting client (from memory or log)
-            const preload = session.buffer && session.buffer.length > 0
-                ? session.buffer
-                : readLogTail(session.logPath || getLogPath(sessionID));
-            if (preload && preload.length > 0) {
-                session.buffer = preload.slice(-MAX_BUFFER_SIZE);
-                ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
-                console.log(`Sent ${session.buffer.length} characters from buffer`);
-            }
+            // Do not send preloaded logs when PTY is active; rely on abduco's screen state
         } else if (!sessionID && projectName) {
             // Create new PTY process and session for a specific project
             sessionID = uuidv4();
@@ -288,10 +279,7 @@ function setupWebSocketServer(server) {
                             name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
                         });
                         session.ptyProcess = proc;
-                        // Send buffer
-                        if (session.buffer && session.buffer.length > 0) {
-                            ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
-                        }
+                        // Do not send preloaded logs now; rely on abduco output
                         // Wire handlers
                         proc.onData((data) => {
                             const s = sessions.get(sessionID);
@@ -353,14 +341,7 @@ function setupWebSocketServer(server) {
                         break;
 
                     case 'requestBuffer':
-                        // Re-send buffered/logged output
-                        const s = sessions.get(sessionID);
-                        if (s && s.ws === ws) {
-                            const preload = s.buffer && s.buffer.length > 0 ? s.buffer : readLogTail(s.logPath || getLogPath(sessionID));
-                            if (preload && preload.length > 0) {
-                                try { ws.send(JSON.stringify({ type: 'output', data: preload })); } catch (_) {}
-                            }
-                        }
+                        // Deprecated: avoid double-drawing causing cursor jump
                         break;
 
                     default:
