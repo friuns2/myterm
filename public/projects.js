@@ -105,14 +105,14 @@ async function showSessionsAndProjectsList() {
                                                 <p class="text-xs opacity-70 mt-2" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
-                                            <div class="flex gap-2">
-                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}')">
-                                                    Connect
-                                                </button>
-                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
-                                                    Kill
-                                                </button>
-                                            </div>
+                                        </div>
+                                        <div class="flex gap-2 mt-4 justify-end">
+                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                                Connect
+                                            </button>
+                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                Kill
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
