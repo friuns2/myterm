@@ -1,79 +1,43 @@
 const express = require('express');
-const path = require('path');
-const { execFile } = require('child_process');
-const { PROJECTS_DIR } = require('../middleware/security');
 
 const router = express.Router();
 
-// API endpoint to get all sessions across all projects (merge in-memory + abduco list)
+// API endpoint to get all sessions across all projects
 router.get('/', (req, res) => {
-    const { getSessions } = require('../websocket/terminal');
-    const sessions = getSessions();
-
-    const allSessions = [];
-    const seen = new Set();
-
-    // In-memory sessions (with buffered status)
-    sessions.forEach((session, sessionID) => {
-        const lines = session.buffer.split('\n');
-        const NUM_STATUS_LINES = 6;
-        let status = 'No output';
-        if (lines.length > 0) {
-            const lastLines = lines.slice(-NUM_STATUS_LINES);
-            status = lastLines.join('\n').trim() || 'Active session';
-        }
-        allSessions.push({
-            id: sessionID,
-            status,
-            created: session.created || new Date().toISOString(),
-            projectName: session.projectName || 'Unknown'
+    const { getSessions, listAbducoSessions, getAllSessionsInfo } = require('../websocket/terminal');
+    const wsSessions = getSessions();
+    const abduco = listAbducoSessions();
+    const info = getAllSessionsInfo();
+    const result = [];
+    const NUM_STATUS_LINES = 6;
+    const statusFor = (buf) => {
+        const lines = (buf || '').split('\n');
+        if (lines.length === 0) return 'No output';
+        const lastLines = lines.slice(-NUM_STATUS_LINES);
+        return lastLines.join('\n').trim() || 'Active session';
+    };
+    abduco.forEach(s => {
+        const wsEntry = wsSessions.get(s.id);
+        const meta = info[s.id] || {};
+        result.push({
+            id: s.id,
+            status: statusFor(wsEntry ? wsEntry.buffer : ''),
+            created: (wsEntry && wsEntry.created) || meta.created || new Date().toISOString(),
+            projectName: (wsEntry && wsEntry.projectName) || meta.projectName || 'Unknown'
         });
-        seen.add(sessionID);
     });
-
-    // Also include abduco-listed sessions
-    execFile('abduco', ['-l'], { timeout: 2000 }, (err, stdout) => {
-        if (!err && stdout) {
-            const lines = stdout.split('\n');
-            for (const line of lines) {
-                // Example: "  Wed    2025-08-13 09:42:34    mysession"
-                const m = line.match(/\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(.+)$/);
-                if (m) {
-                    const createdStr = m[1];
-                    const name = m[2].trim();
-                    if (!seen.has(name)) {
-                        // Try to parse date, fallback to now
-                        let created = new Date(createdStr);
-                        if (isNaN(created.getTime())) {
-                            created = new Date();
-                        }
-                        allSessions.push({
-                            id: name,
-                            status: 'Detached session (abduco)',
-                            created: created.toISOString(),
-                            projectName: 'Unknown'
-                        });
-                        seen.add(name);
-                    }
-                }
-            }
-        }
-        res.json(allSessions);
-    });
+    res.json(result);
 });
 
 
 
-// API endpoint to kill a session (abduco-aware)
-router.delete('/:sessionId', (req, res) => {
+// API endpoint to kill a session
+router.delete('/:sessionId', async (req, res) => {
     const sessionId = req.params.sessionId;
     const { deleteSession } = require('../websocket/terminal');
-    try {
-        deleteSession(sessionId);
-        res.json({ success: true, message: 'Session termination requested' });
-    } catch (e) {
-        res.status(500).json({ success: false, message: 'Failed to terminate session' });
-    }
+    const ok = await deleteSession(sessionId);
+    if (ok) res.json({ success: true, message: 'Session terminated' });
+    else res.status(404).json({ success: false, message: 'Session not found or still running' });
 });
 
 module.exports = router;
