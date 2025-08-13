@@ -105,6 +105,10 @@ const connectWebSocket = () => {
             cols: terminal.cols,
             rows: terminal.rows
         }));
+        // Ask server to resend any buffered output right after open
+        try {
+            ws.send(JSON.stringify({ type: 'requestBuffer' }));
+        } catch (_) {}
     };
 
     ws.onmessage = (event) => {

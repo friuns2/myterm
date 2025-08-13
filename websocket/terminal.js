@@ -6,96 +6,132 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
-const { registerSession, unregisterSession, getSessionInfo, getAllSessionsInfo } = require('./sessionRegistry');
 
-const SESSIONS_LOG_DIR = path.join(__dirname, '..', 'sessions');
+// Store active terminal sessions
+// session map value shape:
+// { ptyProcess, ws, buffer, created, projectName, sessionName, logPath }
+const sessions = new Map();
+const MAX_BUFFER_SIZE = 100 * 1024; // 100kb
 
-// Store active websocket-attached client state and rolling buffers
-const sessions = new Map(); // Map: sessionID -> { ws, buffer, projectName, created }
-const loggerClients = new Map(); // Map: sessionID -> persistent abduco attach pty that feeds buffer
-const MAX_BUFFER_SIZE = 100 * 1024; // Maximum number of characters to buffer (100kb)
+const LOGS_DIR = path.join(__dirname, '..', 'worktrees', 'logs');
+function ensureLogsDir() {
+    try {
+        fs.mkdirSync(LOGS_DIR, { recursive: true });
+    } catch (e) {
+        // ignore
+    }
+}
+
+function buildSessionName(sessionID, projectName) {
+    const proj = projectName ? encodeURIComponent(projectName) : 'default';
+    return `msh_${sessionID}_${proj}`;
+}
+
+function parseProjectFromSessionName(sessionName) {
+    const parts = sessionName.split('_');
+    if (parts.length >= 3 && parts[0] === 'msh') {
+        try {
+            return decodeURIComponent(parts.slice(2).join('_'));
+        } catch (e) {
+            return parts.slice(2).join('_');
+        }
+    }
+    return null;
+}
+
+function getLogPath(sessionID) {
+    ensureLogsDir();
+    return path.join(LOGS_DIR, `${sessionID}.log`);
+}
+
+function readLogTail(logPath) {
+    try {
+        if (fs.existsSync(logPath)) {
+            const data = fs.readFileSync(logPath, 'utf8');
+            if (data.length > MAX_BUFFER_SIZE) {
+                return data.slice(-MAX_BUFFER_SIZE);
+            }
+            return data;
+        }
+    } catch (e) {
+        // ignore
+    }
+    return '';
+}
+
+function appendToLog(logPath, data) {
+    try {
+        fs.appendFile(logPath, data, () => {});
+    } catch (e) {
+        // ignore
+    }
+}
 
 function listAbducoSessions() {
     try {
-        const out = execSync('abduco -l', { encoding: 'utf8' });
-        // Example lines may look like:
-        //  Mon 01 Jan 00:00:00 2025  detached  mysession
-        //  Mon 01 Jan 00:00:00 2025  attached  anothersession
-        const lines = out.split('\n').map(l => l.trim()).filter(Boolean);
-        const result = [];
-        for (const line of lines) {
-            const parts = line.split(/\s+/);
-            const name = parts[parts.length - 1];
-            const attached = line.includes('attached');
-            if (name && name !== 'sessions:' && !name.includes(':')) {
-                result.push({ id: name, attached });
-            }
-        }
-        return result;
-    } catch (_) {
+        // abduco -l prints a table; last column is the name
+        const out = execSync('abduco -l', { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+        return out
+            .split('\n')
+            .map(l => l.trim())
+            .filter(l => l && l.includes('msh_'))
+            .map(l => l.split(/\s+/).pop())
+            .filter(Boolean);
+    } catch (e) {
         return [];
     }
 }
 
-function abducoSessionExists(sessionID) {
-    return listAbducoSessions().some(s => s.id === sessionID);
+function rehydrateSessionsFromAbduco() {
+    const names = listAbducoSessions();
+    names.forEach(name => {
+        // sessionID is middle segment between first and second underscore
+        const parts = name.split('_');
+        if (parts.length >= 3 && parts[0] === 'msh') {
+            const sessionID = parts[1];
+            const projectName = parseProjectFromSessionName(name);
+            if (!sessions.has(sessionID)) {
+                const logPath = getLogPath(sessionID);
+                const buffer = readLogTail(logPath);
+                sessions.set(sessionID, {
+                    ptyProcess: null,
+                    ws: null,
+                    buffer,
+                    created: new Date().toISOString(),
+                    projectName,
+                    sessionName: name,
+                    logPath
+                });
+            }
+        }
+    });
 }
 
-function ensureLoggerAttached(sessionID) {
-    if (loggerClients.has(sessionID)) return;
-    if (!abducoSessionExists(sessionID)) return;
-    try {
-        const logger = pty.spawn('abduco', ['-a', sessionID], {
-            name: 'xterm-color',
-            cols: 80,
-            rows: 24,
-            cwd: process.cwd(),
-            env: process.env
-        });
-        logger.onData((data) => {
-            const entry = sessions.get(sessionID);
-            if (!entry) return;
-            entry.buffer += data;
-            if (entry.buffer.length > MAX_BUFFER_SIZE) {
-                entry.buffer = entry.buffer.slice(-MAX_BUFFER_SIZE);
-            }
-        });
-        logger.onExit(() => {
-            loggerClients.delete(sessionID);
-            // Optionally, try to reattach if session still exists
-            setTimeout(() => {
-                if (abducoSessionExists(sessionID)) ensureLoggerAttached(sessionID);
-            }, 500);
-        });
-        loggerClients.set(sessionID, logger);
-    } catch (_) {}
+function killAbducoSessionByName(sessionName) {
+    return new Promise((resolve) => {
+        try {
+            const killer = pty.spawn('abduco', ['-a', sessionName], {
+                name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
+            });
+            let settled = false;
+            const tidy = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+            const timer = setTimeout(() => {
+                try { killer.kill(); } catch (_) {}
+                tidy(false);
+            }, 4000);
+            killer.onData(() => {});
+            setTimeout(() => { try { killer.write('exit\r'); } catch (_) {} }, 50);
+            killer.onExit(() => { clearTimeout(timer); tidy(true); });
+        } catch (e) {
+            resolve(false);
+        }
+    });
 }
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
-
-    // Hydrate sessions map and attach background loggers for any existing abduco sessions
-    const hydrateExistingSessions = () => {
-        try {
-            const existing = listAbducoSessions();
-            const info = getAllSessionsInfo();
-            existing.forEach(s => {
-                if (!sessions.has(s.id)) {
-                    const meta = info[s.id] || {};
-                    sessions.set(s.id, {
-                        ws: null,
-                        buffer: '',
-                        created: meta.created || new Date().toISOString(),
-                        projectName: meta.projectName || null
-                    });
-                }
-                ensureLoggerAttached(s.id);
-            });
-        } catch (_) {}
-    };
-    hydrateExistingSessions();
-    setTimeout(hydrateExistingSessions, 500);
-    setInterval(hydrateExistingSessions, 5000);
+    // Attempt to recover any existing abduco sessions on startup
+    rehydrateSessionsFromAbduco();
 
     wss.on('connection', (ws, req) => {
         console.log('Terminal connected');
@@ -104,19 +140,187 @@ function setupWebSocketServer(server) {
         const url = new URL(req.url, `http://${req.headers.host}`);
         let sessionID = url.searchParams.get('sessionID');
         const projectName = url.searchParams.get('projectName');
-        let ptyProcess; // this is the abduco attach/create client process
+        let ptyProcess;
 
-        // Establish or attach to abduco-backed session
-        if (!sessionID && projectName) {
-            // New session in given project
+        if (sessionID && sessions.has(sessionID)) {
+            // Reconnect to existing session; re-attach to abduco if needed
+            const session = sessions.get(sessionID);
+            if (!session.sessionName) {
+                session.sessionName = buildSessionName(sessionID, session.projectName);
+            }
+            if (!session.ptyProcess) {
+                const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
+                ptyProcess = pty.spawn('abduco', ['-a', session.sessionName], {
+                    name: 'xterm-color',
+                    cols: 80,
+                    rows: 24,
+                    cwd: process.cwd(),
+                    env: process.env
+                });
+                session.ptyProcess = ptyProcess;
+            } else {
+                ptyProcess = session.ptyProcess;
+            }
+            
+            // Clear previous timeout for this session
+            if (session.timeoutId) {
+                clearTimeout(session.timeoutId);
+                session.timeoutId = null;
+            }
+            
+            // Close any existing WebSocket connection for this session
+            if (session.ws && session.ws !== ws && session.ws.readyState === WebSocket.OPEN) {
+                console.log(`Closing previous WebSocket connection for session: ${sessionID}`);
+                session.ws.close(1000, 'New connection established');
+            }
+            
+            // Update WebSocket instance
+            session.ws = ws;
+            console.log(`Reconnected to session: ${sessionID}`);
+            
+            // Send buffered content to reconnecting client (from memory or log)
+            const preload = session.buffer && session.buffer.length > 0
+                ? session.buffer
+                : readLogTail(session.logPath || getLogPath(sessionID));
+            if (preload && preload.length > 0) {
+                session.buffer = preload.slice(-MAX_BUFFER_SIZE);
+                ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
+                console.log(`Sent ${session.buffer.length} characters from buffer`);
+            }
+        } else if (!sessionID && projectName) {
+            // Create new PTY process and session for a specific project
             sessionID = uuidv4();
-        }
+            const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
+            const sessionName = buildSessionName(sessionID, projectName);
+            // Determine working directory
+            let cwd = process.cwd();
+            if (projectName) {
+                const projectPath = path.join(PROJECTS_DIR, projectName);
+                if (fs.existsSync(projectPath)) {
+                    cwd = projectPath;
+                } else {
+                    // Create project directory if it doesn't exist
+                    fs.mkdirSync(projectPath, { recursive: true });
+                    cwd = projectPath;
+                }
+            }
+            
+            const mergedEnv = process.env;
+            
+            // Use abduco to create or attach the session
+            ptyProcess = pty.spawn('abduco', ['-A', sessionName, shell], {
+                name: 'xterm-color',
+                cols: 80,
+                rows: 24,
+                cwd: cwd,
+                env: mergedEnv
+            });
 
-        if (!sessionID) {
+            const logPath = getLogPath(sessionID);
+            const session = { ptyProcess, ws, buffer: readLogTail(logPath), created: new Date().toISOString(), projectName: projectName || null, sessionName, logPath };
+            sessions.set(sessionID, session);
+            console.log(`New session created: ${sessionID} for project: ${projectName || 'default'}`);
+
+            // Send session ID to client
+            ws.send(JSON.stringify({
+                type: 'sessionID',
+                sessionID: sessionID
+            }));
+
+            // Set up PTY event handlers only for new sessions
+            // Send PTY output to WebSocket and buffer it
+            ptyProcess.onData((data) => {
+                const currentSession = sessions.get(sessionID);
+                if (currentSession) {
+                    currentSession.buffer += data;
+                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+                    }
+                    appendToLog(currentSession.logPath || getLogPath(sessionID), data);
+                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                        try {
+                            currentSession.ws.send(JSON.stringify({ type: 'output', data }));
+                        } catch (error) {
+                            console.error(`Error sending data to session ${sessionID}:`, error);
+                        }
+                    }
+                }
+            });
+
+            // Handle PTY exit
+            ptyProcess.onExit(({ exitCode, signal }) => {
+                console.log(`PTY detached/exited with code: ${exitCode}, signal: ${signal}`);
+                const currentSession = sessions.get(sessionID);
+                if (currentSession) {
+                    // Do not delete the session; underlying abduco-managed shell may still run
+                    currentSession.ptyProcess = null;
+                    if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
+                        try {
+                            currentSession.ws.send(JSON.stringify({ type: 'exit', exitCode, signal }));
+                        } catch (error) {
+                            // ignore
+                        }
+                    }
+                }
+            });
+        } else {
             // Do NOT auto-create sessions when no valid sessionID is provided and no project is specified
             // Send an error to the client and close the connection
             try {
                 let message = 'Missing sessionID in query string';
+                if (sessionID && !sessions.has(sessionID)) {
+                    // Try to see if an abduco session exists with this id and rehydrate
+                    const candidates = listAbducoSessions().filter(name => name.startsWith(`msh_${sessionID}_`));
+                    if (candidates.length > 0) {
+                        const name = candidates[0];
+                        const project = parseProjectFromSessionName(name);
+                        const logPath = getLogPath(sessionID);
+                        sessions.set(sessionID, {
+                            ptyProcess: null,
+                            ws: ws,
+                            buffer: readLogTail(logPath),
+                            created: new Date().toISOString(),
+                            projectName: project,
+                            sessionName: name,
+                            logPath
+                        });
+                        // Re-run handler logic by simulating existing path
+                        // Attach now
+                        const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh';
+                        const session = sessions.get(sessionID);
+                        const proc = pty.spawn('abduco', ['-a', session.sessionName], {
+                            name: 'xterm-color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
+                        });
+                        session.ptyProcess = proc;
+                        // Send buffer
+                        if (session.buffer && session.buffer.length > 0) {
+                            ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
+                        }
+                        // Wire handlers
+                        proc.onData((data) => {
+                            const s = sessions.get(sessionID);
+                            if (!s) return;
+                            s.buffer += data;
+                            if (s.buffer.length > MAX_BUFFER_SIZE) s.buffer = s.buffer.slice(-MAX_BUFFER_SIZE);
+                            appendToLog(s.logPath || getLogPath(sessionID), data);
+                            if (s.ws && s.ws.readyState === WebSocket.OPEN) {
+                                try { s.ws.send(JSON.stringify({ type: 'output', data })); } catch (_) {}
+                            }
+                        });
+                        proc.onExit(({ exitCode, signal }) => {
+                            const s = sessions.get(sessionID);
+                            if (s) s.ptyProcess = null;
+                            if (s && s.ws && s.ws.readyState === WebSocket.OPEN) {
+                                try { s.ws.send(JSON.stringify({ type: 'exit', exitCode, signal })); } catch (_) {}
+                            }
+                        });
+                        // Also send sessionID to client now
+                        ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
+                        return; // early return; we've set up the session
+                    } else {
+                        message = `Session not found: ${sessionID}`;
+                    }
+                }
                 ws.send(JSON.stringify({ type: 'error', message }));
             } catch (e) {
                 // ignore send errors
@@ -125,126 +329,6 @@ function setupWebSocketServer(server) {
             return;
         }
 
-        // Resolve project working directory
-        let cwd = process.cwd();
-        let resolvedProject = projectName;
-        if (resolvedProject) {
-            const projectPath = path.join(PROJECTS_DIR, resolvedProject);
-            if (!fs.existsSync(projectPath)) fs.mkdirSync(projectPath, { recursive: true });
-            cwd = projectPath;
-        } else {
-            const info = getSessionInfo(sessionID);
-            if (info && info.projectName) {
-                const projectPath = path.join(PROJECTS_DIR, info.projectName);
-                if (fs.existsSync(projectPath)) {
-                    cwd = projectPath;
-                    resolvedProject = info.projectName;
-                }
-            }
-        }
-
-        if (!fs.existsSync(SESSIONS_LOG_DIR)) {
-            try { fs.mkdirSync(SESSIONS_LOG_DIR, { recursive: true }); } catch (_) {}
-        }
-
-        const logPath = path.join(SESSIONS_LOG_DIR, `${sessionID}.log`);
-        const isWin = os.platform() === 'win32';
-        const createArgs = isWin
-            ? ['-c', sessionID, 'powershell.exe']
-            : ['-c', sessionID, 'zsh'];
-        const attachArgs = ['-a', sessionID];
-
-        const ensureAttached = () => {
-            const exists = abducoSessionExists(sessionID);
-            const args = exists ? attachArgs : createArgs;
-            const env = process.env;
-            ptyProcess = pty.spawn('abduco', args, {
-                name: 'xterm-color',
-                cols: 80,
-                rows: 24,
-                cwd: exists ? process.cwd() : cwd,
-                env
-            });
-
-            // Register metadata on creation path
-            if (!exists) {
-                registerSession(sessionID, resolvedProject || null);
-            }
-
-            // Create/refresh session entry
-            const existing = sessions.get(sessionID) || { buffer: '', created: new Date().toISOString() };
-            const session = {
-                ws,
-                buffer: existing.buffer || '',
-                created: existing.created,
-                projectName: resolvedProject || (existing.projectName || null)
-            };
-            sessions.set(sessionID, session);
-
-            // Inform client of sessionID only if it's a new session (no sessionID provided by client)
-            if (!url.searchParams.get('sessionID')) {
-                ws.send(JSON.stringify({ type: 'sessionID', sessionID }));
-            }
-
-            // Send buffered history or log tail immediately on connect
-            let sentHistory = false;
-            if (session.buffer && session.buffer.length > 0) {
-                try {
-                    ws.send(JSON.stringify({ type: 'output', data: session.buffer }));
-                    sentHistory = true;
-                } catch (_) {}
-            }
-            if (!sentHistory) {
-                try {
-                    const stats = fs.existsSync(logPath) ? fs.statSync(logPath) : null;
-                    if (stats && stats.size > 0) {
-                        const bytesToRead = Math.min(stats.size, MAX_BUFFER_SIZE);
-                        const fd = fs.openSync(logPath, 'r');
-                        const buf = Buffer.alloc(bytesToRead);
-                        fs.readSync(fd, buf, 0, bytesToRead, stats.size - bytesToRead);
-                        fs.closeSync(fd);
-                        const prehistory = buf.toString('utf8');
-                        session.buffer = prehistory;
-                        ws.send(JSON.stringify({ type: 'output', data: prehistory }));
-                    }
-                } catch (_) {}
-            }
-
-            // Pipe abduco client output to ws; also append to buffer if no logger yet
-            ptyProcess.onData((data) => {
-                const currentSession = sessions.get(sessionID);
-                if (!currentSession) return;
-                if (!loggerClients.has(sessionID)) {
-                    currentSession.buffer += data;
-                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
-                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
-                    }
-                }
-                if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                    try {
-                        currentSession.ws.send(JSON.stringify({ type: 'output', data }));
-                    } catch (error) {
-                        // ignore transient send errors
-                    }
-                }
-            });
-
-            ptyProcess.onExit(({ exitCode, signal }) => {
-                // abduco client exited (detach/close). Keep session entry for status/history
-                const currentSession = sessions.get(sessionID);
-                if (currentSession && currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
-                    try {
-                        currentSession.ws.send(JSON.stringify({ type: 'exit', exitCode, signal }));
-                    } catch (_) {}
-                }
-            });
-        };
-
-        // Start abduco attach/create client
-        ensureAttached();
-        // Ensure background logger is attached to collect history
-        ensureLoggerAttached(sessionID);
-
         // Handle WebSocket messages
         ws.on('message', (message) => {
             try {
@@ -252,15 +336,35 @@ function setupWebSocketServer(server) {
 
                 // Validate that this WebSocket is still the active one for this session
                 const currentSession = sessions.get(sessionID);
-                if (!currentSession || currentSession.ws !== ws) return;
+                if (!currentSession || currentSession.ws !== ws) {
+                    console.warn(`Received message from inactive WebSocket for session ${sessionID}`);
+                    return;
+                }
 
                 switch (msg.type) {
                     case 'input':
-                        if (ptyProcess && !ptyProcess.killed) ptyProcess.write(msg.data);
+                        // Send input to PTY
+                        if (ptyProcess && !ptyProcess.killed) {
+                            ptyProcess.write(msg.data);
+                        }
                         break;
 
                     case 'resize':
-                        if (ptyProcess && !ptyProcess.killed) ptyProcess.resize(msg.cols, msg.rows);
+                        // Resize PTY
+                        if (ptyProcess && !ptyProcess.killed) {
+                            ptyProcess.resize(msg.cols, msg.rows);
+                        }
+                        break;
+
+                    case 'requestBuffer':
+                        // Re-send buffered/logged output
+                        const s = sessions.get(sessionID);
+                        if (s && s.ws === ws) {
+                            const preload = s.buffer && s.buffer.length > 0 ? s.buffer : readLogTail(s.logPath || getLogPath(sessionID));
+                            if (preload && preload.length > 0) {
+                                try { ws.send(JSON.stringify({ type: 'output', data: preload })); } catch (_) {}
+                            }
+                        }
                         break;
 
                     default:
@@ -271,21 +375,29 @@ function setupWebSocketServer(server) {
             }
         });
 
-        // Clean up on WebSocket close
+        // Clean up on WebSocket close: detach from abduco by killing the attach PTY, keep session metadata
         ws.on('close', () => {
+            console.log(`Terminal disconnected for session: ${sessionID}`);
             const session = sessions.get(sessionID);
             if (session && session.ws === ws) {
-                // Close the abduco client process (underlying session remains)
-                try { if (ptyProcess && !ptyProcess.killed) ptyProcess.kill(); } catch (_) {}
-                // Keep session metadata and buffer for dashboard
+                if (session.ptyProcess && !session.ptyProcess.killed) {
+                    try { session.ptyProcess.kill(); } catch (e) {}
+                }
+                session.ptyProcess = null;
+                session.ws = null;
             }
         });
 
         // Handle WebSocket errors
-        ws.on('error', () => {
+        ws.on('error', (error) => {
+            console.error(`WebSocket error for session ${sessionID}:`, error);
             const session = sessions.get(sessionID);
             if (session && session.ws === ws) {
-                try { if (ptyProcess && !ptyProcess.killed) ptyProcess.kill(); } catch (_) {}
+                if (session.ptyProcess && !session.ptyProcess.killed) {
+                    try { session.ptyProcess.kill(); } catch (e) {}
+                }
+                session.ptyProcess = null;
+                session.ws = null;
             }
         });
     });
@@ -298,50 +410,34 @@ function getSessions() {
 }
 
 async function deleteSession(sessionId) {
-    // Kill supervising abduco process for this session by matching its command line
-    try {
-        if (!abducoSessionExists(sessionId)) {
-            unregisterSession(sessionId);
-            sessions.delete(sessionId);
-            return true;
-        }
-
-        // Find a matching abduco PID (first match)
-        let pid = null;
+    const session = sessions.get(sessionId);
+    if (session) {
         try {
-            const cmd = `pgrep -fl '^abduco( |$).* ${sessionId}( |$)' | awk '{print $1}' | head -n1`;
-            const out = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-            pid = out || null;
-        } catch (_) {
-            pid = null;
+            if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+                session.ws.close();
+            }
+            if (session.ptyProcess && !session.ptyProcess.killed) {
+                try { session.ptyProcess.kill(); } catch (_) {}
+                session.ptyProcess = null;
+            }
+            if (session.sessionName) {
+                await killAbducoSessionByName(session.sessionName);
+            }
+        } finally {
+            sessions.delete(sessionId);
         }
-
-        if (pid) {
-            try { execSync(`kill ${pid}`, { stdio: 'ignore' }); } catch (_) {}
+    } else {
+        // Try to find by abduco listing
+        const candidates = listAbducoSessions().filter(name => name.startsWith(`msh_${sessionId}_`));
+        if (candidates.length > 0) {
+            await killAbducoSessionByName(candidates[0]);
         }
-
-        // Give it a brief moment, then re-check; escalate if needed
-        const wait = (ms) => new Promise(r => setTimeout(r, ms));
-        await wait(200);
-        if (abducoSessionExists(sessionId)) {
-            // Try a broader pkill as fallback
-            try { execSync(`pkill -f 'abduco.* ${sessionId}( |$)'`, { stdio: 'ignore', shell: '/bin/zsh' }); } catch (_) {}
-            await wait(200);
-        }
-
-        const gone = !abducoSessionExists(sessionId);
-        if (gone) unregisterSession(sessionId);
         sessions.delete(sessionId);
-        return gone;
-    } catch (_) {
-        return false;
     }
 }
 
 module.exports = {
     setupWebSocketServer,
     getSessions,
-    deleteSession,
-    listAbducoSessions,
-    getAllSessionsInfo
+    deleteSession
 };
