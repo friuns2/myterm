@@ -74,6 +74,29 @@ function ensureLoggerAttached(sessionID) {
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
 
+    // Hydrate sessions map and attach background loggers for any existing abduco sessions
+    const hydrateExistingSessions = () => {
+        try {
+            const existing = listAbducoSessions();
+            const info = getAllSessionsInfo();
+            existing.forEach(s => {
+                if (!sessions.has(s.id)) {
+                    const meta = info[s.id] || {};
+                    sessions.set(s.id, {
+                        ws: null,
+                        buffer: '',
+                        created: meta.created || new Date().toISOString(),
+                        projectName: meta.projectName || null
+                    });
+                }
+                ensureLoggerAttached(s.id);
+            });
+        } catch (_) {}
+    };
+    hydrateExistingSessions();
+    setTimeout(hydrateExistingSessions, 500);
+    setInterval(hydrateExistingSessions, 5000);
+
     wss.on('connection', (ws, req) => {
         console.log('Terminal connected');
         
@@ -187,10 +210,16 @@ function setupWebSocketServer(server) {
                 } catch (_) {}
             }
 
-            // Pipe abduco client output to ws; buffer via logger only to avoid duplicates
+            // Pipe abduco client output to ws; also append to buffer if no logger yet
             ptyProcess.onData((data) => {
                 const currentSession = sessions.get(sessionID);
                 if (!currentSession) return;
+                if (!loggerClients.has(sessionID)) {
+                    currentSession.buffer += data;
+                    if (currentSession.buffer.length > MAX_BUFFER_SIZE) {
+                        currentSession.buffer = currentSession.buffer.slice(-MAX_BUFFER_SIZE);
+                    }
+                }
                 if (currentSession.ws && currentSession.ws.readyState === WebSocket.OPEN) {
                     try {
                         currentSession.ws.send(JSON.stringify({ type: 'output', data }));
