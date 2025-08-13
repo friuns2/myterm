@@ -32,10 +32,31 @@ router.get('/', (req, res) => {
 		let gitDirty = false;
 		try {
 			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
-			// Resize pane to 200x200 cells and capture visible pane with ANSI for thumbnail
-			try { execSync(`tmux resize-pane -t ${safeName} -x 200 -y 200`); } catch (_) {}
-			const thumbCmd = `tmux capture-pane -pet ${safeName}`; // -p print, -e include escapes, -t target
+			// Try to resize pane to 200x200 cells (best effort; may not apply if target differs)
+			try { execSync(`tmux resize-pane -t ${safeName}:0.0 -x 200 -y 200`); } catch (_) { try { execSync(`tmux resize-pane -t ${safeName} -x 200 -y 200`); } catch (_) {} }
+			// Capture last 200 lines with ANSI
+			const thumbCmd = `tmux capture-pane -pet ${safeName} -S -200`;
 			thumbnail = execSync(thumbCmd, { encoding: 'utf8' });
+			// Enforce 200 cols x 200 lines while preserving ANSI sequences
+			const maxCols = 200, maxLines = 200;
+			const csi = /\x1B\[[0-9;?]*[ -\/]*[@-~]/y;
+			function trimAnsiLine(line) {
+				let out = '', cols = 0;
+				for (let i = 0; i < line.length && cols < maxCols; ) {
+					if (line.charCodeAt(i) === 27) { // ESC
+						csi.lastIndex = i;
+						const m = csi.exec(line);
+						if (m) { out += m[0]; i += m[0].length; continue; }
+					}
+					const ch = line[i];
+					if (ch === '\r') { i++; continue; }
+					out += ch; i++; cols++;
+				}
+				return out;
+			}
+			const lines = (thumbnail || '').split('\n');
+			const trimmed = lines.slice(Math.max(0, lines.length - maxLines)).map(trimAnsiLine);
+			thumbnail = trimmed.join('\n') + '\x1b[0m';
 		} catch (_) {
 			thumbnail = '';
 		}
