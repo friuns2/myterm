@@ -14,7 +14,9 @@ router.get('/', (req, res) => {
         // Get last several lines from buffer for status (multiline)
         const lines = session.buffer.split('\n');
         const NUM_STATUS_LINES = 6; // short preview
-        const NUM_SCREEN_LINES = 24; // approximate full screen rows
+        const rows = session.rows || 24;
+        const cols = session.cols || 80;
+        const NUM_SCREEN_LINES = rows; // full screen rows
         let status = 'No output';
         let screen = 'No output';
         if (lines.length > 0) {
@@ -28,6 +30,8 @@ router.get('/', (req, res) => {
             id: sessionID,
             status,
             screen,
+            rows,
+            cols,
             created: session.created || new Date().toISOString(),
             projectName: session.projectName || 'Unknown'
         });

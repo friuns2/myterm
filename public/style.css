@@ -182,13 +182,17 @@
 /* Session thumbnail */
 .session-thumb {
     font-family: 'Courier New', monospace;
-    font-size: 9px;
-    line-height: 1.05;
-    white-space: pre-wrap;
     background: #000;
     color: #ddd;
-    padding: 6px 8px;
-    border-radius: 6px;
-    max-height: 7.5rem; /* roughly 6-8 lines visible */
+    width: 640px;
+    height: 480px;
     overflow: hidden;
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+
+.session-thumb pre {
+    margin: 0;
+    white-space: pre;
+    line-height: 1.0;
 }
