@@ -30,6 +30,12 @@ function setupWebSocketServer(server) {
             }
         }
 
+        function ensureTmuxTerminalOverrides() {
+            try {
+                execSync('tmux set -g terminal-overrides "xterm*:smcup@:rmcup@"', { stdio: 'ignore' });
+            } catch (_) {}
+        }
+
         function sanitizeName(name) {
             return String(name || '')
                 .replace(/[^a-zA-Z0-9_.-]+/g, '-')
@@ -51,26 +57,8 @@ function setupWebSocketServer(server) {
             }
         }
 
-        let areTmuxOverridesApplied = false;
-
-        function ensureTmuxTerminalOverrides() {
-            if (areTmuxOverridesApplied) return;
-            try {
-                const current = execSync('tmux show -g -v terminal-overrides', { encoding: 'utf8' }).trim();
-                const hasXtermNoAlt = /xterm\*:.*smcup@.*rmcup@/.test(current);
-                if (!hasXtermNoAlt) {
-                    execSync("tmux set -g -a terminal-overrides ',xterm*:smcup@:rmcup@'");
-                }
-            } catch (_) {
-                // ignore if tmux server not started yet; setting below will create it
-                try { execSync("tmux set -g -a terminal-overrides ',xterm*:smcup@:rmcup@'"); } catch (_) {}
-            }
-            areTmuxOverridesApplied = true;
-        }
-
         function createTmuxSession(name, cwd) {
             try {
-                ensureTmuxTerminalOverrides();
                 execSync(`tmux new-session -d -s ${name} -c ${JSON.stringify(cwd).slice(1, -1)}`);
                 return true;
             } catch (error) {
@@ -92,7 +80,6 @@ function setupWebSocketServer(server) {
 
         function attachAndWire(tmuxName, cwdForAttach, sendId) {
             try {
-                ensureTmuxTerminalOverrides();
                 ptyProcess = attachToTmux(tmuxName, cwdForAttach);
             } catch (error) {
                 console.error('Failed to spawn tmux attach:', error.message || String(error));
@@ -134,6 +121,7 @@ function setupWebSocketServer(server) {
             try { ws.close(1011, 'tmux missing'); } catch (_) {}
             return;
         }
+        ensureTmuxTerminalOverrides();
 
         if (sessionID) {
             if (tmuxSessionExists(sessionID)) {
