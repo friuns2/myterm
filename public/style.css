@@ -51,22 +51,24 @@
 
 /* Session thumbnail styling */
 .session-thumb {
-    width: 420px;
-    height: 300px;
-    overflow: hidden;
-    background: #000;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+	display: inline-block;
+	overflow: hidden;
+	background: #000;
+	border-radius: 6px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .session-thumb pre {
     margin: 0;
-    padding: 8px;
-    line-height: 1.05;
+	padding: 8px;
+	line-height: 1.05;
     font-family: "Courier New", monospace;
-    font-size: 7px; /* smaller font to fit more text */
+	font-size: 8px; /* small font to fit more text */
     color: #ddd;
-    white-space: pre; /* preserve layout */
+	white-space: pre; /* preserve layout */
+	width: calc(var(--cols, 80) * 1ch);
+	height: calc(var(--rows, 24) * 1.05em);
+	overflow: hidden;
 }
 
 .projects-container::-webkit-scrollbar {

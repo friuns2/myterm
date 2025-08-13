@@ -30,9 +30,22 @@ router.get('/', (req, res) => {
 		let lastCommitShortHash = '';
 		try {
 			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
-			// Capture last 24 lines with ANSI, join wraps for smaller payload
-			const thumbCmd = `tmux capture-pane -epJ -S -24 -t ${safeName}`; // -p print, -e escapes, -J join wraps
-			thumbnail = execSync(thumbCmd, { encoding: 'utf8' });
+			// Temporarily shrink window for smaller thumbnail, then restore
+			let origWinW, origWinH;
+			try {
+				origWinW = parseInt(execSync(`tmux display -p -t ${safeName} "#{window_width}"`, { encoding: 'utf8' }).trim(), 10);
+				origWinH = parseInt(execSync(`tmux display -p -t ${safeName} "#{window_height}"`, { encoding: 'utf8' }).trim(), 10);
+			} catch (_) {}
+			try {
+				execSync(`tmux resize-window -t ${safeName} -x 80 -y 24`);				
+			} catch (_) {}
+			thumbnail = execSync(`tmux capture-pane -ep -S -24 -t ${safeName}`, { encoding: 'utf8' });
+			// Restore original window size
+			try {
+				if (Number.isFinite(origWinW) && Number.isFinite(origWinH)) {
+					execSync(`tmux resize-window -t ${safeName} -x ${origWinW} -y ${origWinH}`);
+				}
+			} catch (_) {}
 		} catch (_) {
 			thumbnail = '';
 		}
