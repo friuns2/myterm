@@ -5,6 +5,18 @@ const { execSync } = require('child_process');
 
 const router = express.Router();
 
+// Return a session's path
+router.get('/:sessionId/path', (req, res) => {
+    const { sessionId } = req.params;
+    try {
+        const p = execSync(`tmux display-message -p -t ${sessionId} "#{session_path}"`, { encoding: 'utf8' }).trim();
+        if (!p) return res.status(404).json({ error: 'Path not found for session' });
+        res.json({ path: p });
+    } catch (e) {
+        res.status(404).json({ error: 'Session not found' });
+    }
+});
+
 // API endpoint to get all sessions across all projects
 router.get('/', (req, res) => {
     // Source of truth: list tmux sessions; augment with in-memory attach clients if any

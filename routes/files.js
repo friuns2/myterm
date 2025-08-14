@@ -6,6 +6,15 @@ const { validatePath, PROJECTS_DIR } = require('../middleware/security');
 
 const router = express.Router();
 
+// API endpoint to get server home path
+router.get('/home', (req, res) => {
+    try {
+        res.json({ home: os.homedir() });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get home path' });
+    }
+});
+
 // API endpoint to browse directory contents
 router.get('/browse', (req, res) => {
     const dirPath = req.query.path || process.cwd();
