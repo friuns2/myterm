@@ -9,6 +9,7 @@ const router = express.Router();
 const SETTINGS_DIR = path.join(__dirname, '..', 'settings');
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.zsh');
 const RULES_FILE = path.join(SETTINGS_DIR, 'rules.txt');
+const HOME_DIR = os.homedir();
 
 // Read current local settings file
 function readLocalSettings() {
@@ -65,6 +66,46 @@ function writeRules(rulesText) {
     } catch (error) {
         console.error('Error writing rules file:', error);
         return false;
+    }
+}
+
+// Best-effort: sync rules to common CLI agent locations
+function syncRulesToCliTargets(rulesText) {
+    const targets = [
+        path.join(HOME_DIR, '.gemini', 'GEMINI.md'),
+        path.join(HOME_DIR, '.claude', 'CLAUDE.md'),
+        path.join(HOME_DIR, '.qwen', 'QWEN.md')
+    ];
+    const source = RULES_FILE;
+    for (const target of targets) {
+        try {
+            const dir = path.dirname(target);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+            // If path exists and is a symlink to our source, skip
+            if (fs.existsSync(target)) {
+                try {
+                    const stat = fs.lstatSync(target);
+                    if (stat.isSymbolicLink()) {
+                        const link = fs.readlinkSync(target);
+                        if (path.resolve(link) === path.resolve(source)) continue;
+                    }
+                } catch (_) {}
+            }
+
+            // Try to create/update symlink first
+            try {
+                if (fs.existsSync(target)) fs.unlinkSync(target);
+                fs.symlinkSync(source, target);
+                continue;
+            } catch (_) {
+                // Fall back to writing the content
+            }
+
+            fs.writeFileSync(target, rulesText || '');
+        } catch (error) {
+            console.error('Failed to sync rules to', target, error.message || String(error));
+        }
     }
 }
 
@@ -136,6 +177,8 @@ router.post('/rules', express.json(), (req, res) => {
             return res.status(400).json({ error: 'Invalid text format' });
         }
         if (writeRules(text)) {
+            // Best-effort sync to common CLI config locations
+            try { syncRulesToCliTargets(text); } catch (_) {}
             res.json({ success: true, message: 'Rules updated successfully', length: text.length });
         } else {
             res.status(500).json({ error: 'Failed to save rules' });
