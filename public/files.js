@@ -18,25 +18,9 @@ async function toggleFileBrowser() {
         fileBrowser.classList.add('flex', 'fullscreen');
         isFileBrowserOpen = true;
         
-        // Load initial directory (project directory or server home)
-        let initialPath;
-        if (currentProject) {
-            initialPath = `../projects/${currentProject}`;
-        } else if (sessionID) {
-            try {
-                const r = await fetch(`/api/sessions/${encodeURIComponent(sessionID)}/path`);
-                const j = await r.json();
-                initialPath = r.ok && j.path ? j.path : null;
-            } catch (_) {}
-        }
-        if (!initialPath) {
-            try {
-                const r = await fetch('/api/home');
-                const j = await r.json();
-                initialPath = r.ok ? j.home : '';
-            } catch (_) { initialPath = ''; }
-        }
-        await loadDirectory(initialPath || '/');
+        // Load initial directory (project directory or home)
+        const initialPath = currentProject ? `../projects/${currentProject}` : '~';
+        await loadDirectory(initialPath);
     }
 }
 

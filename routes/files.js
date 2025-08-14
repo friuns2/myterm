@@ -6,18 +6,18 @@ const { validatePath, PROJECTS_DIR } = require('../middleware/security');
 
 const router = express.Router();
 
-// API endpoint to get server home path
-router.get('/home', (req, res) => {
-    try {
-        res.json({ home: os.homedir() });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to get home path' });
-    }
-});
+function expandUserPath(p) {
+    if (!p) return p;
+    if (p === '~' || p.startsWith('~/')) return path.join(os.homedir(), p.slice(2));
+    if (p === '$HOME' || p.startsWith('$HOME/')) return path.join(os.homedir(), p.replace(/^\$HOME\/?/, ''));
+    if (p === 'HOME' || p.startsWith('HOME/')) return path.join(os.homedir(), p.replace(/^HOME\/?/, ''));
+    return p;
+}
 
 // API endpoint to browse directory contents
 router.get('/browse', (req, res) => {
-    const dirPath = req.query.path || process.cwd();
+    const requested = req.query.path;
+    const dirPath = expandUserPath(requested) || os.homedir();
     
     try {
         if (!validatePath(dirPath)) {
@@ -57,7 +57,7 @@ router.get('/browse', (req, res) => {
 
 // API endpoint to read file content
 router.get('/file', (req, res) => {
-    const filePath = req.query.path;
+    const filePath = expandUserPath(req.query.path);
     
     if (!filePath) {
         return res.status(400).json({ error: 'File path is required' });
@@ -94,7 +94,8 @@ router.get('/file', (req, res) => {
 
 // API endpoint to save file content
 router.post('/file', express.json(), (req, res) => {
-    const { path: filePath, content } = req.body;
+    const { path: filePathRaw, content } = req.body;
+    const filePath = expandUserPath(filePathRaw);
     
     if (!filePath) {
         return res.status(400).json({ error: 'File path is required' });
@@ -123,7 +124,8 @@ router.post('/file', express.json(), (req, res) => {
 
 // API endpoint to create folder
 router.post('/folder', express.json(), (req, res) => {
-    const { path: folderPath } = req.body;
+    const { path: folderPathRaw } = req.body;
+    const folderPath = expandUserPath(folderPathRaw);
     
     if (!folderPath) {
         return res.status(400).json({ error: 'Folder path is required' });
