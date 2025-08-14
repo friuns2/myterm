@@ -139,7 +139,7 @@ async function showSessionsAndProjectsList() {
                                 <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow">
                                     <div class="card-body p-4">
                                         <div class="flex justify-between items-start">
-                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
                                                 <div class="flex items-center gap-2 mb-2">
                                                     <h3 class="font-semibold text-sm">${session.id}</h3>
                                                     <span class="badge badge-primary badge-sm">${session.projectName}</span>
@@ -359,7 +359,9 @@ function connectToSession(sessionId, projectName = null, sessionPath = '') {
     
     sessionID = sessionId;
     currentProject = projectName || currentProject;
-    if (sessionPath) { window.__lastSessionPath = sessionPath; }
+    if (sessionPath && typeof sessionPath === 'string' && sessionPath.startsWith('/')) {
+        window.__lastSessionPath = sessionPath;
+    }
     updateURLWithSession(sessionID, currentProject);
     stopSessionsStatusAutoRefresh();
     initializeTerminal();
