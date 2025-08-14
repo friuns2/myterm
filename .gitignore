@@ -101,4 +101,5 @@ pids
 .vscode/
 .idea/
 *.swp
-*.swo 
+*.swo api.sh
+settings/settings.zsh
