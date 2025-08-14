@@ -192,15 +192,40 @@ router.delete('/projects/:projectName/worktrees/:worktreeName', (req, res) => {
         return res.status(404).json({ error: 'Worktree not found' });
     }
 
-    // Remove the worktree
-    exec(`git worktree remove ${worktreePath}`, { cwd: projectPath }, (error, stdout, stderr) => {
-        if (error) {
-            console.error('Error removing worktree:', error);
-            return res.status(500).json({ error: `Failed to remove worktree: ${error.message}` });
-        }
-        
-        console.log(`Worktree removed: ${worktreePath}`);
-        res.json({ success: true, message: `Worktree ${worktreeName} removed successfully` });
+    // First, detect the branch used by this worktree (if any)
+    exec('git branch --show-current', { cwd: worktreePath }, (branchErr, branchStdout) => {
+        const currentBranch = (branchStdout || '').trim();
+
+        // Remove the worktree
+        exec(`git worktree remove ${worktreePath}`, { cwd: projectPath }, (rmErr) => {
+            if (rmErr) {
+                console.error('Error removing worktree:', rmErr);
+                return res.status(500).json({ error: `Failed to remove worktree: ${rmErr.message}` });
+            }
+
+            if (!currentBranch) {
+                console.log(`Worktree removed: ${worktreePath} (no branch to delete or detached HEAD)`);
+                return res.json({ success: true, message: `Worktree ${worktreeName} removed successfully` });
+            }
+
+            // Try to delete the branch in the main repo
+            exec(`git branch -d ${currentBranch}`, { cwd: projectPath }, (delErr) => {
+                if (!delErr) {
+                    console.log(`Worktree and branch removed: ${worktreePath}, ${currentBranch}`);
+                    return res.json({ success: true, message: `Worktree ${worktreeName} and branch ${currentBranch} removed successfully` });
+                }
+
+                // If not fully merged, force delete
+                exec(`git branch -D ${currentBranch}`, { cwd: projectPath }, (forceErr) => {
+                    if (forceErr) {
+                        console.warn(`Worktree removed, but failed to delete branch ${currentBranch}: ${forceErr.message}`);
+                        return res.json({ success: true, message: `Worktree ${worktreeName} removed. Failed to delete branch ${currentBranch}: ${forceErr.message}` });
+                    }
+                    console.log(`Worktree removed and branch force-deleted: ${worktreePath}, ${currentBranch}`);
+                    return res.json({ success: true, message: `Worktree ${worktreeName} removed and branch ${currentBranch} force-deleted` });
+                });
+            });
+        });
     });
 });
 
