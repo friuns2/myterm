@@ -21,7 +21,7 @@ async function toggleFileBrowser() {
         // Load initial directory (session path if available, else project dir, else home)
         const initialPath = (window.__lastSessionPath && typeof window.__lastSessionPath === 'string' && window.__lastSessionPath) ?
             window.__lastSessionPath :
-            (currentProject ? `../projects/${currentProject}` : (process.env.HOME || '~'));
+            (currentProject ? `../projects/${currentProject}` : '/');
         await loadDirectory(initialPath);
     }
 }

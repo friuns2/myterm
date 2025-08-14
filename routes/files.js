@@ -6,25 +6,24 @@ const { validatePath, PROJECTS_DIR } = require('../middleware/security');
 
 const router = express.Router();
 
-function expandUserPath(p) {
-    if (!p) return p;
-    if (p === '~' || p.startsWith('~/')) return path.join(os.homedir(), p.slice(2));
-    if (p === '$HOME' || p.startsWith('$HOME/')) return path.join(os.homedir(), p.replace(/^\$HOME\/?/, ''));
-    if (p === 'HOME' || p.startsWith('HOME/')) return path.join(os.homedir(), p.replace(/^HOME\/?/, ''));
-    return p;
+function normalizePath(inputPath) {
+    if (!inputPath) return inputPath;
+    let p = String(inputPath);
+    if (p === '~' || p.startsWith('~/')) {
+        p = path.join(os.homedir(), p.slice(1));
+    }
+    return path.resolve(p);
 }
 
 // API endpoint to browse directory contents
 router.get('/browse', (req, res) => {
-    const requested = req.query.path;
-    const dirPath = expandUserPath(requested) || os.homedir();
+    const dirPath = req.query.path || process.cwd();
     
     try {
         if (!validatePath(dirPath)) {
             return res.status(403).json({ error: 'Access denied to this directory' });
         }
-        
-        const resolvedPath = path.resolve(dirPath);
+        const resolvedPath = normalizePath(dirPath);
         
         if (!fs.existsSync(resolvedPath)) {
             return res.status(404).json({ error: 'Directory not found' });
@@ -57,7 +56,7 @@ router.get('/browse', (req, res) => {
 
 // API endpoint to read file content
 router.get('/file', (req, res) => {
-    const filePath = expandUserPath(req.query.path);
+    const filePath = req.query.path;
     
     if (!filePath) {
         return res.status(400).json({ error: 'File path is required' });
@@ -67,8 +66,7 @@ router.get('/file', (req, res) => {
         if (!validatePath(filePath)) {
             return res.status(403).json({ error: 'Access denied to this file' });
         }
-        
-        const resolvedPath = path.resolve(filePath);
+        const resolvedPath = normalizePath(filePath);
         
         if (!fs.existsSync(resolvedPath)) {
             return res.status(404).json({ error: 'File not found' });
@@ -94,8 +92,7 @@ router.get('/file', (req, res) => {
 
 // API endpoint to save file content
 router.post('/file', express.json(), (req, res) => {
-    const { path: filePathRaw, content } = req.body;
-    const filePath = expandUserPath(filePathRaw);
+    const { path: filePath, content } = req.body;
     
     if (!filePath) {
         return res.status(400).json({ error: 'File path is required' });
@@ -105,8 +102,7 @@ router.post('/file', express.json(), (req, res) => {
         if (!validatePath(filePath)) {
             return res.status(403).json({ error: 'Access denied to this file' });
         }
-        
-        const resolvedPath = path.resolve(filePath);
+        const resolvedPath = normalizePath(filePath);
         
         // Ensure directory exists
         const dirPath = path.dirname(resolvedPath);
@@ -124,8 +120,7 @@ router.post('/file', express.json(), (req, res) => {
 
 // API endpoint to create folder
 router.post('/folder', express.json(), (req, res) => {
-    const { path: folderPathRaw } = req.body;
-    const folderPath = expandUserPath(folderPathRaw);
+    const { path: folderPath } = req.body;
     
     if (!folderPath) {
         return res.status(400).json({ error: 'Folder path is required' });
@@ -135,8 +130,7 @@ router.post('/folder', express.json(), (req, res) => {
         if (!validatePath(folderPath)) {
             return res.status(403).json({ error: 'Access denied to this location' });
         }
-        
-        const resolvedPath = path.resolve(folderPath);
+        const resolvedPath = normalizePath(folderPath);
         
         if (fs.existsSync(resolvedPath)) {
             return res.status(409).json({ error: 'Folder already exists' });
