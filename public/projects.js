@@ -107,14 +107,20 @@ async function showSessionsAndProjectsList() {
     } catch (_) {}
 
     try {
-        // Fetch all sessions and projects with worktrees in parallel
-        const [sessionsResponse, projectsResponse] = await Promise.all([
+        // Fetch sessions, projects and available shell functions in parallel
+        const [sessionsResponse, projectsResponse, functionsResponse] = await Promise.all([
             fetch('/api/sessions'),
-            fetch('/api/projects-with-worktrees')
+            fetch('/api/projects-with-worktrees'),
+            fetch('/api/settings/functions')
         ]);
         
         const allSessions = await sessionsResponse.json();
         const projectsWithWorktrees = await projectsResponse.json();
+        let functionsList = [];
+        try {
+            const f = await functionsResponse.json();
+            functionsList = (f && f.functions) || [];
+        } catch (_) {}
         
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = `
@@ -193,14 +199,22 @@ async function showSessionsAndProjectsList() {
                                                 <button class="btn btn-secondary btn-sm" onclick="createWorktreeModal('${project.name}')">
                                                     + Worktree
                                                 </button>
-                                                 <button class="btn btn-accent btn-sm" onclick="projectActionsModal('${project.name}')">
-                                                     Actions
-                                                 </button>
                                                 <button class="btn btn-error btn-sm" onclick="deleteProject('${project.name}')">
                                                     Delete
                                                 </button>
                                             </div>
                                         </div>
+
+                                        ${functionsList.length > 0 ? `
+                                            <div class="mt-2">
+                                                <h4 class="text-sm font-semibold mb-2 opacity-80">Actions:</h4>
+                                                <div class="flex flex-wrap gap-1">
+                                                    ${functionsList.map(fn => `
+                                                        <button class=\"btn btn-xs btn-accent\" onclick=\"runFunctionFromButton('${project.name}','${fn.name}',${fn.numParams || 0})\">${fn.name}</button>
+                                                    `).join('')}
+                                                </div>
+                                            </div>
+                                        ` : ''}
                                         
                                         <!-- Worktrees for this project -->
                                         ${project.worktrees.length > 0 ? `
@@ -252,29 +266,11 @@ async function showSessionsAndProjectsList() {
     }
 }
 
-// Show actions for project: parse functions and run selected
-async function projectActionsModal(projectName) {
+// Run a specific function chosen by clicking a button in the project card
+async function runFunctionFromButton(projectName, fnName, numParams) {
     try {
-        const res = await fetch('/api/settings/functions');
-        if (!res.ok) throw new Error('Failed to fetch functions');
-        const { functions } = await res.json();
-        if (!functions || functions.length === 0) {
-            await Swal.fire({ title: 'No Functions', text: 'No shell functions found in settings.zsh', icon: 'info' });
-            return;
-        }
-        const choices = Object.fromEntries(functions.map(f => [f.name, `${f.name} (${f.numParams || 0})`]));
-        const { value: fnName } = await Swal.fire({
-            title: `Run Action in ${projectName}`,
-            input: 'select',
-            inputOptions: choices,
-            inputPlaceholder: 'Select function',
-            showCancelButton: true,
-            confirmButtonText: 'Next'
-        });
-        if (!fnName) return;
-        const fn = functions.find(f => f.name === fnName) || { numParams: 0 };
         const args = [];
-        for (let i = 1; i <= (fn.numParams || 0); i++) {
+        for (let i = 1; i <= (numParams || 0); i++) {
             const { value: argVal, isDismissed } = await Swal.fire({
                 title: `${fnName}: Param ${i}`,
                 input: 'text',
@@ -286,7 +282,7 @@ async function projectActionsModal(projectName) {
         }
         await runFunctionInProjectTerminal(projectName, fnName, args);
     } catch (e) {
-        console.error('Actions modal error:', e);
+        console.error('Run function error:', e);
         await Swal.fire({ title: 'Error', text: String(e.message || e), icon: 'error' });
     }
 }
