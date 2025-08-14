@@ -51,8 +51,7 @@
 
 /* Session thumbnail styling */
 .session-thumb {
-    display: block;
-    width: 100%;
+	display: inline-block;
 	overflow: hidden;
 	background: #000;
 	border-radius: 6px;
@@ -68,7 +67,7 @@
     color: #ddd;
 	white-space: pre; /* preserve layout */
 	width: calc(var(--cols, 81) * 1ch);
-	height: calc(var(--rows, 50) * 1.05em);
+	height: calc(var(--rows, 60) * 1.05em);
 	overflow: hidden;
 }
 

@@ -31,34 +31,6 @@ app.get('/api/projects-with-worktrees', require('./routes/projects').getProjects
 
 const ZSHRC_PATH = path.join(os.homedir(), '.zshrc');
 
-// Function to setup global msh alias
-function setupGlobalAlias() {
-    try {
-        const mshPath = path.join(__dirname, 'msh.js');
-        const aliasLine = `alias msh="node ${mshPath}"`;
-        
-        // Check if .zshrc exists
-        let zshrcContent = '';
-        if (fs.existsSync(ZSHRC_PATH)) {
-            zshrcContent = fs.readFileSync(ZSHRC_PATH, 'utf8');
-        }
-        
-        // Check if alias already exists and update it
-        if (zshrcContent.includes('alias msh=')) {
-            // Replace existing alias with new path
-            const updatedContent = zshrcContent.replace(/alias msh="[^"]*"/g, aliasLine);
-            fs.writeFileSync(ZSHRC_PATH, updatedContent);
-            console.log('Updated msh alias in ~/.zshrc with new path');
-        } else {
-            // Add the alias to .zshrc
-            const newContent = zshrcContent + (zshrcContent.endsWith('\n') ? '' : '\n') + aliasLine + '\n';
-            fs.writeFileSync(ZSHRC_PATH, newContent);
-            console.log('Added msh alias to ~/.zshrc');
-        }
-    } catch (error) {
-        console.error('Error setting up global alias:', error.message);
-    }
-}
 
 // Ensure ~/.zshrc sources local settings file under this project
 function ensureLocalSettingsIncluded() {
@@ -77,8 +49,6 @@ function ensureLocalSettingsIncluded() {
 
 const server = app.listen(port, () => {
     console.log(`Web Terminal running at http://localhost:${port}`);
-    // Setup global alias on server start
-    setupGlobalAlias();
     // Ensure ~/.zshrc includes local settings file
     ensureLocalSettingsIncluded();
 });
