@@ -10,7 +10,7 @@ router.get('/', (req, res) => {
     // Source of truth: list tmux sessions; augment with in-memory attach clients if any
     let tmuxSessions = [];
     try {
-        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created_string}|#{session_path}"', { encoding: 'utf8' });
+        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created_string}|#{session_path}" 2>/dev/null || true', { encoding: 'utf8' });
         tmuxSessions = out
             .split('\n')
             .filter(Boolean)
@@ -31,9 +31,7 @@ router.get('/', (req, res) => {
 		try {
 			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
 			
-			if (thumbnail.length > 0) {
-				thumbnail = execSync(`tmux capture-pane -ep -S -5 -t ${safeName}`, { encoding: 'utf8' });
-			}
+			thumbnail = execSync(`tmux capture-pane -ep -t ${safeName}`, { encoding: 'utf8' });
 			
 		} catch (_) {
 			thumbnail = '';
