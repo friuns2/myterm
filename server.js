@@ -6,7 +6,7 @@ const os = require('os');
 const { basicAuthMiddleware, rejectUpgradeIfUnauthorized } = require('./middleware/basicAuth');
 
 const app = express();
-const port = 3535;
+const port = 3536;
 
 // Serve static files
 app.use(basicAuthMiddleware);

@@ -204,3 +204,51 @@ router.delete('/rules', (req, res) => {
 });
 
 module.exports = router;
+ 
+// Parse functions in settings.zsh and expose via API
+// Heuristic: find function names and count positional parameters by scanning for $1..$N within function body
+function parseFunctionsFromZsh(text) {
+    const results = [];
+    if (typeof text !== 'string' || !text.trim()) return results;
+    const patterns = [
+        /(^|\n)\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{/g,
+        /(^|\n)\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{/g
+    ];
+    for (const re of patterns) {
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const name = m[2];
+            const braceStart = text.indexOf('{', m.index);
+            if (braceStart === -1) continue;
+            let i = braceStart + 1;
+            let depth = 1;
+            while (i < text.length && depth > 0) {
+                const ch = text[i++];
+                if (ch === '{') depth++;
+                else if (ch === '}') depth--;
+            }
+            const body = text.slice(braceStart + 1, i - 1);
+            let maxParam = 0;
+            const dollarParams = body.match(/(?<![A-Za-z0-9_])\$([1-9][0-9]?)/g) || [];
+            for (const tok of dollarParams) {
+                const n = parseInt(tok.slice(1), 10);
+                if (Number.isFinite(n) && n > maxParam) maxParam = n;
+            }
+            if (!results.find(f => f.name === name)) {
+                results.push({ name, numParams: maxParam });
+            }
+        }
+    }
+    return results;
+}
+
+router.get('/functions', (req, res) => {
+    try {
+        const text = readLocalSettings();
+        const functions = parseFunctionsFromZsh(text);
+        res.json({ functions });
+    } catch (error) {
+        console.error('Error parsing functions:', error);
+        res.status(500).json({ error: 'Failed to parse functions' });
+    }
+});

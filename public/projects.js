@@ -193,6 +193,9 @@ async function showSessionsAndProjectsList() {
                                                 <button class="btn btn-secondary btn-sm" onclick="createWorktreeModal('${project.name}')">
                                                     + Worktree
                                                 </button>
+                                                 <button class="btn btn-accent btn-sm" onclick="projectActionsModal('${project.name}')">
+                                                     Actions
+                                                 </button>
                                                 <button class="btn btn-error btn-sm" onclick="deleteProject('${project.name}')">
                                                     Delete
                                                 </button>
@@ -247,6 +250,76 @@ async function showSessionsAndProjectsList() {
         const terminalContainer = document.getElementById('terminal-container');
         terminalContainer.innerHTML = '<div class="p-6 text-center text-error">Error loading sessions and projects</div>';
     }
+}
+
+// Show actions for project: parse functions and run selected
+async function projectActionsModal(projectName) {
+    try {
+        const res = await fetch('/api/settings/functions');
+        if (!res.ok) throw new Error('Failed to fetch functions');
+        const { functions } = await res.json();
+        if (!functions || functions.length === 0) {
+            await Swal.fire({ title: 'No Functions', text: 'No shell functions found in settings.zsh', icon: 'info' });
+            return;
+        }
+        const choices = Object.fromEntries(functions.map(f => [f.name, `${f.name} (${f.numParams || 0})`]));
+        const { value: fnName } = await Swal.fire({
+            title: `Run Action in ${projectName}`,
+            input: 'select',
+            inputOptions: choices,
+            inputPlaceholder: 'Select function',
+            showCancelButton: true,
+            confirmButtonText: 'Next'
+        });
+        if (!fnName) return;
+        const fn = functions.find(f => f.name === fnName) || { numParams: 0 };
+        const args = [];
+        for (let i = 1; i <= (fn.numParams || 0); i++) {
+            const { value: argVal, isDismissed } = await Swal.fire({
+                title: `${fnName}: Param ${i}`,
+                input: 'text',
+                inputPlaceholder: `Enter $${i}`,
+                showCancelButton: true
+            });
+            if (isDismissed) return;
+            args.push(argVal ?? '');
+        }
+        await runFunctionInProjectTerminal(projectName, fnName, args);
+    } catch (e) {
+        console.error('Actions modal error:', e);
+        await Swal.fire({ title: 'Error', text: String(e.message || e), icon: 'error' });
+    }
+}
+
+function shellQuote(arg) {
+    const s = String(arg ?? '');
+    return "'" + s.replace(/'/g, "'\"'\"'") + "'";
+}
+
+async function waitForTerminalConnection(timeoutMs = 8000) {
+    const start = Date.now();
+    while (!(typeof isConnected !== 'undefined' && isConnected)) {
+        if (Date.now() - start > timeoutMs) throw new Error('Terminal connection timeout');
+        await new Promise(r => setTimeout(r, 100));
+    }
+}
+
+async function runFunctionInProjectTerminal(projectName, fnName, args) {
+    // If not already in this project or terminal not active, create session
+    if (typeof currentProject === 'undefined' || currentProject !== projectName || typeof ws === 'undefined') {
+        createNewSessionForProject(projectName);
+    }
+    await waitForTerminalConnection();
+    const cmd = `${fnName} ${args.map(a => shellQuote(a)).join(' ')}`.trim();
+    // Focus and send via websocket
+    try {
+        if (terminal) terminal.focus();
+    } catch (_) {}
+    // Send command and newline similar to custom input behavior
+    ws.send(JSON.stringify({ type: 'input', data: cmd }));
+    setTimeout(() => {
+        try { ws.send(JSON.stringify({ type: 'input', data: '\\r' })); } catch (_) {}
+    }, 50);
 }
 
 async function createNewProject() {
