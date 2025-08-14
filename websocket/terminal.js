@@ -6,6 +6,8 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { execSync } = require('child_process');
+const SETTINGS_DIR = path.join(__dirname, '..', 'settings');
+const RULES_FILE = path.join(SETTINGS_DIR, 'rules.txt');
 
 function setupWebSocketServer(server) {
     const wss = new WebSocket.Server({ server });
@@ -57,9 +59,19 @@ function setupWebSocketServer(server) {
             }
         }
 
-        function createTmuxSession(name, cwd) {
+        function loadRules() {
             try {
-                execSync(`tmux new-session -d -s ${name} -c ${JSON.stringify(cwd).slice(1, -1)}`);
+                if (fs.existsSync(RULES_FILE)) {
+                    return fs.readFileSync(RULES_FILE, 'utf8');
+                }
+            } catch (_) {}
+            return '';
+        }
+
+        function createTmuxSession(name, cwd, baseEnv) {
+            try {
+                const envForTmux = Object.assign({}, process.env, baseEnv || {});
+                execSync(`tmux new-session -d -s ${name} -c ${JSON.stringify(cwd).slice(1, -1)}`, { env: envForTmux });
                 return true;
             } catch (error) {
                 console.error('Failed to create tmux session:', error.message);
@@ -67,8 +79,8 @@ function setupWebSocketServer(server) {
             }
         }
 
-        function spawnInteractiveZsh(cwd) {
-            const env = process.env;
+        function spawnInteractiveZsh(cwd, extraEnv) {
+            const env = Object.assign({}, process.env, extraEnv || {});
             return pty.spawn('zsh', ['-i'], {
                 name: 'xterm-color',
                 cols: 80,
@@ -78,9 +90,9 @@ function setupWebSocketServer(server) {
             });
         }
 
-        function attachAndWire(tmuxName, cwdForAttach, sendId) {
+        function attachAndWire(tmuxName, cwdForAttach, sendId, extraEnv) {
             try {
-                ptyProcess = spawnInteractiveZsh(cwdForAttach);
+                ptyProcess = spawnInteractiveZsh(cwdForAttach, extraEnv);
             } catch (error) {
                 console.error('Failed to spawn tmux attach:', error.message || String(error));
                 try { ws.send(JSON.stringify({ type: 'error', message: 'Failed to attach to tmux. Is tmux installed?' })); } catch (_) {}
@@ -128,6 +140,9 @@ function setupWebSocketServer(server) {
         }
         ensureTmuxTerminalOverrides();
 
+        const rulesText = loadRules();
+        const rulesEnv = { MYSHELL_RULES_PATH: RULES_FILE, MYSHELL_RULES: rulesText };
+
         if (sessionID) {
             if (tmuxSessionExists(sessionID)) {
                 let cwd = process.cwd();
@@ -135,7 +150,7 @@ function setupWebSocketServer(server) {
                     const sessionPath = execSync(`tmux display-message -p -t ${sessionID} "#{session_path}"`, { encoding: 'utf8' }).trim();
                     if (sessionPath) cwd = sessionPath;
                 } catch (_) {}
-                const ok = attachAndWire(sessionID, cwd, false);
+                const ok = attachAndWire(sessionID, cwd, false, rulesEnv);
                 if (!ok) return;
             } else {
                 try { ws.send(JSON.stringify({ type: 'error', message: `Session not found: ${sessionID}` })); } catch (e) {}
@@ -152,13 +167,13 @@ function setupWebSocketServer(server) {
                 cwd = projectPath;
             }
             const tmuxName = generateTmuxSessionName(projectName);
-            const created = createTmuxSession(tmuxName, cwd);
+            const created = createTmuxSession(tmuxName, cwd, rulesEnv);
             if (!created) {
                 try { ws.send(JSON.stringify({ type: 'error', message: 'Failed to create tmux session' })); } catch (_) {}
                 try { ws.close(1011, 'tmux create failed'); } catch (_) {}
                 return;
             }
-            const ok = attachAndWire(tmuxName, cwd, true);
+            const ok = attachAndWire(tmuxName, cwd, true, rulesEnv);
             if (!ok) return;
         } else {
             try { ws.send(JSON.stringify({ type: 'error', message: 'Missing sessionID or projectName in query string' })); } catch (e) {}
