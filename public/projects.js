@@ -152,7 +152,7 @@ async function showSessionsAndProjectsList() {
                                             </div>
                                         </div>
                                         <div class="flex gap-2 mt-4 justify-end">
-                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}')">
+                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
                                                 Connect
                                             </button>
                                             <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
@@ -349,7 +349,7 @@ function selectProject(projectName) {
 
 
 // Function to connect to existing session
-function connectToSession(sessionId, projectName = null) {
+function connectToSession(sessionId, projectName = null, sessionPath = '') {
     // Cleanup existing terminal before connecting to new session
     saveDashboardScroll();
     saveDashboardSnapshot();
@@ -359,6 +359,7 @@ function connectToSession(sessionId, projectName = null) {
     
     sessionID = sessionId;
     currentProject = projectName || currentProject;
+    if (sessionPath) { window.__lastSessionPath = sessionPath; }
     updateURLWithSession(sessionID, currentProject);
     stopSessionsStatusAutoRefresh();
     initializeTerminal();

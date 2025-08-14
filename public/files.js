@@ -18,8 +18,10 @@ async function toggleFileBrowser() {
         fileBrowser.classList.add('flex', 'fullscreen');
         isFileBrowserOpen = true;
         
-        // Load initial directory (project directory or home)
-        const initialPath = currentProject ? `../projects/${currentProject}` : '~';
+        // Load initial directory (session path if available, else project dir, else home)
+        const initialPath = (window.__lastSessionPath && typeof window.__lastSessionPath === 'string' && window.__lastSessionPath) ?
+            window.__lastSessionPath :
+            (currentProject ? `../projects/${currentProject}` : (process.env.HOME || '~'));
         await loadDirectory(initialPath);
     }
 }

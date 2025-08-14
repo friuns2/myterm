@@ -65,6 +65,7 @@ router.get('/', (req, res) => {
 
 		return {
 			id: ts.name,
+			path: ts.pathStr || '',
 			thumbnail: thumbnail || '',
 			lastCommitSubject,
 			lastCommitShortHash,

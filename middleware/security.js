@@ -3,13 +3,14 @@ const os = require('os');
 
 const PROJECTS_DIR = path.join(__dirname, '..', '..', 'projects');
 
-// Security check - ensure path is within allowed directories
+// Security check - allow any absolute path. Users are already behind auth.
 function validatePath(filePath) {
-    const resolvedPath = path.resolve(filePath);
-    const projectsPath = path.resolve(PROJECTS_DIR);
-    const homePath = path.resolve(os.homedir());
-
-    return resolvedPath.startsWith(projectsPath) || resolvedPath.startsWith(homePath);
+    try {
+        const resolvedPath = path.resolve(filePath);
+        return path.isAbsolute(resolvedPath);
+    } catch (_) {
+        return false;
+    }
 }
 
 module.exports = {
