@@ -6,6 +6,16 @@ const { PROJECTS_DIR } = require('../middleware/security');
 
 const router = express.Router();
 
+// Helper: auto-commit pending changes in a git repo if any
+function autoCommitIfNeeded(cwd, message, callback) {
+    const safeMsg = String(message || 'Auto-commit').replace(/"/g, '\"');
+    const cmd = `sh -lc 'git add -A && (git diff --cached --quiet || git commit -m "${safeMsg}")'`;
+    exec(cmd, { cwd }, (error) => {
+        if (error) return callback(new Error(`Failed to auto-commit in ${cwd}: ${error.message}`));
+        callback(null);
+    });
+}
+
 // API endpoint to get worktrees for a project
 router.get('/projects/:projectName/worktrees', (req, res) => {
     const projectName = req.params.projectName;
@@ -101,18 +111,21 @@ router.post('/projects/:projectName/worktrees', express.json(), (req, res) => {
         return res.status(409).json({ error: 'Worktree already exists' });
     }
 
-    // Create the worktree
-    const branchArg = branch ? `-b ${branch}` : '';
-    const command = `git worktree add ${branchArg} ${worktreePath}`;
-    
-    exec(command, { cwd: projectPath }, (error, stdout, stderr) => {
-        if (error) {
-            console.error('Error creating worktree:', error);
-            return res.status(500).json({ error: `Failed to create worktree: ${error.message}` });
+    // Commit pending changes first in main repo, then create the worktree
+    autoCommitIfNeeded(projectPath, `chore(worktree): auto-commit before creating ${name}`, (commitErr) => {
+        if (commitErr) {
+            console.warn(commitErr.message);
         }
-        
-        console.log(`Worktree created: ${worktreePath}`);
-        res.json({ success: true, name: name.trim(), path: worktreePath });
+        const branchArg = branch ? `-b ${branch}` : '';
+        const command = `git worktree add ${branchArg} ${worktreePath}`;
+        exec(command, { cwd: projectPath }, (error) => {
+            if (error) {
+                console.error('Error creating worktree:', error);
+                return res.status(500).json({ error: `Failed to create worktree: ${error.message}` });
+            }
+            console.log(`Worktree created: ${worktreePath}`);
+            res.json({ success: true, name: name.trim(), path: worktreePath });
+        });
     });
 });
 
@@ -133,8 +146,12 @@ router.post('/projects/:projectName/worktrees/:worktreeName/merge', express.json
         return res.status(404).json({ error: 'Worktree not found' });
     }
 
-    // First, get the current branch of the worktree
-    exec('git branch --show-current', { cwd: worktreePath }, (error, branchOutput, stderr) => {
+    // First, auto-commit pending changes inside the worktree, then get the current branch
+    autoCommitIfNeeded(worktreePath, `chore(worktree): auto-commit before merge ${worktreeName}`, (acErr) => {
+        if (acErr) {
+            console.warn(acErr.message);
+        }
+        exec('git branch --show-current', { cwd: worktreePath }, (error, branchOutput, stderr) => {
         if (error) {
             return res.status(500).json({ error: `Failed to get worktree branch: ${error.message}` });
         }
@@ -144,35 +161,42 @@ router.post('/projects/:projectName/worktrees/:worktreeName/merge', express.json
             return res.status(400).json({ error: 'Worktree is in detached HEAD state' });
         }
 
-        // Switch to target branch in main repository and merge
-        const mergeCommands = [
-            `git checkout ${targetBranch}`,
-            `git merge ${currentBranch}`,
-            `git worktree remove ${worktreePath}`,
-            `git branch -d ${currentBranch}`
-        ];
-
-        let commandIndex = 0;
-        
-        const runNextCommand = () => {
-            if (commandIndex >= mergeCommands.length) {
-                return res.json({ success: true, message: `Worktree ${worktreeName} merged and removed successfully` });
-            }
-
-            const command = mergeCommands[commandIndex];
-            commandIndex++;
-
-            exec(command, { cwd: projectPath }, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Error running "${command}":`, error);
-                    return res.status(500).json({ error: `Failed to execute: ${command}. Error: ${error.message}` });
+            // Auto-commit in the main repo as well, then merge
+            autoCommitIfNeeded(projectPath, `chore(worktree): auto-commit before merging ${currentBranch} into ${targetBranch}`, (mainAcErr) => {
+                if (mainAcErr) {
+                    console.warn(mainAcErr.message);
                 }
+                // Switch to target branch in main repository and merge
+                const mergeCommands = [
+                    `git checkout ${targetBranch}`,
+                    `git merge ${currentBranch}`,
+                    `git worktree remove ${worktreePath}`,
+                    `git branch -d ${currentBranch}`
+                ];
+
+                let commandIndex = 0;
                 
+                const runNextCommand = () => {
+                    if (commandIndex >= mergeCommands.length) {
+                        return res.json({ success: true, message: `Worktree ${worktreeName} merged and removed successfully` });
+                    }
+
+                    const command = mergeCommands[commandIndex];
+                    commandIndex++;
+
+                    exec(command, { cwd: projectPath }, (error, stdout, stderr) => {
+                        if (error) {
+                            console.error(`Error running "${command}":`, error);
+                            return res.status(500).json({ error: `Failed to execute: ${command}. Error: ${error.message}` });
+                        }
+                        
+                        runNextCommand();
+                    });
+                };
+
                 runNextCommand();
             });
-        };
-
-        runNextCommand();
+        });
     });
 });
 
