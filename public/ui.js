@@ -394,7 +394,7 @@ function setupCustomCommandInput() {
                         const cacheKey = generateCacheKey(customCommandInput.value.trim(), workingDirectory, operatingSystem);
                         const isFromCache = getCachedPredictions(cacheKey) !== null;
                         
-                        const label = isFromCache ? 'AI (cached)' : 'AI';
+                        const label = 'AI';
                         item.innerHTML = `<span class="text-green-400 text-xs mr-2">${label}</span><span>${cmd}</span>`;
                         item.addEventListener('click', () => {
                             customCommandInput.value = cmd;
