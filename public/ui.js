@@ -248,8 +248,8 @@ function setupCustomCommandInput() {
                 if (window.terminal && window.terminal.buffer && window.terminal.buffer.active) {
                     const buffer = window.terminal.buffer.active;
                     const lines = [];
-                    // Get last 10 lines of terminal output
-                    const startLine = Math.max(0, buffer.length - 10);
+                    // Get last 50 lines of terminal output
+                    const startLine = Math.max(0, buffer.length - 50);
                     for (let i = startLine; i < buffer.length; i++) {
                         const line = buffer.getLine(i);
                         if (line) {
