@@ -3,10 +3,56 @@ const { setupWebSocketServer } = require('./websocket/terminal');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { basicAuthMiddleware, rejectUpgradeIfUnauthorized } = require('./middleware/basicAuth');
 
 const app = express();
-const port = 3537;
+
+// Generate port based on directory execution hash
+function generatePortFromDirectory() {
+    const currentDir = process.cwd();
+    const hash = crypto.createHash('sha256').update(currentDir).digest('hex');
+    // Convert first 8 characters of hash to integer and map to range 3000-4000
+    const hashInt = parseInt(hash.substring(0, 8), 16);
+    const basePort = 3000 + (hashInt % 1001); // 1001 gives us range 3000-4000
+    return basePort;
+}
+
+// Check if port is available
+function isPortAvailable(port) {
+    return new Promise((resolve) => {
+        const server = require('net').createServer();
+        server.listen(port, () => {
+            server.once('close', () => resolve(true));
+            server.close();
+        });
+        server.on('error', () => resolve(false));
+    });
+}
+
+// Find available port starting from the generated one
+async function findAvailablePort() {
+    let port = generatePortFromDirectory();
+    const maxPort = 4000;
+    
+    while (port <= maxPort) {
+        if (await isPortAvailable(port)) {
+            return port;
+        }
+        port++;
+    }
+    
+    // If no port found in range, wrap around to 3000
+    for (let p = 3000; p < generatePortFromDirectory(); p++) {
+        if (await isPortAvailable(p)) {
+            return p;
+        }
+    }
+    
+    throw new Error('No available ports in range 3000-4000');
+}
+
+let port;
 
 // Serve static files
 app.use(basicAuthMiddleware);
@@ -49,22 +95,38 @@ function ensureLocalSettingsIncluded() {
     }
 }
 
-const server = app.listen(port, () => {
-    console.log(`Web Terminal running at http://localhost:${port}`);
-    // Ensure ~/.zshrc includes local settings file
-    ensureLocalSettingsIncluded();
-});
-
-// Enforce Basic Auth on WebSocket upgrades
-server.on('upgrade', (req, socket) => {
-    if (rejectUpgradeIfUnauthorized(req, socket)) {
-        return;
+// Initialize server with dynamic port
+async function startServer() {
+    try {
+        port = await findAvailablePort();
+        console.log(`Generated port ${generatePortFromDirectory()} for directory: ${process.cwd()}`);
+        console.log(`Using available port: ${port}`);
+        
+        const server = app.listen(port, () => {
+            console.log(`Web Terminal running at http://localhost:${port}`);
+            // Ensure ~/.zshrc includes local settings file
+            ensureLocalSettingsIncluded();
+        });
+        
+        // Enforce Basic Auth on WebSocket upgrades
+        server.on('upgrade', (req, socket) => {
+            if (rejectUpgradeIfUnauthorized(req, socket)) {
+                return;
+            }
+            // If authorized, do nothing; ws server will handle the upgrade
+        });
+        
+        // Set up WebSocket server
+        setupWebSocketServer(server);
+        
+    } catch (error) {
+        console.error('Failed to start server:', error.message);
+        process.exit(1);
     }
-    // If authorized, do nothing; ws server will handle the upgrade
-});
+}
 
-// Set up WebSocket server
-setupWebSocketServer(server);
+// Start the server
+startServer();
 
 // Global safety nets to avoid crashing the whole process
 process.on('uncaughtException', (err) => {
