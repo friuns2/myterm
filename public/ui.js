@@ -223,11 +223,19 @@ function setupCustomCommandInput() {
         let suggestionsList = null;
         let aiPredictions = [];
         let isLoadingPredictions = false;
+        let currentAbortController = null;
         
         // Function to fetch AI predictions
         const fetchAIPredictions = async (input) => {
             if (isLoadingPredictions || input.length < 2) return [];
             
+            // Cancel previous request if it exists
+            if (currentAbortController) {
+                currentAbortController.abort();
+            }
+            
+            // Create new abort controller for this request
+            currentAbortController = new AbortController();
             isLoadingPredictions = true;
             
             try {
@@ -261,7 +269,8 @@ function setupCustomCommandInput() {
                         workingDirectory: window.currentWorkingDirectory || '/',
                         operatingSystem: operatingSystem,
                         commandLineScreen: commandLineScreen
-                    })
+                    }),
+                    signal: currentAbortController.signal
                 });
                 
                 if (response.ok) {
@@ -269,9 +278,13 @@ function setupCustomCommandInput() {
                     return data.suggestions || [];
                 }
             } catch (error) {
-                console.error('Failed to fetch AI predictions:', error);
+                // Don't log error if request was aborted
+                if (error.name !== 'AbortError') {
+                    console.error('Failed to fetch AI predictions:', error);
+                }
             } finally {
                 isLoadingPredictions = false;
+                currentAbortController = null;
             }
             
             return [];
@@ -345,6 +358,12 @@ function setupCustomCommandInput() {
         
         // Hide suggestions
         const hideSuggestions = () => {
+            // Cancel any ongoing API requests
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
+            
             if (suggestionsList) {
                 suggestionsList.classList.add('hidden');
             }
@@ -353,6 +372,12 @@ function setupCustomCommandInput() {
         const sendCommand = () => {
             const command = customCommandInput.value.trim();
             if (!command) return;
+            
+            // Cancel any ongoing API requests
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
             
             // Save to history
             saveToHistory(command);
