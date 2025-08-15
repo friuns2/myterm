@@ -7,6 +7,11 @@ const router = express.Router();
 
 // Function to detect ports used by processes in tmux session
 function detectSessionPorts(sessionName) {
+    // Check if port scanning is enabled via environment variable
+    if (process.env.ENABLE_PORT_SCANNING !== 'true') {
+        return [];
+    }
+    
     const ports = [];
     try {
         // Get all panes in the session with their TTYs

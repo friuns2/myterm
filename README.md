@@ -40,6 +40,23 @@ npm start
 4. **Open in browser:**
 Navigate to http://localhost:3000
 
+## Configuration
+
+The application can be configured using environment variables in the `.env` file:
+
+### Port Scanning
+```bash
+# Enable/disable port detection for tmux sessions
+ENABLE_PORT_SCANNING=false  # Set to 'true' to enable
+```
+
+When `ENABLE_PORT_SCANNING` is set to `true`, the application will:
+- Detect ports used by processes within tmux sessions
+- Display port preview buttons in the session UI
+- Allow killing processes by port using kill buttons
+
+When disabled (default), no port scanning is performed for better performance.
+
 ## Usage
 
 ### Web Terminal (Recommended)
@@ -93,4 +110,4 @@ Successfully tested with:
 - `nano` - Full text editor functionality
 - `ls -la` - Directory listings with colors
 - `echo` commands with ANSI escape sequences
-- Interactive command-line applications 
+- Interactive command-line applications
