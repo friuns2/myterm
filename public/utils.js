@@ -1,5 +1,12 @@
 // Utility functions for the web terminal application
 
+// Function to escape HTML characters
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Function to strip ANSI escape sequences from text
 function stripAnsiCodes(text) {
     // Remove ANSI escape sequences

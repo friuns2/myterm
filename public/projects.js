@@ -141,57 +141,42 @@ async function showSessionsAndProjectsList() {
                     </h2>
                     <div class="grid gap-3 mb-6">
                         ${allSessions.length === 0 ? '<p class="text-center opacity-70 py-4">No active sessions</p>' : 
-                            allSessions.map(session => {
-                                // Escape HTML to prevent injection and parsing issues
-                                const escapeHtml = (str) => {
-                                    const div = document.createElement('div');
-                                    div.textContent = str;
-                                    return div.innerHTML;
-                                };
-                                
-                                const sessionId = escapeHtml(session.id);
-                                const projectName = escapeHtml(session.projectName);
-                                const sessionPath = escapeHtml(session.path || '');
-                                const commitHash = escapeHtml(session.lastCommitShortHash || '');
-                                const commitSubject = escapeHtml(session.lastCommitSubject || '');
-                                
-                                return `
+                            allSessions.map(session => `
                                 <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow">
                                     <div class="card-body p-4">
                                         <div class="flex justify-between items-start">
-                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${sessionId}', '${projectName}', '${sessionPath}')">
+                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
                                                 <div class="flex items-center gap-2 mb-2">
-                                                    <h3 class="font-semibold text-sm">${sessionId}</h3>
-                                                    <span class="badge badge-primary badge-sm">${projectName}</span>
+                                                    <h3 class="font-semibold text-sm">${session.id}</h3>
+                                                    <span class="badge badge-primary badge-sm">${session.projectName}</span>
                                                 </div>
                                                 <div class="session-thumb">
-                                                    <pre id="session-thumb-${sessionId}">${ansiToHtml(escapeHtml(session.thumbnail || ''))}</pre>
+                                                    <pre id="session-thumb-${session.id}">${ansiToHtml(escapeHtml(session.thumbnail || ''))}</pre>
                                                 </div>
-                                                <p class="text-xs opacity-70 mt-2" id="session-commit-${sessionId}">${(commitHash && commitSubject) ? `${commitHash} — ${commitSubject}` : ''}</p>
+                                                <p class="text-xs opacity-70 mt-2" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
                                         </div>
                                         <div class="flex gap-2 mt-4 justify-between">
                                             <div class="flex gap-1">
                                                 ${session.ports && session.ports.length > 0 ? session.ports.map(port => `
-                                                    <button class="btn btn-xs btn-outline btn-success" onclick="event.stopPropagation(); window.open('http://localhost:${parseInt(port)}', '_blank')" title="Preview http://localhost:${parseInt(port)}">
-                                                        🚀 ${parseInt(port)}
+                                                    <button class="btn btn-xs btn-outline btn-success" onclick="event.stopPropagation(); window.open('http://localhost:${port}', '_blank')" title="Preview http://localhost:${port}">
+                                                        🚀 ${port}
                                                     </button>
                                                 `).join('') : ''}
                                             </div>
                                             <div class="flex gap-2">
-                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${sessionId}', '${projectName}', '${sessionPath}')">
+                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
                                                     Connect
                                                 </button>
-                                                <button class="btn btn-error btn-sm" onclick="killSession('${sessionId}')">
+                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
                                                     Kill
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                `;
-                            }).join('')
+                            `).join('')
                         }
                     </div>
                 </div>
