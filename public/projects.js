@@ -160,9 +160,14 @@ async function showSessionsAndProjectsList() {
                                         <div class="flex gap-2 mt-4 justify-between">
                                             <div class="flex gap-1">
                                                 ${session.ports && session.ports.length > 0 ? session.ports.map(port => `
-                                                    <button class="btn btn-xs btn-outline btn-success" onclick="event.stopPropagation(); window.open('http://localhost:${port}', '_blank')" title="Preview http://localhost:${port}">
-                                                        🚀 ${port}
-                                                    </button>
+                                                    <div class="flex gap-1">
+                                                        <button class="btn btn-xs btn-outline btn-success" onclick="event.stopPropagation(); window.open('http://localhost:${port}', '_blank')" title="Preview http://localhost:${port}">
+                                                            🚀 ${port}
+                                                        </button>
+                                                        <button class="btn btn-xs btn-outline btn-error" onclick="event.stopPropagation(); killProcessByPort('${session.id}', ${port})" title="Kill process on port ${port}">
+                                                            ❌
+                                                        </button>
+                                                    </div>
                                                 `).join('') : ''}
                                             </div>
                                             <div class="flex gap-2">
@@ -487,4 +492,30 @@ function createNewSessionForProject(projectName) {
     currentProject = projectName;
     stopSessionsStatusAutoRefresh();
     initializeTerminal();
+}
+
+// Function to kill process by port
+async function killProcessByPort(sessionId, port) {
+    if (!confirm(`Are you sure you want to kill the process running on port ${port}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/sessions/${sessionId}/ports/${port}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(result.message);
+            // Refresh the sessions list to update port status
+            showSessionsAndProjectsList();
+        } else {
+            alert(`Failed to kill process: ${result.message}`);
+        }
+    } catch (error) {
+        console.error('Error killing process:', error);
+        alert('Failed to kill process. Please try again.');
+    }
 }

@@ -176,4 +176,50 @@ router.delete('/:sessionId', (req, res) => {
     }
 });
 
+// API endpoint to kill process by port
+router.delete('/:sessionId/ports/:port', (req, res) => {
+    const sessionId = req.params.sessionId;
+    const port = parseInt(req.params.port);
+    
+    if (!port || port < 1 || port > 65535) {
+        return res.status(400).json({ success: false, message: 'Invalid port number' });
+    }
+    
+    try {
+        // Find the process using the port
+        const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
+        const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
+        
+        if (pids.length === 0) {
+            return res.status(404).json({ success: false, message: `No process found using port ${port}` });
+        }
+        
+        // Kill all processes using this port
+        let killedCount = 0;
+        for (const pid of pids) {
+            try {
+                execSync(`kill ${pid}`);
+                killedCount++;
+            } catch (killError) {
+                // Try force kill if regular kill fails
+                try {
+                    execSync(`kill -9 ${pid}`);
+                    killedCount++;
+                } catch (_) {
+                    // Ignore if process already dead or can't be killed
+                }
+            }
+        }
+        
+        if (killedCount > 0) {
+            res.json({ success: true, message: `Killed ${killedCount} process(es) using port ${port}` });
+        } else {
+            res.status(500).json({ success: false, message: `Failed to kill processes using port ${port}` });
+        }
+    } catch (error) {
+        console.error('Error killing process by port:', error);
+        res.status(500).json({ success: false, message: 'Failed to kill process' });
+    }
+});
+
 module.exports = router;
