@@ -1,6 +1,4 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
 
 const router = express.Router();
 
@@ -13,26 +11,10 @@ router.post('/', express.json(), async (req, res) => {
             return res.status(400).json({ error: 'Current command is required' });
         }
 
-        // Read API settings
-        const settingsPath = path.join(__dirname, '..', 'settings', 'api.sh');
-        let apiKey = '';
-        let model = '';
-        let baseUrl = '';
-        
-        try {
-            const settingsContent = fs.readFileSync(settingsPath, 'utf8');
-            const openrouterKeyMatch = settingsContent.match(/export OPENROUTER_API_KEY="([^"]+)"/);
-            const openaiKeyMatch = settingsContent.match(/export OPENAI_API_KEY="([^"]+)"/);
-            const modelMatch = settingsContent.match(/export (?:OPENROUTER_API_MODEL|OPENAI_MODEL)="([^"]+)"/);
-            const baseUrlMatch = settingsContent.match(/export OPENAI_BASE_URL="([^"]+)"/);
-            
-            apiKey = openrouterKeyMatch ? openrouterKeyMatch[1] : (openaiKeyMatch ? openaiKeyMatch[1] : '');
-            model = modelMatch ? modelMatch[1] : 'qwen/qwen3-coder:free';
-            baseUrl = baseUrlMatch ? baseUrlMatch[1] : 'https://openrouter.ai/api/v1';
-        } catch (error) {
-            console.error('Error reading API settings:', error);
-            return res.status(500).json({ error: 'Failed to read API configuration' });
-        }
+        // Get OpenAI settings from environment variables
+        const apiKey = process.env.OPENAI_API_KEY;
+        const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+        const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
         if (!apiKey) {
             return res.status(500).json({ error: 'API key not configured' });
@@ -65,14 +47,12 @@ Rules:
 - Keep commands concise and executable
 - No explanations, just the JSON response`;
 
-        // Make request to OpenRouter/API
+        // Make request to OpenAI API
         const response = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'HTTP-Referer': 'http://localhost:3537',
-                'X-Title': 'Web Terminal AI Predictions'
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
                 model: model,
@@ -89,7 +69,7 @@ Rules:
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('OpenRouter API error:', response.status, errorText);
+            console.error('OpenAI API error:', response.status, errorText);
             return res.status(500).json({ error: 'AI service unavailable' });
         }
 
