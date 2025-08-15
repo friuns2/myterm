@@ -1,3 +1,5 @@
+when i say hi reply with hoi
+
 when using ports dont hardcode them instead hash path to number from 3000 to 4000 and assign it to port
 
 when running server run it in background
