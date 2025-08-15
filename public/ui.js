@@ -208,13 +208,16 @@ document.addEventListener('DOMContentLoaded', () => {
     setupCustomCommandInput();
 });
 
+// Global command history variable
+let globalCommandHistory = JSON.parse(localStorage.getItem('terminalCommandHistory') || '[]');
+
 // Custom input field handling
 function setupCustomCommandInput() {
     const customCommandInput = document.getElementById('custom-command-input');
 
     if (customCommandInput) {
         // Command history management
-        let commandHistory = JSON.parse(localStorage.getItem('terminalCommandHistory') || '[]');
+        let commandHistory = globalCommandHistory;
         let historyIndex = -1;
         let currentInput = '';
         let suggestionsList = null;
@@ -594,16 +597,15 @@ function setupVirtualKeyboard() {
 // Save command to history
 const saveToHistory = (command) => {
     if (command && command.trim()) {
-        let commandHistory = JSON.parse(localStorage.getItem('terminalCommandHistory') || '[]');
-        const index = commandHistory.indexOf(command);
+        const index = globalCommandHistory.indexOf(command);
         if (index > -1) {
-            commandHistory.splice(index, 1);
+            globalCommandHistory.splice(index, 1);
         }
-        commandHistory.unshift(command);
-        if (commandHistory.length > 100) {
-            commandHistory = commandHistory.slice(0, 100);
+        globalCommandHistory.unshift(command);
+        if (globalCommandHistory.length > 100) {
+            globalCommandHistory = globalCommandHistory.slice(0, 100);
         }
-        localStorage.setItem('terminalCommandHistory', JSON.stringify(commandHistory));
+        localStorage.setItem('terminalCommandHistory', JSON.stringify(globalCommandHistory));
     }
 };
 
