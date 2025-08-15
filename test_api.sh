@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Set OpenAI environment variables
-export OPENAI_API_KEY="your_openai_api_key_here"
+# Set OpenAI environment variables (API key already defined in env)
 export OPENAI_MODEL="gpt-3.5-turbo"
 export OPENAI_BASE_URL="https://api.openai.com/v1"
 
