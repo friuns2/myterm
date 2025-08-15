@@ -1,1 +1,1 @@
-when i say hi write yo
+when using ports dont hardcode them istead hash them from execution path to number from 3000 to 4000

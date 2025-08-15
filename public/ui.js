@@ -226,9 +226,61 @@ function setupCustomCommandInput() {
         let currentAbortController = null;
         let debounceTimeout = null;
         
+        // Function to generate cache key for predictions
+        const generateCacheKey = (input, workingDirectory, operatingSystem) => {
+            return `ai_predictions_${btoa(input + '|' + workingDirectory + '|' + operatingSystem).replace(/[^a-zA-Z0-9]/g, '')}`;
+        };
+        
+        // Function to get cached predictions
+        const getCachedPredictions = (cacheKey) => {
+            try {
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    const now = Date.now();
+                    // Cache expires after 1 hour (3600000 ms)
+                    if (now - data.timestamp < 3600000) {
+                        return data.suggestions;
+                    } else {
+                        // Remove expired cache
+                        localStorage.removeItem(cacheKey);
+                    }
+                }
+            } catch (error) {
+                console.error('Error reading cache:', error);
+            }
+            return null;
+        };
+        
+        // Function to cache predictions
+        const cachePredictions = (cacheKey, suggestions) => {
+            try {
+                const data = {
+                    suggestions: suggestions,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(cacheKey, JSON.stringify(data));
+            } catch (error) {
+                console.error('Error caching predictions:', error);
+            }
+        };
+        
         // Function to fetch AI predictions
         const fetchAIPredictions = async (input) => {
             if (isLoadingPredictions || input.length < 2) return [];
+            
+            // Get context information
+            const operatingSystem = navigator.platform || navigator.userAgentData?.platform || 'Unknown';
+            const workingDirectory = window.currentWorkingDirectory || '/';
+            
+            // Generate cache key
+            const cacheKey = generateCacheKey(input, workingDirectory, operatingSystem);
+            
+            // Check cache first
+            const cachedPredictions = getCachedPredictions(cacheKey);
+            if (cachedPredictions) {
+                return cachedPredictions;
+            }
             
             // Cancel previous request if it exists
             if (currentAbortController) {
@@ -240,9 +292,6 @@ function setupCustomCommandInput() {
             isLoadingPredictions = true;
             
             try {
-                // Get operating system information
-                const operatingSystem = navigator.platform || navigator.userAgentData?.platform || 'Unknown';
-                
                 // Get current command line screen content from terminal
                 let commandLineScreen = '';
                 if (window.terminal && window.terminal.buffer && window.terminal.buffer.active) {
@@ -266,7 +315,7 @@ function setupCustomCommandInput() {
                     },
                     body: JSON.stringify({
                         currentCommand: input,
-                        workingDirectory: window.currentWorkingDirectory || '/',
+                        workingDirectory: workingDirectory,
                         operatingSystem: operatingSystem,
                         commandLineScreen: commandLineScreen
                     }),
@@ -275,7 +324,14 @@ function setupCustomCommandInput() {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    return data.suggestions || [];
+                    const suggestions = data.suggestions || [];
+                    
+                    // Cache the results
+                    if (suggestions.length > 0) {
+                        cachePredictions(cacheKey, suggestions);
+                    }
+                    
+                    return suggestions;
                 }
             } catch (error) {
                 // Don't log error if request was aborted
@@ -331,7 +387,15 @@ function setupCustomCommandInput() {
                     predictions.slice(0, 3).forEach((cmd, index) => {
                         const item = document.createElement('div');
                         item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
-                        item.innerHTML = `<span class="text-green-400 text-xs mr-2">AI</span><span>${cmd}</span>`;
+                        
+                        // Check if this prediction came from cache
+                        const operatingSystem = navigator.platform || navigator.userAgentData?.platform || 'Unknown';
+                        const workingDirectory = window.currentWorkingDirectory || '/';
+                        const cacheKey = generateCacheKey(customCommandInput.value.trim(), workingDirectory, operatingSystem);
+                        const isFromCache = getCachedPredictions(cacheKey) !== null;
+                        
+                        const label = isFromCache ? 'AI (cached)' : 'AI';
+                        item.innerHTML = `<span class="text-green-400 text-xs mr-2">${label}</span><span>${cmd}</span>`;
                         item.addEventListener('click', () => {
                             customCommandInput.value = cmd;
                             suggestionsList.classList.add('hidden');
@@ -542,6 +606,53 @@ function setupCustomCommandInput() {
             }
         });
         
+        // Function to clean up old cache entries
+        const cleanupPredictionsCache = () => {
+            try {
+                const keys = Object.keys(localStorage);
+                const predictionKeys = keys.filter(key => key.startsWith('ai_predictions_'));
+                const now = Date.now();
+                
+                predictionKeys.forEach(key => {
+                    try {
+                        const cached = localStorage.getItem(key);
+                        if (cached) {
+                            const data = JSON.parse(cached);
+                            // Remove entries older than 1 hour
+                            if (now - data.timestamp >= 3600000) {
+                                localStorage.removeItem(key);
+                            }
+                        }
+                    } catch (error) {
+                        // Remove corrupted cache entries
+                        localStorage.removeItem(key);
+                    }
+                });
+                
+                // If we still have too many cache entries (>100), remove oldest ones
+                const remainingKeys = Object.keys(localStorage).filter(key => key.startsWith('ai_predictions_'));
+                if (remainingKeys.length > 100) {
+                    const cacheEntries = remainingKeys.map(key => {
+                        try {
+                            const data = JSON.parse(localStorage.getItem(key));
+                            return { key, timestamp: data.timestamp };
+                        } catch {
+                            return { key, timestamp: 0 };
+                        }
+                    }).sort((a, b) => a.timestamp - b.timestamp);
+                    
+                    // Remove oldest entries to keep only 50
+                    const toRemove = cacheEntries.slice(0, cacheEntries.length - 50);
+                    toRemove.forEach(entry => localStorage.removeItem(entry.key));
+                }
+            } catch (error) {
+                console.error('Error cleaning up predictions cache:', error);
+            }
+        };
+        
+        // Clean up cache on initialization
+        cleanupPredictionsCache();
+        
         // Initialize suggestions dropdown
         suggestionsList = createSuggestionsDropdown();
         
@@ -552,6 +663,39 @@ function setupCustomCommandInput() {
                 hideSuggestions();
             }
         });
+        
+        // Expose cache management functions globally for debugging
+        window.clearPredictionsCache = () => {
+            const keys = Object.keys(localStorage).filter(key => key.startsWith('ai_predictions_'));
+            keys.forEach(key => localStorage.removeItem(key));
+            console.log(`Cleared ${keys.length} prediction cache entries`);
+        };
+        
+        window.getPredictionsCacheInfo = () => {
+            const keys = Object.keys(localStorage).filter(key => key.startsWith('ai_predictions_'));
+            const now = Date.now();
+            let validEntries = 0;
+            let expiredEntries = 0;
+            
+            keys.forEach(key => {
+                try {
+                    const data = JSON.parse(localStorage.getItem(key));
+                    if (now - data.timestamp < 3600000) {
+                        validEntries++;
+                    } else {
+                        expiredEntries++;
+                    }
+                } catch {
+                    expiredEntries++;
+                }
+            });
+            
+            return {
+                total: keys.length,
+                valid: validEntries,
+                expired: expiredEntries
+            };
+        };
     }
 }
 
