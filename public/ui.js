@@ -218,6 +218,8 @@ function setupCustomCommandInput() {
         let historyIndex = -1;
         let currentInput = '';
         let suggestionsList = null;
+        let aiAbortController = null;
+        let latestQueryId = 0;
         
         // Save command to history
         const saveToHistory = (command) => {
@@ -244,7 +246,7 @@ function setupCustomCommandInput() {
             }
             
             suggestionsList = document.createElement('div');
-            suggestionsList.className = 'absolute bottom-full left-0 right-0 bg-base-200 border border-base-300 rounded-t-lg max-h-40 overflow-y-auto z-50 hidden';
+            suggestionsList.className = 'absolute bottom-full left-0 right-0 bg-base-200 border border-base-300 rounded-t-lg max-h-60 overflow-y-auto z-50 hidden shadow';
             suggestionsList.style.marginBottom = '2px';
             
             const container = customCommandInput.parentElement;
@@ -254,23 +256,16 @@ function setupCustomCommandInput() {
             return suggestionsList;
         };
         
-        // Show command suggestions
-        const showSuggestions = (input) => {
-            if (!suggestionsList) {
-                createSuggestionsDropdown();
-            }
-            
-            const filtered = commandHistory.filter(cmd => 
-                cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input
-            ).slice(0, 5);
-            
-            if (filtered.length === 0) {
+        // Render suggestions into dropdown
+        const renderSuggestions = (ai, history) => {
+            if (!suggestionsList) createSuggestionsDropdown();
+            suggestionsList.innerHTML = '';
+            const all = [...ai, ...history];
+            if (all.length === 0) {
                 suggestionsList.classList.add('hidden');
                 return;
             }
-            
-            suggestionsList.innerHTML = '';
-            filtered.forEach((cmd, index) => {
+            all.forEach((cmd) => {
                 const item = document.createElement('div');
                 item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm';
                 item.textContent = cmd;
@@ -281,8 +276,53 @@ function setupCustomCommandInput() {
                 });
                 suggestionsList.appendChild(item);
             });
-            
             suggestionsList.classList.remove('hidden');
+        };
+        
+        // Fetch AI suggestions from backend
+        const fetchAISuggestions = async (input) => {
+            const queryId = ++latestQueryId;
+            // Debounce/abort previous
+            if (aiAbortController) aiAbortController.abort();
+            aiAbortController = new AbortController();
+
+            try {
+                const res = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        input,
+                        history: commandHistory.slice(0, 20), // send last 20
+                        cwd: document.getElementById('current-path')?.textContent || ''
+                    }),
+                    signal: aiAbortController.signal
+                });
+                if (!res.ok) throw new Error('Network');
+                const data = await res.json();
+                const ai = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [];
+                // If a newer query was made, ignore this response
+                if (queryId !== latestQueryId) return;
+                // History fallback filtered by current input
+                const hist = commandHistory.filter(cmd => cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input).slice(0, 5);
+                renderSuggestions(ai, hist);
+            } catch (_) {
+                // On error, show only history suggestions
+                const hist = commandHistory.filter(cmd => cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input).slice(0, 5);
+                renderSuggestions([], hist);
+            }
+        };
+        
+        // Show command suggestions (AI + history)
+        const showSuggestions = (input) => {
+            if (!suggestionsList) {
+                createSuggestionsDropdown();
+            }
+            if (!input) {
+                suggestionsList.classList.add('hidden');
+                return;
+            }
+            // Trigger AI fetch; UI will be updated when response arrives
+            fetchAISuggestions(input);
         };
         
         // Hide suggestions
