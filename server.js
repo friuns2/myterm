@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+require('dotenv').config();
 const { basicAuthMiddleware, rejectUpgradeIfUnauthorized } = require('./middleware/basicAuth');
 
 const app = express();
