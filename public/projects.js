@@ -165,7 +165,7 @@ async function showSessionsAndProjectsList() {
                                                     <span class="badge badge-primary badge-sm">${projectName}</span>
                                                 </div>
                                                 <div class="session-thumb">
-                                                    <pre id="session-thumb-${sessionId}">${ansiToHtml(session.thumbnail || '')}</pre>
+                                                    <pre id="session-thumb-${sessionId}">${ansiToHtml(escapeHtml(session.thumbnail || ''))}</pre>
                                                 </div>
                                                 <p class="text-xs opacity-70 mt-2" id="session-commit-${sessionId}">${(commitHash && commitSubject) ? `${commitHash} — ${commitSubject}` : ''}</p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
