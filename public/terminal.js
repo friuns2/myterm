@@ -61,6 +61,9 @@ function createNewTerminal() {
         terminal.loadAddon(fitAddon);
     }
     
+    // Expose terminal globally for UI access
+    window.terminal = terminal;
+    
     return terminal;
 }
 
