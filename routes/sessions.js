@@ -30,22 +30,48 @@ function detectSessionPorts(sessionName) {
                     if (parts.length >= 2) {
                         const pid = parts[1];
                         if (pid && /^\d+$/.test(pid)) {
+                            // Collect this process and its children (depth 2)
+                            const pidsToCheck = [pid];
+                            
                             try {
-                                // Check what ports this process is using
-                                const lsofOutput = execSync(`lsof -Pan -p ${pid} -i 2>/dev/null || true`, { encoding: 'utf8' });
-                                const lsofLines = lsofOutput.split('\n').filter(Boolean);
+                                // Get child processes (depth 1)
+                                const childrenOutput = execSync(`pgrep -P ${pid} 2>/dev/null || true`, { encoding: 'utf8' });
+                                const childPids = childrenOutput.split('\n').filter(p => p.trim() && /^\d+$/.test(p.trim()));
+                                pidsToCheck.push(...childPids);
                                 
-                                for (const lsofLine of lsofLines) {
-                                    const match = lsofLine.match(/:([0-9]+)\s*\(LISTEN\)/);
-                                    if (match) {
-                                        const port = parseInt(match[1]);
-                                        if (port && !ports.includes(port)) {
-                                            ports.push(port);
-                                        }
+                                // Get grandchildren processes (depth 2)
+                                for (const childPid of childPids) {
+                                    try {
+                                        const grandchildrenOutput = execSync(`pgrep -P ${childPid} 2>/dev/null || true`, { encoding: 'utf8' });
+                                        const grandchildPids = grandchildrenOutput.split('\n').filter(p => p.trim() && /^\d+$/.test(p.trim()));
+                                        pidsToCheck.push(...grandchildPids);
+                                    } catch (_) {
+                                        // Ignore errors for individual grandchildren lookup
                                     }
                                 }
                             } catch (_) {
-                                // Ignore lsof errors for individual processes
+                                // Ignore errors for children lookup, still check the parent process
+                            }
+                            
+                            // Check ports for all collected PIDs
+                            for (const pidToCheck of pidsToCheck) {
+                                try {
+                                    // Check what ports this process is using
+                                    const lsofOutput = execSync(`lsof -Pan -p ${pidToCheck} -i 2>/dev/null || true`, { encoding: 'utf8' });
+                                    const lsofLines = lsofOutput.split('\n').filter(Boolean);
+                                    
+                                    for (const lsofLine of lsofLines) {
+                                        const match = lsofLine.match(/:([0-9]+)\s*\(LISTEN\)/);
+                                        if (match) {
+                                            const port = parseInt(match[1]);
+                                            if (port && !ports.includes(port)) {
+                                                ports.push(port);
+                                            }
+                                        }
+                                    }
+                                } catch (_) {
+                                    // Ignore lsof errors for individual processes
+                                }
                             }
                         }
                     }
