@@ -4,69 +4,68 @@ let portDetectionInterval = null;
 let detectedPorts = new Set();
 let lastDetectedPort = null;
 
-// Common development server ports to monitor
+// Common development server ports to monitor (prioritized list)
 const COMMON_DEV_PORTS = [
-    3000, 3001, 3002, 3003, 3004, 3005,
-    4000, 4001, 4002, 4003, 4004, 4005,
-    5000, 5001, 5002, 5003, 5004, 5005,
-    8000, 8001, 8002, 8003, 8004, 8005,
-    8080, 8081, 8082, 8083, 8084, 8085,
-    9000, 9001, 9002, 9003, 9004, 9005
+    3000, 3001, 3002, 3003, // React, Next.js
+    4000, 4001, 4002, // Gatsby, other frameworks
+    5000, 5001, 5002, // Flask, other Python servers
+    8000, 8001, 8080, // Django, HTTP servers, Tomcat
+    9000, 9001, 9002  // Various dev servers
 ];
 
-// Function to check if a port is listening
+// Function to check if a port is listening using WebSocket connection test
 async function checkPort(port) {
-    try {
-        // Try to create a connection to the port
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1000);
+    return new Promise((resolve) => {
+        // Use WebSocket to test connectivity - it's more reliable for port detection
+        const ws = new WebSocket(`ws://localhost:${port}`);
+        const timeout = setTimeout(() => {
+            ws.close();
+            resolve(false);
+        }, 500); // Shorter timeout for faster scanning
         
-        const response = await fetch(`http://localhost:${port}`, {
-            method: 'HEAD',
-            mode: 'no-cors',
-            cache: 'no-cache',
-            signal: controller.signal
-        });
+        ws.onopen = () => {
+            clearTimeout(timeout);
+            ws.close();
+            resolve(true);
+        };
         
-        clearTimeout(timeoutId);
-        return true;
-    } catch (error) {
-        // For CORS or network errors, try a different approach
-        try {
-            // Create an image element to test connectivity
-            return new Promise((resolve) => {
-                const img = new Image();
-                const timeout = setTimeout(() => {
-                    img.onload = img.onerror = null;
-                    resolve(false);
-                }, 1000);
-                
-                img.onload = () => {
-                    clearTimeout(timeout);
-                    resolve(true);
-                };
-                
-                img.onerror = () => {
-                    clearTimeout(timeout);
-                    // If we get an error, it might still mean the port is listening
-                    // but serving content that's not an image
-                    resolve(true);
-                };
-                
-                img.src = `http://localhost:${port}/favicon.ico?t=${Date.now()}`;
-            });
-        } catch (fallbackError) {
-            return false;
-        }
-    }
+        ws.onerror = () => {
+            clearTimeout(timeout);
+            // If WebSocket fails, try HTTP fetch as fallback
+            fetch(`http://localhost:${port}`, {
+                method: 'HEAD',
+                mode: 'no-cors',
+                cache: 'no-cache',
+                signal: AbortSignal.timeout(300)
+            })
+            .then(() => resolve(true))
+            .catch(() => resolve(false));
+        };
+        
+        ws.onclose = (event) => {
+            clearTimeout(timeout);
+            // If connection was established but closed, port is listening
+            if (event.wasClean || event.code === 1000) {
+                resolve(true);
+            } else {
+                resolve(false);
+            }
+        };
+    });
 }
 
 // Function to scan for listening ports
 async function scanPorts() {
     const currentlyListening = new Set();
     
-    // Check common development ports
-    const portChecks = COMMON_DEV_PORTS.map(async (port) => {
+    // Get current server port from URL
+    const currentPort = parseInt(window.location.port) || 80;
+    
+    // Combine common ports with current server port
+    const portsToCheck = [...new Set([currentPort, ...COMMON_DEV_PORTS])];
+    
+    // Check all ports
+    const portChecks = portsToCheck.map(async (port) => {
         const isListening = await checkPort(port);
         if (isListening) {
             currentlyListening.add(port);
