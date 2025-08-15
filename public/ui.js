@@ -224,6 +224,7 @@ function setupCustomCommandInput() {
         let aiPredictions = [];
         let isLoadingPredictions = false;
         let currentAbortController = null;
+        let debounceTimeout = null;
         
         // Function to fetch AI predictions
         const fetchAIPredictions = async (input) => {
@@ -366,6 +367,12 @@ function setupCustomCommandInput() {
         
         // Hide suggestions
         const hideSuggestions = () => {
+            // Clear debounce timeout
+            if (debounceTimeout) {
+                clearTimeout(debounceTimeout);
+                debounceTimeout = null;
+            }
+            
             // Cancel any ongoing API requests
             if (currentAbortController) {
                 currentAbortController.abort();
@@ -493,10 +500,24 @@ function setupCustomCommandInput() {
             historyIndex = -1;
             currentInput = customCommandInput.value;
             
+            // Clear previous debounce timeout
+            if (debounceTimeout) {
+                clearTimeout(debounceTimeout);
+            }
+            
+            // Cancel any ongoing API requests when user continues typing
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
+            
             // Show suggestions if input is not empty
             const input = customCommandInput.value.trim();
             if (input.length > 0) {
-                showSuggestions(input);
+                // Debounce the suggestions - wait 300ms after user stops typing
+                debounceTimeout = setTimeout(() => {
+                    showSuggestions(input);
+                }, 300);
             } else {
                 hideSuggestions();
             }
