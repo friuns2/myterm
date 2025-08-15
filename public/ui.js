@@ -258,7 +258,7 @@ function setupCustomCommandInput() {
                         workingDirectory: window.currentWorkingDirectory || '/',
                         operatingSystem: operatingSystem,
                         commandLineScreen: commandLineScreen,
-                        previousCommands: commandHistory.slice(-20) // Last 20 commands
+                        previousCommands: commandHistory.slice(-5) // Last 5 commands
                     })
                 });
                 
