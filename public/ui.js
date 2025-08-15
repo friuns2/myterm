@@ -266,7 +266,6 @@ function setupCustomCommandInput() {
                     },
                     body: JSON.stringify({
                         currentCommand: input,
-                        context: commandHistory.slice(0, 5).join('\n'),
                         workingDirectory: window.currentWorkingDirectory || '/',
                         operatingSystem: operatingSystem,
                         commandLineScreen: commandLineScreen
