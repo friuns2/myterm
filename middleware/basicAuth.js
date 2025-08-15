@@ -22,7 +22,19 @@ function isAuthorized(authHeader) {
   return crypto.timingSafeEqual(a, b);
 }
 
+function isLocalhost(req) {
+  const host = (req.headers && req.headers.host) || '';
+  const remote = req.socket && (req.socket.remoteAddress || req.socket.remoteAddress === '' ? req.socket.remoteAddress : '');
+  // Accept typical localhost patterns
+  const isLocalHostHeader = typeof host === 'string' && (/^(localhost|127\.0\.0\.1)(:\d+)?$/i).test(host.trim());
+  const isLoopback = typeof remote === 'string' && (remote === '::1' || remote === '127.0.0.1');
+  return isLocalHostHeader || isLoopback;
+}
+
 function basicAuthMiddleware(req, res, next) {
+  // Bypass auth for localhost
+  if (isLocalhost(req)) return next();
+
   if (isAuthorized(req.headers.authorization)) {
     return next();
   }
@@ -31,6 +43,13 @@ function basicAuthMiddleware(req, res, next) {
 }
 
 function rejectUpgradeIfUnauthorized(req, socket) {
+  // Bypass auth for localhost websocket upgrades
+  try {
+    if (isLocalhost(req)) {
+      return false; // do not reject
+    }
+  } catch (_) {}
+
   if (isAuthorized(req.headers['authorization'])) {
     return false; // do not reject
   }

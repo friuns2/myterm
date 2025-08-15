@@ -218,57 +218,60 @@ function setupCustomCommandInput() {
         let historyIndex = -1;
         let currentInput = '';
         let suggestionsList = null;
-        let aiAbortController = null;
-        let latestQueryId = 0;
+        let aiPredictions = [];
+        let isLoadingPredictions = false;
         
-        // Save command to history
-        const saveToHistory = (command) => {
-            if (command && command.trim()) {
-                // Remove duplicate if exists
-                const index = commandHistory.indexOf(command);
-                if (index > -1) {
-                    commandHistory.splice(index, 1);
+        // Function to fetch AI predictions
+        const fetchAIPredictions = async (input) => {
+            if (isLoadingPredictions || input.length < 2) return [];
+            
+            isLoadingPredictions = true;
+            
+            try {
+                const response = await fetch('/api/predictions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        currentCommand: input,
+                        context: commandHistory.slice(0, 5).join('\n'),
+                        workingDirectory: window.currentWorkingDirectory || '/'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.suggestions || [];
                 }
-                // Add to beginning
-                commandHistory.unshift(command);
-                // Limit history size
-                if (commandHistory.length > 100) {
-                    commandHistory = commandHistory.slice(0, 100);
-                }
-                localStorage.setItem('terminalCommandHistory', JSON.stringify(commandHistory));
+            } catch (error) {
+                console.error('Failed to fetch AI predictions:', error);
+            } finally {
+                isLoadingPredictions = false;
             }
+            
+            return [];
         };
         
-        // Create suggestions dropdown
-        const createSuggestionsDropdown = () => {
-            if (suggestionsList) {
-                suggestionsList.remove();
+        // Show command suggestions (enhanced with AI predictions)
+        const showSuggestions = async (input) => {
+            if (!suggestionsList) {
+                suggestionsList = createSuggestionsDropdown();
             }
             
-            suggestionsList = document.createElement('div');
-            suggestionsList.className = 'absolute bottom-full left-0 right-0 bg-base-200 border border-base-300 rounded-t-lg max-h-60 overflow-y-auto z-50 hidden shadow';
-            suggestionsList.style.marginBottom = '2px';
+            // Get history suggestions
+            const historyFiltered = commandHistory.filter(cmd => 
+                cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input
+            ).slice(0, 3);
             
-            const container = customCommandInput.parentElement;
-            container.style.position = 'relative';
-            container.appendChild(suggestionsList);
-            
-            return suggestionsList;
-        };
-        
-        // Render suggestions into dropdown
-        const renderSuggestions = (ai, history) => {
-            if (!suggestionsList) createSuggestionsDropdown();
+            // Show loading state if we need AI predictions
             suggestionsList.innerHTML = '';
-            const all = [...ai, ...history];
-            if (all.length === 0) {
-                suggestionsList.classList.add('hidden');
-                return;
-            }
-            all.forEach((cmd) => {
+            
+            // Add history suggestions first
+            historyFiltered.forEach((cmd, index) => {
                 const item = document.createElement('div');
-                item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm';
-                item.textContent = cmd;
+                item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
+                item.innerHTML = `<span class="text-blue-400 text-xs mr-2">HISTORY</span><span>${cmd}</span>`;
                 item.addEventListener('click', () => {
                     customCommandInput.value = cmd;
                     suggestionsList.classList.add('hidden');
@@ -276,53 +279,44 @@ function setupCustomCommandInput() {
                 });
                 suggestionsList.appendChild(item);
             });
-            suggestionsList.classList.remove('hidden');
-        };
-        
-        // Fetch AI suggestions from backend
-        const fetchAISuggestions = async (input) => {
-            const queryId = ++latestQueryId;
-            // Debounce/abort previous
-            if (aiAbortController) aiAbortController.abort();
-            aiAbortController = new AbortController();
-
-            try {
-                const res = await fetch('/api/predict', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        input,
-                        history: commandHistory.slice(0, 20), // send last 20
-                        cwd: document.getElementById('current-path')?.textContent || ''
-                    }),
-                    signal: aiAbortController.signal
+            
+            // Add AI predictions section
+            const aiSection = document.createElement('div');
+            aiSection.className = 'border-t border-base-300 mt-1 pt-1';
+            
+            if (isLoadingPredictions) {
+                const loadingItem = document.createElement('div');
+                loadingItem.className = 'px-3 py-2 text-sm text-gray-400';
+                loadingItem.innerHTML = '<span class="text-green-400 text-xs mr-2">AI</span>Loading predictions...';
+                aiSection.appendChild(loadingItem);
+            } else {
+                // Try to get AI predictions
+                const predictions = await fetchAIPredictions(input);
+                aiPredictions = predictions;
+                
+                predictions.slice(0, 3).forEach((cmd, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
+                    item.innerHTML = `<span class="text-green-400 text-xs mr-2">AI</span><span>${cmd}</span>`;
+                    item.addEventListener('click', () => {
+                        customCommandInput.value = cmd;
+                        suggestionsList.classList.add('hidden');
+                        customCommandInput.focus();
+                    });
+                    aiSection.appendChild(item);
                 });
-                if (!res.ok) throw new Error('Network');
-                const data = await res.json();
-                const ai = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [];
-                // If a newer query was made, ignore this response
-                if (queryId !== latestQueryId) return;
-                // History fallback filtered by current input
-                const hist = commandHistory.filter(cmd => cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input).slice(0, 5);
-                renderSuggestions(ai, hist);
-            } catch (_) {
-                // On error, show only history suggestions
-                const hist = commandHistory.filter(cmd => cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input).slice(0, 5);
-                renderSuggestions([], hist);
             }
-        };
-        
-        // Show command suggestions (AI + history)
-        const showSuggestions = (input) => {
-            if (!suggestionsList) {
-                createSuggestionsDropdown();
+            
+            if (aiSection.children.length > 0) {
+                suggestionsList.appendChild(aiSection);
             }
-            if (!input) {
+            
+            // Show dropdown if we have any suggestions
+            if (historyFiltered.length > 0 || aiPredictions.length > 0 || isLoadingPredictions) {
+                suggestionsList.classList.remove('hidden');
+            } else {
                 suggestionsList.classList.add('hidden');
-                return;
             }
-            // Trigger AI fetch; UI will be updated when response arrives
-            fetchAISuggestions(input);
         };
         
         // Hide suggestions
@@ -472,7 +466,7 @@ function setupCustomCommandInput() {
         });
         
         // Initialize suggestions dropdown
-        createSuggestionsDropdown();
+        suggestionsList = createSuggestionsDropdown();
         
         // Hide suggestions when clicking outside
         document.addEventListener('click', (event) => {
@@ -575,3 +569,38 @@ function setupVirtualKeyboard() {
         });
     }
 }
+
+// Save command to history
+const saveToHistory = (command) => {
+    if (command && command.trim()) {
+        let commandHistory = JSON.parse(localStorage.getItem('terminalCommandHistory') || '[]');
+        const index = commandHistory.indexOf(command);
+        if (index > -1) {
+            commandHistory.splice(index, 1);
+        }
+        commandHistory.unshift(command);
+        if (commandHistory.length > 100) {
+            commandHistory = commandHistory.slice(0, 100);
+        }
+        localStorage.setItem('terminalCommandHistory', JSON.stringify(commandHistory));
+    }
+};
+
+// Create suggestions dropdown
+const createSuggestionsDropdown = () => {
+    const customCommandInput = document.getElementById('custom-command-input');
+    if (!customCommandInput) return null;
+    
+    const existingDropdown = customCommandInput.parentElement.querySelector('.absolute.bottom-full');
+    if (existingDropdown) {
+        existingDropdown.remove();
+    }
+    
+    const suggestionsList = document.createElement('div');
+    suggestionsList.className = 'absolute bottom-full left-0 right-0 bg-base-200 border border-base-300 rounded-t-lg max-h-40 overflow-y-auto z-50 hidden';
+    suggestionsList.style.marginBottom = '2px';
+    const container = customCommandInput.parentElement;
+    container.style.position = 'relative';
+    container.appendChild(suggestionsList);
+    return suggestionsList;
+};
