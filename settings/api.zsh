@@ -1,17 +1,12 @@
 
-# AI Model Configuration - Updated to use Moonshot AI
-export OPENAI_API_KEY="ms-af1bbcd8-400f-4b00-907d-96924da90955"
-export OPENAI_BASE_URL="https://api.moonshot.cn/v1"
-export OPENAI_MODEL="moonshotai/Kimi-K2-Instruct"
-
-# Previous configurations (commented out)
 # export _OPENAI_API_KEY="hf_jwt_eyJhbGciOiJIUzI1NiJ9.eyJwZXJtaXNzaW9ucyI6eyJpbmZlcmVuY2Uuc2VydmVybGVzcy53cml0ZSI6dHJ1ZX0sIm9uQmVoYWxmT2YiOnsia2luZCI6InVzZXIiLCJfaWQiOiI2NzE2MzViYzEyYmJmOGJhYjk2MmIzYmMiLCJ1c2VyIjoiZG9ydW1vbiIsInNlc3Npb25JZCI6IjY4OGFkMmM1NmEzZmUxNDFmMDMxZWQ3OSJ9LCJpYXQiOjE3NTQ0NzIxNzgsInN1YjoiYXp1cmU6Ly9yb3V0ZXIuaHVnZ2luZ2ZhY2UuY28iLCJleHAiOjE3NTQ0NzU3NzgsaXNzIjoiaHR0cHM6Ly9odWdnaW5nZmFjZS5jbyJ9.IvLCBl7u2jgDPm8RWpFzO7zgoK9o7a5hRMu5CP3Tuf4"
+export OPENAI_API_KEY="ms-af1bbcd8-400f-4b00-907d-96924da90955"
 # export _OPENAI_BASE_URL="https://openrouter.ai/api/v1"
 # export _OPENAI_BASE_URL="https://router.huggingface.co/novita/v3/openai"
-# export _OPENAI_BASE_URL="https://api-inference.modelscope.cn/v1"
+export OPENAI_BASE_URL="https://api-inference.modelscope.cn/v1"
 # export _OPENAI_MODEL="qwen/qwen3-coder:free"
 # export _OPENAI_MODEL="claude-4-sonnet"
 # export _OPENAI_MODEL="qwen/qwen3-coder-480b-a35b-instruct"
 # export _OPENAI_MODEL="qwen/qwen3-235b-a22b:free"
 # export _OPENAI_MODEL="openrouter/horizon-beta"
-# export OPENAI_MODEL="Qwen/Qwen3-Coder-480B-A35B-Instruct"
+export OPENAI_MODEL="Qwen/Qwen3-Coder-480B-A35B-Instruct"
