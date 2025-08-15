@@ -54,7 +54,10 @@ function startSessionsStatusAutoRefresh() {
             const sessions = await res.json();
             sessions.forEach(session => {
                 const el = document.getElementById(`session-thumb-${session.id}`);
-                if (el) el.innerHTML = ansiToHtml(session.thumbnail || '');
+                if (el) {
+                    const thumbnail = session.thumbnail || '';
+                    el.innerHTML = ansiToHtml(thumbnail.slice(0, 200)) + (thumbnail.length > 200 ? '...' : '');
+                }
                 const commitEl = document.getElementById(`session-commit-${session.id}`);
                 if (commitEl) {
                     const subject = session.lastCommitSubject || '';
@@ -151,7 +154,7 @@ async function showSessionsAndProjectsList() {
                                                     <span class="badge badge-primary badge-sm">${session.projectName}</span>
                                                 </div>
                                                 <div class="session-thumb">
-                                                    <pre id="session-thumb-${session.id}">${ansiToHtml(session.thumbnail || '')}</pre>
+                                                    <pre id="session-thumb-${session.id}" class="text-xs overflow-hidden max-h-20 whitespace-pre-wrap break-words">${ansiToHtml((session.thumbnail || '').slice(0, 200))}${(session.thumbnail || '').length > 200 ? '...' : ''}</pre>
                                                 </div>
                                                 <p class="text-xs opacity-70 mt-2" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
