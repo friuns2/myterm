@@ -5,6 +5,62 @@ const { execSync } = require('child_process');
 
 const router = express.Router();
 
+// Function to detect ports used by processes in tmux session
+function detectSessionPorts(sessionName) {
+    const ports = [];
+    try {
+        // Get all panes in the session with their TTYs
+        const panesOutput = execSync(`tmux list-panes -s -t ${JSON.stringify(sessionName)} -F "#{pane_id} #{pane_tty}" 2>/dev/null || true`, { encoding: 'utf8' });
+        const panes = panesOutput.split('\n').filter(Boolean);
+        
+        for (const pane of panes) {
+            const [paneId, tty] = pane.split(' ');
+            if (!tty) continue;
+            
+            try {
+                // Extract TTY device name (e.g., ttys007 from /dev/ttys007)
+                const ttyDevice = tty.replace('/dev/', '');
+                
+                // Get processes running on this TTY
+                const psOutput = execSync(`ps -ft ${ttyDevice} 2>/dev/null || true`, { encoding: 'utf8' });
+                const lines = psOutput.split('\n').filter(line => line.trim() && !line.includes('PID'));
+                
+                for (const line of lines) {
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length >= 2) {
+                        const pid = parts[1];
+                        if (pid && /^\d+$/.test(pid)) {
+                            try {
+                                // Check what ports this process is using
+                                const lsofOutput = execSync(`lsof -Pan -p ${pid} -i 2>/dev/null || true`, { encoding: 'utf8' });
+                                const lsofLines = lsofOutput.split('\n').filter(Boolean);
+                                
+                                for (const lsofLine of lsofLines) {
+                                    const match = lsofLine.match(/:([0-9]+)\s+\(LISTEN\)/);
+                                    if (match) {
+                                        const port = parseInt(match[1]);
+                                        if (port && !ports.includes(port)) {
+                                            ports.push(port);
+                                        }
+                                    }
+                                }
+                            } catch (_) {
+                                // Ignore lsof errors for individual processes
+                            }
+                        }
+                    }
+                }
+            } catch (_) {
+                // Ignore errors for individual panes
+            }
+        }
+    } catch (_) {
+        // Ignore errors for the entire session
+    }
+    
+    return ports.sort((a, b) => a - b);
+}
+
 // API endpoint to get all sessions across all projects
 router.get('/', (req, res) => {
     // Source of truth: list tmux sessions; augment with in-memory attach clients if any
@@ -63,6 +119,9 @@ router.get('/', (req, res) => {
 			}
 		} catch (_) {}
 
+		// Detect ports used by this session
+		const ports = detectSessionPorts(ts.name);
+
 		return {
 			id: ts.name,
 			path: ts.pathStr || '',
@@ -70,7 +129,8 @@ router.get('/', (req, res) => {
 			lastCommitSubject,
 			lastCommitShortHash,
 			created: ts.createdStr || new Date().toISOString(),
-			projectName
+			projectName,
+			ports
 		};
     });
 
