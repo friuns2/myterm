@@ -301,58 +301,66 @@ function setupCustomCommandInput() {
                 cmd.toLowerCase().includes(input.toLowerCase()) && cmd !== input
             ).slice(0, 3);
             
-            // Show loading state if we need AI predictions
-            suggestionsList.innerHTML = '';
-            
-            // Add history suggestions first
-            historyFiltered.forEach((cmd, index) => {
-                const item = document.createElement('div');
-                item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
-                item.innerHTML = `<span class="text-blue-400 text-xs mr-2">HISTORY</span><span>${cmd}</span>`;
-                item.addEventListener('click', () => {
-                    customCommandInput.value = cmd;
-                    suggestionsList.classList.add('hidden');
-                    customCommandInput.focus();
-                });
-                suggestionsList.appendChild(item);
-            });
-            
-            // Add AI predictions section
-            const aiSection = document.createElement('div');
-            aiSection.className = 'border-t border-base-300 mt-1 pt-1';
-            
-            if (isLoadingPredictions) {
-                const loadingItem = document.createElement('div');
-                loadingItem.className = 'px-3 py-2 text-sm text-gray-400';
-                loadingItem.innerHTML = '<span class="text-green-400 text-xs mr-2">AI</span>Loading predictions...';
-                aiSection.appendChild(loadingItem);
-            } else {
-                // Try to get AI predictions
-                const predictions = await fetchAIPredictions(input);
-                aiPredictions = predictions;
+            // Clear and rebuild suggestions
+            const renderSuggestions = (predictions = []) => {
+                suggestionsList.innerHTML = '';
                 
-                predictions.slice(0, 3).forEach((cmd, index) => {
+                // Add history suggestions first
+                historyFiltered.forEach((cmd, index) => {
                     const item = document.createElement('div');
                     item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
-                    item.innerHTML = `<span class="text-green-400 text-xs mr-2">AI</span><span>${cmd}</span>`;
+                    item.innerHTML = `<span class="text-blue-400 text-xs mr-2">HISTORY</span><span>${cmd}</span>`;
                     item.addEventListener('click', () => {
                         customCommandInput.value = cmd;
                         suggestionsList.classList.add('hidden');
                         customCommandInput.focus();
                     });
-                    aiSection.appendChild(item);
+                    suggestionsList.appendChild(item);
                 });
-            }
+                
+                // Add AI predictions section
+                const aiSection = document.createElement('div');
+                aiSection.className = 'border-t border-base-300 mt-1 pt-1';
+                
+                if (isLoadingPredictions) {
+                    const loadingItem = document.createElement('div');
+                    loadingItem.className = 'px-3 py-2 text-sm text-gray-400';
+                    loadingItem.innerHTML = '<span class="text-green-400 text-xs mr-2">AI</span>Loading predictions...';
+                    aiSection.appendChild(loadingItem);
+                } else if (predictions.length > 0) {
+                    predictions.slice(0, 3).forEach((cmd, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
+                        item.innerHTML = `<span class="text-green-400 text-xs mr-2">AI</span><span>${cmd}</span>`;
+                        item.addEventListener('click', () => {
+                            customCommandInput.value = cmd;
+                            suggestionsList.classList.add('hidden');
+                            customCommandInput.focus();
+                        });
+                        aiSection.appendChild(item);
+                    });
+                }
+                
+                if (aiSection.children.length > 0) {
+                    suggestionsList.appendChild(aiSection);
+                }
+                
+                // Show dropdown if we have any suggestions
+                if (historyFiltered.length > 0 || predictions.length > 0 || isLoadingPredictions) {
+                    suggestionsList.classList.remove('hidden');
+                } else {
+                    suggestionsList.classList.add('hidden');
+                }
+            };
             
-            if (aiSection.children.length > 0) {
-                suggestionsList.appendChild(aiSection);
-            }
+            // Initial render with loading state if needed
+            renderSuggestions();
             
-            // Show dropdown if we have any suggestions
-            if (historyFiltered.length > 0 || aiPredictions.length > 0 || isLoadingPredictions) {
-                suggestionsList.classList.remove('hidden');
-            } else {
-                suggestionsList.classList.add('hidden');
+            // Fetch AI predictions and re-render when done
+            if (input.length >= 2) {
+                const predictions = await fetchAIPredictions(input);
+                aiPredictions = predictions;
+                renderSuggestions(predictions);
             }
         };
         
