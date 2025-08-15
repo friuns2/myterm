@@ -5,7 +5,7 @@ const router = express.Router();
 // Get AI command predictions using OpenRouter
 router.post('/', express.json(), async (req, res) => {
     try {
-        const { currentCommand, context, workingDirectory, operatingSystem, commandLineScreen, previousCommands } = req.body;
+        const { currentCommand, context, workingDirectory, operatingSystem, commandLineScreen } = req.body;
         
         if (!currentCommand || typeof currentCommand !== 'string') {
             return res.status(400).json({ error: 'Current command is required' });
@@ -33,9 +33,7 @@ Current input: "${currentCommand}"`;
             prompt += `\nCurrent command line screen:\n${commandLineScreen}`;
         }
 
-        if (previousCommands && Array.isArray(previousCommands) && previousCommands.length > 0) {
-            prompt += `\nPreviously typed commands:\n${previousCommands.slice(-10).join('\n')}`;
-        }
+
 
         if (context && typeof context === 'string') {
             prompt += `\nRecent commands context:\n${context}`;
