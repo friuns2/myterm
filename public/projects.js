@@ -155,15 +155,6 @@ async function showSessionsAndProjectsList() {
                                                 </div>
                                                 <p class="text-xs opacity-70 mt-2" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
-                                                ${session.ports && session.ports.length > 0 ? `
-                                                    <div class="flex flex-wrap gap-1 mt-2">
-                                                        ${session.ports.map(port => `
-                                                            <button class="btn btn-xs btn-outline btn-info" onclick="event.stopPropagation(); window.open('http://localhost:${port}', '_blank')" title="Open http://localhost:${port}">
-                                                                🌐 :${port}
-                                                            </button>
-                                                        `).join('')}
-                                                    </div>
-                                                ` : ''}
                                             </div>
                                         </div>
                                         <div class="flex gap-2 mt-4 justify-between">
