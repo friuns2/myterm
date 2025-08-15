@@ -225,7 +225,6 @@ function setupCustomCommandInput() {
         let isLoadingPredictions = false;
         let currentAbortController = null;
         let debounceTimeout = null;
-        let isSelectingSuggestion = false;
         
         // Function to fetch AI predictions
         const fetchAIPredictions = async (input) => {
@@ -312,14 +311,9 @@ function setupCustomCommandInput() {
                     item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
                     item.innerHTML = `<span class="text-blue-400 text-xs mr-2">HISTORY</span><span>${cmd}</span>`;
                     item.addEventListener('click', () => {
-                        isSelectingSuggestion = true;
                         customCommandInput.value = cmd;
                         suggestionsList.classList.add('hidden');
                         customCommandInput.focus();
-                        // Reset flag after a short delay
-                        setTimeout(() => {
-                            isSelectingSuggestion = false;
-                        }, 100);
                     });
                     suggestionsList.appendChild(item);
                 });
@@ -339,14 +333,9 @@ function setupCustomCommandInput() {
                         item.className = 'px-3 py-2 cursor-pointer hover:bg-base-300 text-sm flex items-center';
                         item.innerHTML = `<span class="text-green-400 text-xs mr-2">AI</span><span>${cmd}</span>`;
                         item.addEventListener('click', () => {
-                            isSelectingSuggestion = true;
                             customCommandInput.value = cmd;
                             suggestionsList.classList.add('hidden');
                             customCommandInput.focus();
-                            // Reset flag after a short delay
-                            setTimeout(() => {
-                                isSelectingSuggestion = false;
-                            }, 100);
                         });
                         aiSection.appendChild(item);
                     });
@@ -519,11 +508,6 @@ function setupCustomCommandInput() {
             if (currentAbortController) {
                 currentAbortController.abort();
                 currentAbortController = null;
-            }
-            
-            // Skip showing suggestions if we're currently selecting one
-            if (isSelectingSuggestion) {
-                return;
             }
             
             // Show suggestions if input is not empty
