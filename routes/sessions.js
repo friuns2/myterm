@@ -36,7 +36,7 @@ function detectSessionPorts(sessionName) {
                                 const lsofLines = lsofOutput.split('\n').filter(Boolean);
                                 
                                 for (const lsofLine of lsofLines) {
-                                    const match = lsofLine.match(/:([0-9]+)\s+\(LISTEN\)/);
+                                    const match = lsofLine.match(/:([0-9]+)\s*\(LISTEN\)/);
                                     if (match) {
                                         const port = parseInt(match[1]);
                                         if (port && !ports.includes(port)) {

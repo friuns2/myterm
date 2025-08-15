@@ -1,1 +1,7 @@
-when using ports dont hardcode them istead hash them from execution path to number from 3000 to 4000
+when using ports dont hardcode them instead hash path to number from 3000 to 4000 and assign it to port
+
+when running server run it in background
+
+then run chromium --headless --disable-gpu --dump-dom https://example.com
+
+after make code changes commit and kill and run server again, and then call open url
