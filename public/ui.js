@@ -228,6 +228,25 @@ function setupCustomCommandInput() {
             isLoadingPredictions = true;
             
             try {
+                // Get operating system information
+                const operatingSystem = navigator.platform || navigator.userAgentData?.platform || 'Unknown';
+                
+                // Get current command line screen content from terminal
+                let commandLineScreen = '';
+                if (window.terminal && window.terminal.buffer && window.terminal.buffer.active) {
+                    const buffer = window.terminal.buffer.active;
+                    const lines = [];
+                    // Get last 10 lines of terminal output
+                    const startLine = Math.max(0, buffer.length - 10);
+                    for (let i = startLine; i < buffer.length; i++) {
+                        const line = buffer.getLine(i);
+                        if (line) {
+                            lines.push(line.translateToString(true));
+                        }
+                    }
+                    commandLineScreen = lines.join('\n').trim();
+                }
+                
                 const response = await fetch('/api/predictions', {
                     method: 'POST',
                     headers: {
@@ -236,7 +255,10 @@ function setupCustomCommandInput() {
                     body: JSON.stringify({
                         currentCommand: input,
                         context: commandHistory.slice(0, 5).join('\n'),
-                        workingDirectory: window.currentWorkingDirectory || '/'
+                        workingDirectory: window.currentWorkingDirectory || '/',
+                        operatingSystem: operatingSystem,
+                        commandLineScreen: commandLineScreen,
+                        previousCommands: commandHistory.slice(-20) // Last 20 commands
                     })
                 });
                 

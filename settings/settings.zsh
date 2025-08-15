@@ -1,7 +1,7 @@
 alias cu='cursor-agent -f'
 alias gemini='gemini --yolo'
 alias qwen='qwen --yolo'
-source "${0:A:h}/api.sh"
+source "${0:A:h}/api.zsh"
 
 function t3() {
   local next_num=1

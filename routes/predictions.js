@@ -5,7 +5,7 @@ const router = express.Router();
 // Get AI command predictions using OpenRouter
 router.post('/', express.json(), async (req, res) => {
     try {
-        const { currentCommand, context, workingDirectory } = req.body;
+        const { currentCommand, context, workingDirectory, operatingSystem, commandLineScreen, previousCommands } = req.body;
         
         if (!currentCommand || typeof currentCommand !== 'string') {
             return res.status(400).json({ error: 'Current command is required' });
@@ -13,17 +13,29 @@ router.post('/', express.json(), async (req, res) => {
 
         // Get OpenAI settings from environment variables
         const apiKey = process.env.OPENAI_API_KEY;
-        const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
-        const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+        const model = process.env.OPENAI_MODEL ;
+        const baseUrl = process.env.OPENAI_BASE_URL ;
 
         if (!apiKey) {
             return res.status(500).json({ error: 'API key not configured' });
         }
 
         // Build context for AI prediction
-        let prompt = `You are a command-line expert. Based on the current input and context, suggest 3 likely shell commands the user might want to run next.
+        let prompt = `You are a command-line expert. Based on the current input, command line screen, and context, suggest 3 likely shell commands the user might want to run next.
 
 Current input: "${currentCommand}"`;
+
+        if (operatingSystem && typeof operatingSystem === 'string') {
+            prompt += `\nOperating System: ${operatingSystem}`;
+        }
+
+        if (commandLineScreen && typeof commandLineScreen === 'string') {
+            prompt += `\nCurrent command line screen:\n${commandLineScreen}`;
+        }
+
+        if (previousCommands && Array.isArray(previousCommands) && previousCommands.length > 0) {
+            prompt += `\nPreviously typed commands:\n${previousCommands.slice(-10).join('\n')}`;
+        }
 
         if (context && typeof context === 'string') {
             prompt += `\nRecent commands context:\n${context}`;
