@@ -267,14 +267,24 @@ router.post('/ports/:port/tunnel', async (req, res) => {
             activeTunnels.delete(portNum);
         }
         
-        // Create new tunnel
-        const tunnel = await localtunnel({ port: portNum });
+        // Create new tunnel with timeout
+        console.log(`Creating tunnel for port ${portNum}...`);
+        
+        const tunnelPromise = localtunnel({ port: portNum });
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Tunnel creation timeout')), 30000); // 30 second timeout
+        });
+        
+        const tunnel = await Promise.race([tunnelPromise, timeoutPromise]);
         activeTunnels.set(portNum, tunnel);
         
         // Handle tunnel close event
         tunnel.on('close', () => {
+            console.log(`Tunnel closed for port ${portNum}`);
             activeTunnels.delete(portNum);
         });
+        
+        console.log(`Tunnel created successfully for port ${portNum}: ${tunnel.url}`);
         
         res.json({ 
             success: true, 
