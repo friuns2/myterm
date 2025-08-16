@@ -74,7 +74,8 @@ function syncRulesToCliTargets(rulesText) {
     const targets = [
         path.join(HOME_DIR, '.gemini', 'GEMINI.md'),
         path.join(HOME_DIR, '.claude', 'CLAUDE.md'),
-        path.join(HOME_DIR, '.qwen', 'QWEN.md')
+        path.join(HOME_DIR, '.qwen', 'QWEN.md'),
+        path.join(HOME_DIR, '.qodo', 'Qodo.md')
     ];
     const source = RULES_FILE;
     for (const target of targets) {
