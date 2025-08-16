@@ -1,6 +1,7 @@
 alias cu='cursor-agent -f'
 alias gemini='gemini --yolo'
 alias qwen='qwen --yolo'
+alias claude='ccr code --dangerously-skip-permissions'
 source "${0:A:h}/api.zsh"
 
 alias chrome='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"'
