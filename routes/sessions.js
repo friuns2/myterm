@@ -6,6 +6,17 @@ const { pinggy } = require('@pinggy/pinggy');
 
 const router = express.Router();
 
+// Dynamic import for ES module
+let serveonet = null;
+(async () => {
+    try {
+        const serveoModule = await import('serveonet');
+        serveonet = serveoModule.default;
+    } catch (error) {
+        console.warn('Failed to load serveonet module:', error.message);
+    }
+})();
+
 // Function to scan all development ports globally
 function scanAllDevelopmentPorts() {
     // Check if port scanning is enabled via environment variable
@@ -238,6 +249,7 @@ router.get('/:sessionId/history', (req, res) => {
 
 // Store active tunnels
 const activeTunnels = new Map();
+const serveoTunnels = new Map();
 
 // API endpoint to create tunnel for a port using Pinggy
 router.post('/ports/:port/tunnel', async (req, res) => {
@@ -285,6 +297,100 @@ router.post('/ports/:port/tunnel', async (req, res) => {
     } catch (error) {
         console.error(`Error creating tunnel for port ${portNum}:`, error);
         res.status(500).json({ error: 'Failed to create tunnel' });
+    }
+});
+
+// API endpoint to create Serveo tunnel for a port
+router.post('/ports/:port/serveo', async (req, res) => {
+    const port = parseInt(req.params.port);
+    
+    if (isNaN(port) || port < 1 || port > 65535) {
+        return res.status(400).json({ error: 'Invalid port number' });
+    }
+    
+    // Check if serveonet module is loaded
+    if (!serveonet) {
+        return res.status(503).json({ error: 'Serveo module not available' });
+    }
+    
+    try {
+        // Check if port is in use
+        const lsofCommand = `lsof -ti:${port}`;
+        const result = execSync(lsofCommand, { encoding: 'utf8' }).trim();
+        
+        if (!result) {
+            return res.status(400).json({ error: `No process found running on port ${port}` });
+        }
+        
+        // Close existing Serveo tunnel for this port if any
+        if (serveoTunnels.has(port)) {
+            const existingTunnel = serveoTunnels.get(port);
+            existingTunnel.kill();
+            serveoTunnels.delete(port);
+        }
+        
+        // Create new Serveo tunnel
+        const tunnel = serveonet({
+            localPort: port,
+            localHost: 'localhost',
+            remotePort: 80 // Use port 80 for HTTPS support
+        });
+        
+        // Wait for connection and get tunnel URL
+        const tunnelPromise = new Promise((resolve, reject) => {
+            let tunnelUrl = null;
+            
+            tunnel.on('connect', (info) => {
+                console.log('Serveo tunnel connected:', info);
+                resolve(tunnelUrl);
+            });
+            
+            tunnel.on('data', (data) => {
+                console.log('Serveo data:', data);
+                // Extract URL from Serveo response
+                const urlMatch = data.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    tunnelUrl = urlMatch[0];
+                }
+            });
+            
+            tunnel.on('error', (error) => {
+                console.error('Serveo error:', error);
+                if (error.killable) {
+                    reject(new Error(error.message));
+                }
+            });
+            
+            tunnel.on('timeout', () => {
+                reject(new Error('Serveo tunnel connection timeout'));
+            });
+            
+            // Timeout after 30 seconds
+            setTimeout(() => {
+                if (!tunnelUrl) {
+                    reject(new Error('Timeout waiting for Serveo tunnel URL'));
+                }
+            }, 30000);
+        });
+        
+        const url = await tunnelPromise;
+        
+        // Store the tunnel
+        serveoTunnels.set(port, tunnel);
+        
+        res.json({
+            success: true,
+            port: port,
+            url: url,
+            message: `Serveo tunnel created for port ${port}`
+        });
+        
+    } catch (error) {
+        console.error('Error creating Serveo tunnel:', error);
+        res.status(500).json({ 
+            error: 'Failed to create Serveo tunnel', 
+            details: error.message 
+        });
     }
 });
 

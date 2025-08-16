@@ -149,9 +149,14 @@ async function showSessionsAndProjectsList() {
                     <div class="flex flex-wrap gap-2 mb-6">
                         ${allPorts.map(port => `
                             <div class="flex gap-1">
-                                <button class="btn btn-sm btn-outline btn-success" onclick="createTunnelForPort(${port})" title="Create tunnel for port ${port}">
+                                <button class="btn btn-sm btn-outline btn-success" onclick="createTunnelForPort(${port})" title="Create Pinggy tunnel for port ${port}">
                                     🌐 ${port}
                                 </button>
+                                ${port === 3000 ? `
+                                <button class="btn btn-sm btn-outline btn-info" onclick="createServeoTunnelForPort(${port})" title="Create Serveo tunnel for port ${port}">
+                                    🔗 Serveo
+                                </button>
+                                ` : ''}
                                 <button class="btn btn-sm btn-outline btn-error" onclick="killProcessByPort('', ${port})" title="Kill process on port ${port}">
                                     ❌
                                 </button>
@@ -578,6 +583,62 @@ async function createTunnelForPort(port) {
         await Swal.fire({
             title: 'Error',
             text: 'Failed to create tunnel. Please try again.',
+            icon: 'error'
+        });
+    }
+}
+
+// Function to create Serveo tunnel for a port
+async function createServeoTunnelForPort(port) {
+    try {
+        // Show loading state
+        const loadingResult = await Swal.fire({
+            title: 'Creating Serveo Tunnel...',
+            text: `Setting up Serveo tunnel for port ${port}`,
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        const response = await fetch(`/api/sessions/ports/${port}/serveo`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            await Swal.fire({
+                title: 'Serveo Tunnel Created! 🔗',
+                html: `
+                    <p>Your tunnel is ready:</p>
+                    <p><a href="${result.url}" target="_blank" style="color: #007bff; text-decoration: none;">${result.url}</a></p>
+                    <p><small>Port: ${result.port}</small></p>
+                    <p><small>Powered by Serveo.net</small></p>
+                `,
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonText: 'Open URL',
+                cancelButtonText: 'Close'
+            }).then((swalResult) => {
+                if (swalResult.isConfirmed) {
+                    window.open(result.url, '_blank');
+                }
+            });
+        } else {
+            await Swal.fire({
+                title: 'Error',
+                text: `Failed to create Serveo tunnel: ${result.error}`,
+                icon: 'error'
+            });
+        }
+    } catch (error) {
+        console.error('Error creating Serveo tunnel:', error);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to create Serveo tunnel. Please try again.',
             icon: 'error'
         });
     }
