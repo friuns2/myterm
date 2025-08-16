@@ -1,9 +1,28 @@
-when i say hi reply with hoi
+# Port Assignment
+- Generate a deterministic port number between 3000-4000 by hashing the project path
+- Avoid hardcoding port numbers to prevent conflicts
+- Store the port number in a configuration file
 
-when using ports dont hardcode them instead hash path to number from 3000 to 4000 and assign it to port
+# Server Management 
+- Launch development server in background mode (e.g. `npm run dev &`)
+- Save the process ID for later management
+- Implement graceful shutdown mechanism
 
-when running server run it in background like run dev &
+# Browser Integration
+- Use headless Chrome for automated testing and DOM inspection
+- Configure Chrome with flags: --headless --disable-gpu
+- Capture and analyze page content using --dump-dom
 
-then run chrome --headless --disable-gpu --dump-dom https://example.com
+# Development Workflow
+1. Make code changes
+2. Commit changes to version control
+3. Gracefully terminate existing server process
+4. Restart server in background
+5. Open application URL in default browser
+6. Verify changes are reflected
 
-after make code changes commit and kill and run server again, and then call open url
+# Error Handling
+- Monitor server startup status
+- Handle port conflicts gracefully
+- Log any browser automation errors
+- Provide clear error messages for troubleshooting

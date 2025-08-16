@@ -5,8 +5,8 @@ const { execSync } = require('child_process');
 
 const router = express.Router();
 
-// Function to detect ports used by processes in tmux session
-function detectSessionPorts(sessionName) {
+// Function to scan all development ports globally
+function scanAllDevelopmentPorts() {
     // Check if port scanning is enabled via environment variable
     if (process.env.ENABLE_PORT_SCANNING !== 'true') {
         return [];
@@ -14,82 +14,24 @@ function detectSessionPorts(sessionName) {
     
     const ports = [];
     try {
-        // Get all panes in the session with their TTYs
-        const panesOutput = execSync(`tmux list-panes -s -t ${JSON.stringify(sessionName)} -F "#{pane_id} #{pane_tty}" 2>/dev/null || true`, { encoding: 'utf8' });
-        const panes = panesOutput.split('\n').filter(Boolean);
+        // Use the provided command to scan for development ports
+        const lsofOutput = execSync(`lsof -i -P | grep LISTEN | grep -E ':(3[0-9]{3}|4000|51[0-9]{2}|52[0-9]{2}|53[0-9]{2}|54[0-9]{2}|55[0-9]{2}|56[0-9]{2}|57[0-9]{2}|58[0-9]{2}|59[0-9]{2}|6000|9[0-9]{3}|10000)\\b'`, { encoding: 'utf8' });
+        const lines = lsofOutput.split('\n').filter(Boolean);
         
-        for (const pane of panes) {
-            const [paneId, tty] = pane.split(' ');
-            if (!tty) continue;
-            
-            try {
-                // Extract TTY device name (e.g., ttys007 from /dev/ttys007)
-                const ttyDevice = tty.replace('/dev/', '');
-                
-                // Get processes running on this TTY
-                const psOutput = execSync(`ps -ft ${ttyDevice} 2>/dev/null || true`, { encoding: 'utf8' });
-                const lines = psOutput.split('\n').filter(line => line.trim() && !line.includes('PID'));
-                
-                for (const line of lines) {
-                    const parts = line.trim().split(/\s+/);
-                    if (parts.length >= 2) {
-                        const pid = parts[1];
-                        if (pid && /^\d+$/.test(pid)) {
-                            // Collect this process and its children (depth 2)
-                            const pidsToCheck = [pid];
-                            
-                            try {
-                                // Get child processes (depth 1)
-                                const childrenOutput = execSync(`pgrep -P ${pid} 2>/dev/null || true`, { encoding: 'utf8' });
-                                const childPids = childrenOutput.split('\n').filter(p => p.trim() && /^\d+$/.test(p.trim()));
-                                pidsToCheck.push(...childPids);
-                                
-                                // Get grandchildren processes (depth 2)
-                                for (const childPid of childPids) {
-                                    try {
-                                        const grandchildrenOutput = execSync(`pgrep -P ${childPid} 2>/dev/null || true`, { encoding: 'utf8' });
-                                        const grandchildPids = grandchildrenOutput.split('\n').filter(p => p.trim() && /^\d+$/.test(p.trim()));
-                                        pidsToCheck.push(...grandchildPids);
-                                    } catch (_) {
-                                        // Ignore errors for individual grandchildren lookup
-                                    }
-                                }
-                            } catch (_) {
-                                // Ignore errors for children lookup, still check the parent process
-                            }
-                            
-                            // Check ports for all collected PIDs
-                            for (const pidToCheck of pidsToCheck) {
-                                try {
-                                    // Check what ports this process is using
-                                    const lsofOutput = execSync(`lsof -Pan -p ${pidToCheck} -i 2>/dev/null || true`, { encoding: 'utf8' });
-                                    const lsofLines = lsofOutput.split('\n').filter(Boolean);
-                                    
-                                    for (const lsofLine of lsofLines) {
-                                        const match = lsofLine.match(/:([0-9]+)\s*\(LISTEN\)/);
-                                        if (match) {
-                                            const port = parseInt(match[1]);
-                                            if (port && !ports.includes(port)) {
-                                                ports.push(port);
-                                            }
-                                        }
-                                    }
-                                } catch (_) {
-                                    // Ignore lsof errors for individual processes
-                                }
-                            }
-                        }
-                    }
+        for (const line of lines) {
+            const match = line.match(/:([0-9]+)\s+\(LISTEN\)/);
+            if (match) {
+                const port = parseInt(match[1]);
+                if (port && !ports.includes(port)) {
+                    ports.push(port);
                 }
-            } catch (_) {
-                // Ignore errors for individual panes
             }
         }
     } catch (_) {
-        // Ignore errors for the entire session
+        // Ignore errors, return empty array
     }
     
-    return ports.sort((a, b) => a - b);
+    return [...new Set(ports)].sort((a, b) => a - b);
 }
 
 // API endpoint to get all sessions across all projects
@@ -150,9 +92,6 @@ router.get('/', (req, res) => {
 			}
 		} catch (_) {}
 
-		// Detect ports used by this session
-		const ports = detectSessionPorts(ts.name);
-
 		return {
 			id: ts.name,
 			path: ts.pathStr || '',
@@ -160,15 +99,23 @@ router.get('/', (req, res) => {
 			lastCommitSubject,
 			lastCommitShortHash,
 			created: ts.createdStr || new Date().toISOString(),
-			projectName,
-			ports
+			projectName
 		};
     });
 
     res.json(all);
 });
 
-
+// GET /api/sessions/ports - Get all development ports
+router.get('/ports', (req, res) => {
+    try {
+        const ports = scanAllDevelopmentPorts();
+        res.json({ ports });
+    } catch (error) {
+        console.error('Error getting ports:', error);
+        res.status(500).json({ error: 'Failed to get ports' });
+    }
+});
 
 // API endpoint to kill a session
 router.delete('/:sessionId', (req, res) => {
@@ -178,6 +125,46 @@ router.delete('/:sessionId', (req, res) => {
         res.json({ success: true, message: 'Tmux session killed successfully' });
     } catch (e) {
         res.status(404).json({ success: false, message: 'Session not found or failed to kill' });
+    }
+});
+
+// DELETE /api/sessions/ports/:port - Kill process by port globally
+router.delete('/ports/:port', (req, res) => {
+    const { port } = req.params;
+    
+    try {
+        // Find the process using the port
+        const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
+        const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
+        
+        if (pids.length === 0) {
+            return res.status(404).json({ error: `No process found on port ${port}` });
+        }
+        
+        // Kill all processes using this port
+        let killedCount = 0;
+        for (const pid of pids) {
+            try {
+                execSync(`kill -9 ${pid}`);
+                killedCount++;
+            } catch (killError) {
+                console.warn(`Failed to kill process ${pid}:`, killError.message);
+            }
+        }
+        
+        if (killedCount > 0) {
+            res.json({ 
+                success: true, 
+                message: `Killed ${killedCount} process(es) on port ${port}`,
+                killedPids: pids.slice(0, killedCount)
+            });
+        } else {
+            res.status(500).json({ error: `Failed to kill processes on port ${port}` });
+        }
+        
+    } catch (error) {
+        console.error(`Error killing process on port ${port}:`, error);
+        res.status(500).json({ error: 'Failed to kill process' });
     }
 });
 

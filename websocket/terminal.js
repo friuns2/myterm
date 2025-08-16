@@ -35,7 +35,6 @@ function setupWebSocketServer(server) {
         function ensureTmuxTerminalOverrides() {
             try {
                 execSync('tmux set -g terminal-overrides "xterm*:smcup@:rmcup@"', { stdio: 'ignore' });
-                execSync('tmux set -g history-limit 52000', { stdio: 'ignore' });
             } catch (_) {}
         }
 

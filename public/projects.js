@@ -107,15 +107,21 @@ async function showSessionsAndProjectsList() {
     } catch (_) {}
 
     try {
-        // Fetch sessions, projects and available shell functions in parallel
-        const [sessionsResponse, projectsResponse, functionsResponse] = await Promise.all([
+        // Fetch sessions, projects, ports and available shell functions in parallel
+        const [sessionsResponse, projectsResponse, portsResponse, functionsResponse] = await Promise.all([
             fetch('/api/sessions'),
             fetch('/api/projects-with-worktrees'),
+            fetch('/api/sessions/ports'),
             fetch('/api/settings/functions')
         ]);
         
         const allSessions = await sessionsResponse.json();
         const projectsWithWorktrees = await projectsResponse.json();
+        let allPorts = [];
+        try {
+            const p = await portsResponse.json();
+            allPorts = (p && p.ports) || [];
+        } catch (_) {}
         let functionsList = [];
         try {
             const f = await functionsResponse.json();
@@ -133,6 +139,27 @@ async function showSessionsAndProjectsList() {
                         </button>
                     </div>
                 </div>
+                
+                <!-- Development Ports Section -->
+                ${allPorts.length > 0 ? `
+                <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
+                        <span class="text-accent">🚀</span> Development Ports
+                    </h2>
+                    <div class="flex flex-wrap gap-2 mb-6">
+                        ${allPorts.map(port => `
+                            <div class="flex gap-1">
+                                <button class="btn btn-sm btn-outline btn-success" onclick="window.open('http://localhost:${port}', '_blank')" title="Preview http://localhost:${port}">
+                                    🚀 ${port}
+                                </button>
+                                <button class="btn btn-sm btn-outline btn-error" onclick="killProcessByPort('', ${port})" title="Kill process on port ${port}">
+                                    ❌
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
                 
                 <!-- All Sessions Section -->
                 <div class="mb-8">
@@ -157,27 +184,13 @@ async function showSessionsAndProjectsList() {
                                                 <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
                                             </div>
                                         </div>
-                                        <div class="flex gap-2 mt-4 justify-between">
-                                            <div class="flex gap-1">
-                                                ${session.ports && session.ports.length > 0 ? session.ports.map(port => `
-                                                    <div class="flex gap-1">
-                                                        <button class="btn btn-xs btn-outline btn-success" onclick="event.stopPropagation(); window.open('http://localhost:${port}', '_blank')" title="Preview http://localhost:${port}">
-                                                            🚀 ${port}
-                                                        </button>
-                                                        <button class="btn btn-xs btn-outline btn-error" onclick="event.stopPropagation(); killProcessByPort('${session.id}', ${port})" title="Kill process on port ${port}">
-                                                            ❌
-                                                        </button>
-                                                    </div>
-                                                `).join('') : ''}
-                                            </div>
-                                            <div class="flex gap-2">
-                                                <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
-                                                    Connect
-                                                </button>
-                                                <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
-                                                    Kill
-                                                </button>
-                                            </div>
+                                        <div class="flex gap-2 mt-4 justify-end">
+                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
+                                                Connect
+                                            </button>
+                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
+                                                Kill
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -501,7 +514,7 @@ async function killProcessByPort(sessionId, port) {
     }
     
     try {
-        const response = await fetch(`/api/sessions/${sessionId}/ports/${port}`, {
+        const response = await fetch(`/api/sessions/ports/${port}`, {
             method: 'DELETE'
         });
         
