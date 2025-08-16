@@ -213,7 +213,7 @@ async function showSessionsAndProjectsList() {
                     </h2>
                     <div class="mb-6">
                         <div class="flex gap-2">
-                            <input type="text" id="project-name" placeholder="Enter project name" class="input input-bordered flex-1">
+                            <input type="text" id="project-name" placeholder="Enter project name (or leave empty for random name)" class="input input-bordered flex-1">
                             <button class="btn btn-primary" onclick="createNewProject()">Create Project</button>
                         </div>
                     </div>
@@ -352,17 +352,26 @@ async function runFunctionInProjectTerminal(projectName, fnName, args) {
     }, 50);
 }
 
+// Function to generate a random project name
+function generateRandomProjectName() {
+    const adjectives = ['awesome', 'brilliant', 'creative', 'dynamic', 'elegant', 'fantastic', 'gorgeous', 'incredible', 'magnificent', 'outstanding', 'perfect', 'remarkable', 'spectacular', 'wonderful', 'amazing', 'beautiful', 'charming', 'delightful', 'excellent', 'fabulous'];
+    const nouns = ['project', 'app', 'tool', 'system', 'platform', 'framework', 'solution', 'engine', 'builder', 'creator', 'manager', 'helper', 'studio', 'workspace', 'lab', 'forge', 'craft', 'maker', 'hub', 'center'];
+    
+    const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+    const randomNumber = Math.floor(Math.random() * 1000);
+    
+    return `${randomAdjective}-${randomNoun}-${randomNumber}`;
+}
+
 async function createNewProject() {
     const projectNameInput = document.getElementById('project-name');
-    const projectName = projectNameInput.value.trim();
+    let projectName = projectNameInput.value.trim();
     
+    // If no name is provided, generate a random one
     if (!projectName) {
-        await Swal.fire({
-            title: 'Error',
-            text: 'Please enter a project name',
-            icon: 'error'
-        });
-        return;
+        projectName = generateRandomProjectName();
+        projectNameInput.value = projectName;
     }
     
     try {
