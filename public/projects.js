@@ -181,7 +181,15 @@ async function showSessionsAndProjectsList() {
                                                 <pre id="session-thumb-${session.id}" class="text-[6px] leading-tight">${ansiToHtml(escapeHtml(session.thumbnail || ''))}</pre>
                                             </div>
                                             <p class="text-[10px] opacity-70 mb-1 truncate" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
-                                            <p class="text-[10px] opacity-50 truncate">Created: ${new Date(session.created).toLocaleString()}</p>
+                                            <p class="text-[10px] opacity-50 truncate">Created: ${new Date(session.created).toLocaleString('en-US', { 
+                                                year: 'numeric', 
+                                                month: '2-digit', 
+                                                day: '2-digit', 
+                                                hour: '2-digit', 
+                                                minute: '2-digit', 
+                                                second: '2-digit',
+                                                hour12: true
+                                            })}</p>
                                         </div>
                                         <div class="flex gap-1 mt-3">
                                             <button class="btn btn-primary btn-xs flex-1" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
