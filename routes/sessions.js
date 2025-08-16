@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { execSync } = require('child_process');
+const localtunnel = require('localtunnel');
 
 const router = express.Router();
 
@@ -232,6 +233,59 @@ router.get('/:sessionId/history', (req, res) => {
     } catch (error) {
         console.error('Error capturing tmux history:', error);
         res.status(404).json({ success: false, error: 'Session not found or failed to capture history' });
+    }
+});
+
+// Store active tunnels
+const activeTunnels = new Map();
+
+// API endpoint to create localtunnel for a port
+router.post('/ports/:port/tunnel', async (req, res) => {
+    const { port } = req.params;
+    const portNum = parseInt(port);
+    
+    if (!portNum || portNum < 1 || portNum > 65535) {
+        return res.status(400).json({ error: 'Invalid port number' });
+    }
+    
+    try {
+        // Check if port is actually in use
+        const lsofOutput = execSync(`lsof -ti:${portNum} 2>/dev/null || true`, { encoding: 'utf8' });
+        const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
+        
+        if (pids.length === 0) {
+            return res.status(404).json({ error: `No process found on port ${portNum}` });
+        }
+        
+        // Close existing tunnel for this port if any
+        if (activeTunnels.has(portNum)) {
+            try {
+                activeTunnels.get(portNum).close();
+            } catch (e) {
+                console.warn('Error closing existing tunnel:', e.message);
+            }
+            activeTunnels.delete(portNum);
+        }
+        
+        // Create new tunnel
+        const tunnel = await localtunnel({ port: portNum });
+        activeTunnels.set(portNum, tunnel);
+        
+        // Handle tunnel close event
+        tunnel.on('close', () => {
+            activeTunnels.delete(portNum);
+        });
+        
+        res.json({ 
+            success: true, 
+            url: tunnel.url,
+            port: portNum,
+            message: `Tunnel created for port ${portNum}` 
+        });
+        
+    } catch (error) {
+        console.error(`Error creating tunnel for port ${portNum}:`, error);
+        res.status(500).json({ error: 'Failed to create tunnel' });
     }
 });
 

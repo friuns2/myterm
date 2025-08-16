@@ -149,8 +149,8 @@ async function showSessionsAndProjectsList() {
                     <div class="flex flex-wrap gap-2 mb-6">
                         ${allPorts.map(port => `
                             <div class="flex gap-1">
-                                <button class="btn btn-sm btn-outline btn-success" onclick="window.open('http://localhost:${port}', '_blank')" title="Preview http://localhost:${port}">
-                                    🚀 ${port}
+                                <button class="btn btn-sm btn-outline btn-success" onclick="createTunnelForPort(${port})" title="Create tunnel for port ${port}">
+                                    🌐 ${port}
                                 </button>
                                 <button class="btn btn-sm btn-outline btn-error" onclick="killProcessByPort('', ${port})" title="Kill process on port ${port}">
                                     ❌
@@ -521,6 +521,57 @@ function createNewSessionForProject(projectName) {
     currentProject = projectName;
     stopSessionsStatusAutoRefresh();
     initializeTerminal();
+}
+
+// Function to create localtunnel for a port
+async function createTunnelForPort(port) {
+    try {
+        // Show loading state
+        const loadingResult = await Swal.fire({
+            title: 'Creating Tunnel...',
+            text: `Setting up localtunnel for port ${port}`,
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        const response = await fetch(`/api/sessions/ports/${port}/tunnel`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            await Swal.fire({
+                title: 'Tunnel Created!',
+                text: `Tunnel URL: ${result.url}`,
+                icon: 'success',
+                confirmButtonText: 'Open Tunnel',
+                showCancelButton: true,
+                cancelButtonText: 'Close'
+            }).then((swalResult) => {
+                if (swalResult.isConfirmed) {
+                    window.open(result.url, '_blank');
+                }
+            });
+        } else {
+            await Swal.fire({
+                title: 'Error',
+                text: `Failed to create tunnel: ${result.error}`,
+                icon: 'error'
+            });
+        }
+    } catch (error) {
+        console.error('Error creating tunnel:', error);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to create tunnel. Please try again.',
+            icon: 'error'
+        });
+    }
 }
 
 // Function to kill process by port
