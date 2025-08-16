@@ -509,9 +509,18 @@ function createNewSessionForProject(projectName) {
 
 // Function to kill process by port
 async function killProcessByPort(sessionId, port) {
-    if (!confirm(`Are you sure you want to kill the process running on port ${port}?`)) {
-        return;
-    }
+    const confirmResult = await Swal.fire({
+        title: 'Kill Process',
+        text: `Are you sure you want to kill the process running on port ${port}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, kill it!',
+        cancelButtonText: 'Cancel'
+    });
+    
+    if (!confirmResult.isConfirmed) return;
     
     try {
         const response = await fetch(`/api/sessions/ports/${port}`, {
@@ -521,14 +530,26 @@ async function killProcessByPort(sessionId, port) {
         const result = await response.json();
         
         if (result.success) {
-            alert(result.message);
+            await Swal.fire({
+                title: 'Success!',
+                text: result.message,
+                icon: 'success'
+            });
             // Refresh the sessions list to update port status
             showSessionsAndProjectsList();
         } else {
-            alert(`Failed to kill process: ${result.error || result.message}`);
+            await Swal.fire({
+                title: 'Error',
+                text: `Failed to kill process: ${result.message}`,
+                icon: 'error'
+            });
         }
     } catch (error) {
         console.error('Error killing process:', error);
-        alert('Failed to kill process. Please try again.');
+        await Swal.fire({
+            title: 'Error',
+            text: 'Failed to kill process. Please try again.',
+            icon: 'error'
+        });
     }
 }
