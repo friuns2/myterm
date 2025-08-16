@@ -553,14 +553,34 @@ async function createPinggyTunnel(port) {
         if (result.success && result.url) {
             await Swal.fire({
                 title: 'Tunnel Created!',
-                text: `Pinggy tunnel created successfully. Opening ${result.url}`,
+                html: `
+                    <p>Your tunnel is ready!</p>
+                    <div style="margin: 15px 0;">
+                        <button 
+                            onclick="window.open('${result.url}', '_blank')" 
+                            style="
+                                background: #007bff;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                                border-radius: 5px;
+                                cursor: pointer;
+                                font-size: 14px;
+                                text-decoration: none;
+                                display: inline-block;
+                            "
+                            onmouseover="this.style.background='#0056b3'"
+                            onmouseout="this.style.background='#007bff'"
+                        >
+                            Open Tunnel: ${result.url}
+                        </button>
+                    </div>
+                    <small style="color: #666;">Click the button above to open your tunnel in a new tab</small>
+                `,
                 icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
+                showConfirmButton: true,
+                confirmButtonText: 'Close'
             });
-            
-            // Open the tunnel URL in a new tab
-            window.open(result.url, '_blank');
         } else {
             await Swal.fire({
                 title: 'Error',
