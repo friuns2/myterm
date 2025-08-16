@@ -25,6 +25,7 @@ let port;
 
 // Serve static files
 app.use(basicAuthMiddleware);
+app.use(express.json());
 app.use(express.static('public'));
 
 // Import route modules

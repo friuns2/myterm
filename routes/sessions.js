@@ -2,20 +2,8 @@ const express = require('express');
 const path = require('path');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { execSync } = require('child_process');
-const { pinggy } = require('@pinggy/pinggy');
 
 const router = express.Router();
-
-// Dynamic import for ES module
-let serveonet = null;
-(async () => {
-    try {
-        const serveoModule = await import('serveonet');
-        serveonet = serveoModule.default;
-    } catch (error) {
-        console.warn('Failed to load serveonet module:', error.message);
-    }
-})();
 
 // Function to scan all development ports globally
 function scanAllDevelopmentPorts() {
@@ -124,7 +112,7 @@ router.get('/', (req, res) => {
     res.json(all);
 });
 
-// GET /api/sessions/ports - Get all development ports
+// API endpoint to get all development ports
 router.get('/ports', (req, res) => {
     try {
         const ports = scanAllDevelopmentPorts();
@@ -132,6 +120,60 @@ router.get('/ports', (req, res) => {
     } catch (error) {
         console.error('Error getting ports:', error);
         res.status(500).json({ error: 'Failed to get ports' });
+    }
+});
+
+// API endpoint to create pinggy.io tunnel
+router.post('/create-tunnel', (req, res) => {
+    const { port } = req.body;
+    
+    if (!port || port < 1 || port > 65535) {
+        return res.status(400).json({ success: false, message: 'Invalid port number' });
+    }
+    
+    try {
+        // Check if port is actually in use
+        const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
+        const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
+        
+        if (pids.length === 0) {
+            return res.status(404).json({ success: false, message: `No process found on port ${port}` });
+        }
+        
+        // Create pinggy tunnel in background using &
+        const tunnelCommand = `ssh -p 443 -R0:localhost:${port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null qr@a.pinggy.io 2>&1 | grep -o 'https://[^[:space:]]*' | head -1 > /tmp/pinggy_${port}.url &`;
+        
+        execSync(tunnelCommand, { encoding: 'utf8' });
+        
+        // Wait a moment for the tunnel to establish
+        setTimeout(() => {
+            try {
+                const tunnelUrl = execSync(`cat /tmp/pinggy_${port}.url 2>/dev/null || echo ''`, { encoding: 'utf8' }).trim();
+                
+                if (tunnelUrl && tunnelUrl.startsWith('https://')) {
+                    res.json({ 
+                        success: true, 
+                        url: tunnelUrl,
+                        message: `Tunnel created for port ${port}` 
+                    });
+                } else {
+                    res.status(500).json({ 
+                        success: false, 
+                        message: 'Failed to get tunnel URL. Please try again.' 
+                    });
+                }
+            } catch (error) {
+                console.error('Error reading tunnel URL:', error);
+                res.status(500).json({ 
+                    success: false, 
+                    message: 'Failed to create tunnel. Please try again.' 
+                });
+            }
+        }, 3000); // Wait 3 seconds for tunnel to establish
+        
+    } catch (error) {
+        console.error(`Error creating tunnel for port ${port}:`, error);
+        res.status(500).json({ success: false, message: 'Failed to create tunnel' });
     }
 });
 
@@ -244,153 +286,6 @@ router.get('/:sessionId/history', (req, res) => {
     } catch (error) {
         console.error('Error capturing tmux history:', error);
         res.status(404).json({ success: false, error: 'Session not found or failed to capture history' });
-    }
-});
-
-// Store active tunnels
-const activeTunnels = new Map();
-const serveoTunnels = new Map();
-
-// API endpoint to create tunnel for a port using Pinggy
-router.post('/ports/:port/tunnel', async (req, res) => {
-    const { port } = req.params;
-    const portNum = parseInt(port);
-    
-    if (!portNum || portNum < 1 || portNum > 65535) {
-        return res.status(400).json({ error: 'Invalid port number' });
-    }
-    
-    try {
-        // Check if port is actually in use
-        const lsofOutput = execSync(`lsof -ti:${portNum} 2>/dev/null || true`, { encoding: 'utf8' });
-        const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
-        
-        if (pids.length === 0) {
-            return res.status(404).json({ error: `No process found on port ${portNum}` });
-        }
-        
-        // Close existing tunnel for this port if any
-        if (activeTunnels.has(portNum)) {
-            try {
-                activeTunnels.get(portNum).stop();
-            } catch (e) {
-                console.warn('Error closing existing tunnel:', e.message);
-            }
-            activeTunnels.delete(portNum);
-        }
-        
-        // Create new tunnel with Pinggy
-        const tunnel = pinggy.createTunnel({ forwardTo: `localhost:${portNum}` });
-        await tunnel.start();
-        
-        const urls = tunnel.urls();
-        activeTunnels.set(portNum, tunnel);
-        
-        res.json({ 
-            success: true, 
-            url: urls[0], // Use the first URL (HTTP)
-            urls: urls, // Provide all URLs (HTTP and HTTPS)
-            port: portNum,
-            message: `Tunnel created for port ${portNum}` 
-        });
-        
-    } catch (error) {
-        console.error(`Error creating tunnel for port ${portNum}:`, error);
-        res.status(500).json({ error: 'Failed to create tunnel' });
-    }
-});
-
-// API endpoint to create Serveo tunnel for a port
-router.post('/ports/:port/serveo', async (req, res) => {
-    const port = parseInt(req.params.port);
-    
-    if (isNaN(port) || port < 1 || port > 65535) {
-        return res.status(400).json({ error: 'Invalid port number' });
-    }
-    
-    // Check if serveonet module is loaded
-    if (!serveonet) {
-        return res.status(503).json({ error: 'Serveo module not available' });
-    }
-    
-    try {
-        // Check if port is in use
-        const lsofCommand = `lsof -ti:${port}`;
-        const result = execSync(lsofCommand, { encoding: 'utf8' }).trim();
-        
-        if (!result) {
-            return res.status(400).json({ error: `No process found running on port ${port}` });
-        }
-        
-        // Close existing Serveo tunnel for this port if any
-        if (serveoTunnels.has(port)) {
-            const existingTunnel = serveoTunnels.get(port);
-            existingTunnel.kill();
-            serveoTunnels.delete(port);
-        }
-        
-        // Create new Serveo tunnel
-        const tunnel = serveonet({
-            localPort: port,
-            localHost: 'localhost',
-            remotePort: 80 // Use port 80 for HTTPS support
-        });
-        
-        // Wait for connection and get tunnel URL
-        const tunnelPromise = new Promise((resolve, reject) => {
-            let tunnelUrl = null;
-            
-            tunnel.on('connect', (info) => {
-                console.log('Serveo tunnel connected:', info);
-                resolve(tunnelUrl);
-            });
-            
-            tunnel.on('data', (data) => {
-                console.log('Serveo data:', data);
-                // Extract URL from Serveo response
-                const urlMatch = data.match(/https?:\/\/[^\s]+/);
-                if (urlMatch) {
-                    tunnelUrl = urlMatch[0];
-                }
-            });
-            
-            tunnel.on('error', (error) => {
-                console.error('Serveo error:', error);
-                if (error.killable) {
-                    reject(new Error(error.message));
-                }
-            });
-            
-            tunnel.on('timeout', () => {
-                reject(new Error('Serveo tunnel connection timeout'));
-            });
-            
-            // Timeout after 30 seconds
-            setTimeout(() => {
-                if (!tunnelUrl) {
-                    reject(new Error('Timeout waiting for Serveo tunnel URL'));
-                }
-            }, 30000);
-        });
-        
-        const url = await tunnelPromise;
-        
-        // Store the tunnel
-        serveoTunnels.set(port, tunnel);
-        
-        res.json({
-            success: true,
-            port: port,
-            url: url,
-            message: `Serveo tunnel created for port ${port}`
-        });
-        
-    } catch (error) {
-        console.error('Error creating Serveo tunnel:', error);
-        res.status(500).json({ 
-            error: 'Failed to create Serveo tunnel', 
-            details: error.message 
-        });
     }
 });
 
