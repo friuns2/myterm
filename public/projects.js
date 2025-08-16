@@ -525,7 +525,7 @@ async function killProcessByPort(sessionId, port) {
             // Refresh the sessions list to update port status
             showSessionsAndProjectsList();
         } else {
-            alert(`Failed to kill process: ${result.message}`);
+            alert(`Failed to kill process: ${result.error || result.message}`);
         }
     } catch (error) {
         console.error('Error killing process:', error);

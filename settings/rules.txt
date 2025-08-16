@@ -1,3 +1,5 @@
+use vue!
+
 # Port Assignment
 - Generate a deterministic port number between 3000-4000 by hashing the project path
 - Avoid hardcoding port numbers to prevent conflicts
