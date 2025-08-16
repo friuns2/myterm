@@ -112,7 +112,7 @@ router.get('/', (req, res) => {
     res.json(all);
 });
 
-// API endpoint to get all development ports
+// GET /api/sessions/ports - Get all development ports
 router.get('/ports', (req, res) => {
     try {
         const ports = scanAllDevelopmentPorts();
@@ -123,57 +123,86 @@ router.get('/ports', (req, res) => {
     }
 });
 
-// API endpoint to create pinggy.io tunnel
-router.post('/create-tunnel', (req, res) => {
+// POST /api/sessions/pinggy - Create pinggy tunnel for a port
+router.post('/pinggy', async (req, res) => {
     const { port } = req.body;
     
     if (!port || port < 1 || port > 65535) {
-        return res.status(400).json({ success: false, message: 'Invalid port number' });
+        return res.status(400).json({ error: 'Invalid port number' });
     }
     
     try {
-        // Check if port is actually in use
+        // Check if port is actually listening
         const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
-        const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
-        
-        if (pids.length === 0) {
-            return res.status(404).json({ success: false, message: `No process found on port ${port}` });
+        if (!lsofOutput.trim()) {
+            return res.status(404).json({ error: `No service found on port ${port}` });
         }
         
-        // Create pinggy tunnel in background using &
-        const tunnelCommand = `ssh -p 443 -R0:localhost:${port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null qr@a.pinggy.io 2>&1 | grep -o 'https://[^[:space:]]*' | head -1 > /tmp/pinggy_${port}.url &`;
+        // Create pinggy tunnel with timeout
+        const { spawn } = require('child_process');
+        const pinggyProcess = spawn('ssh', ['-p', '443', '-R0:localhost:' + port, 'a.pinggy.io'], {
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
         
-        execSync(tunnelCommand, { encoding: 'utf8' });
+        let tunnelUrl = null;
+        let timeoutId = null;
         
-        // Wait a moment for the tunnel to establish
-        setTimeout(() => {
-            try {
-                const tunnelUrl = execSync(`cat /tmp/pinggy_${port}.url 2>/dev/null || echo ''`, { encoding: 'utf8' }).trim();
-                
-                if (tunnelUrl && tunnelUrl.startsWith('https://')) {
-                    res.json({ 
-                        success: true, 
-                        url: tunnelUrl,
-                        message: `Tunnel created for port ${port}` 
-                    });
-                } else {
-                    res.status(500).json({ 
-                        success: false, 
-                        message: 'Failed to get tunnel URL. Please try again.' 
-                    });
+        const promise = new Promise((resolve, reject) => {
+            timeoutId = setTimeout(() => {
+                pinggyProcess.kill();
+                reject(new Error('Timeout creating pinggy tunnel'));
+            }, 10000); // 10 second timeout
+            
+            pinggyProcess.stdout.on('data', (data) => {
+                const output = data.toString();
+                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.a\.pinggy\.io/);
+                if (urlMatch) {
+                    tunnelUrl = urlMatch[0];
+                    clearTimeout(timeoutId);
+                    resolve(tunnelUrl);
                 }
-            } catch (error) {
-                console.error('Error reading tunnel URL:', error);
-                res.status(500).json({ 
-                    success: false, 
-                    message: 'Failed to create tunnel. Please try again.' 
-                });
-            }
-        }, 3000); // Wait 3 seconds for tunnel to establish
+            });
+            
+            pinggyProcess.stderr.on('data', (data) => {
+                const output = data.toString();
+                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.a\.pinggy\.io/);
+                if (urlMatch) {
+                    tunnelUrl = urlMatch[0];
+                    clearTimeout(timeoutId);
+                    resolve(tunnelUrl);
+                }
+            });
+            
+            pinggyProcess.on('error', (error) => {
+                clearTimeout(timeoutId);
+                reject(error);
+            });
+            
+            pinggyProcess.on('exit', (code) => {
+                if (!tunnelUrl) {
+                    clearTimeout(timeoutId);
+                    reject(new Error(`Pinggy process exited with code ${code}`));
+                }
+            });
+        });
+        
+        const url = await promise;
+        
+        // Keep the process running in background
+        // Store process reference for cleanup if needed
+        global.pinggyProcesses = global.pinggyProcesses || new Map();
+        global.pinggyProcesses.set(port, pinggyProcess);
+        
+        res.json({ 
+            success: true, 
+            url: url,
+            port: port,
+            message: `Pinggy tunnel created for port ${port}` 
+        });
         
     } catch (error) {
-        console.error(`Error creating tunnel for port ${port}:`, error);
-        res.status(500).json({ success: false, message: 'Failed to create tunnel' });
+        console.error(`Error creating pinggy tunnel for port ${port}:`, error);
+        res.status(500).json({ error: 'Failed to create pinggy tunnel: ' + error.message });
     }
 });
 

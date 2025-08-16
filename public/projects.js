@@ -149,7 +149,7 @@ async function showSessionsAndProjectsList() {
                     <div class="flex flex-wrap gap-2 mb-6">
                         ${allPorts.map(port => `
                             <div class="flex gap-1">
-                                <button class="btn btn-sm btn-outline btn-success" onclick="createPinggyTunnel(${port})" title="Create pinggy.io tunnel for port ${port}">
+                                <button class="btn btn-sm btn-outline btn-success" onclick="createPinggyTunnel(${port})" title="Create pinggy tunnel for port ${port}">
                                     🚀 ${port}
                                 </button>
                                 <button class="btn btn-sm btn-outline btn-error" onclick="killProcessByPort('', ${port})" title="Kill process on port ${port}">
@@ -523,13 +523,13 @@ function createNewSessionForProject(projectName) {
     initializeTerminal();
 }
 
-// Function to create pinggy.io tunnel
+// Function to create pinggy tunnel for a port
 async function createPinggyTunnel(port) {
     try {
-        // Show loading message
+        // Show loading indicator
         const loadingAlert = Swal.fire({
             title: 'Creating Tunnel',
-            text: `Creating pinggy.io tunnel for port ${port}...`,
+            text: `Creating pinggy tunnel for port ${port}...`,
             icon: 'info',
             allowOutsideClick: false,
             showConfirmButton: false,
@@ -537,45 +537,42 @@ async function createPinggyTunnel(port) {
                 Swal.showLoading();
             }
         });
-
-        // Create pinggy tunnel in background
-        const response = await fetch('/api/sessions/create-tunnel', {
+        
+        const response = await fetch('/api/sessions/pinggy', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ port })
         });
-
+        
         const result = await response.json();
+        
         loadingAlert.close();
-
-        if (result.success) {
-            // Show success message with tunnel URL
+        
+        if (result.success && result.url) {
             await Swal.fire({
                 title: 'Tunnel Created!',
-                html: `Tunnel created successfully!<br><br><strong>URL:</strong> <a href="${result.url}" target="_blank">${result.url}</a>`,
+                text: `Pinggy tunnel created successfully. Opening ${result.url}`,
                 icon: 'success',
-                confirmButtonText: 'Open Tunnel',
-                showCancelButton: true,
-                cancelButtonText: 'Close'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.open(result.url, '_blank');
-                }
+                timer: 2000,
+                showConfirmButton: false
             });
+            
+            // Open the tunnel URL in a new tab
+            window.open(result.url, '_blank');
         } else {
             await Swal.fire({
                 title: 'Error',
-                text: `Failed to create tunnel: ${result.message}`,
+                text: `Failed to create tunnel: ${result.error || 'Unknown error'}`,
                 icon: 'error'
             });
         }
     } catch (error) {
-        console.error('Error creating tunnel:', error);
+        console.error('Error creating pinggy tunnel:', error);
         await Swal.fire({
             title: 'Error',
-            text: 'Failed to create tunnel. Please try again.',
+            text: 'Failed to create pinggy tunnel. Please try again.',
             icon: 'error'
         });
     }
