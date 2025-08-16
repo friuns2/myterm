@@ -39,12 +39,14 @@ router.get('/', (req, res) => {
     // Source of truth: list tmux sessions; augment with in-memory attach clients if any
     let tmuxSessions = [];
     try {
-        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created_string}|#{session_path}|#{pane_title}" 2>/dev/null || true', { encoding: 'utf8' });
+        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created}|#{session_path}|#{pane_title}" 2>/dev/null || true', { encoding: 'utf8' });
         tmuxSessions = out
             .split('\n')
             .filter(Boolean)
             .map(line => {
-                const [name, createdStr, pathStr, title] = line.split('|');
+                const [name, createdTimestamp, pathStr, title] = line.split('|');
+                // Convert Unix timestamp to ISO string
+                const createdStr = createdTimestamp ? new Date(parseInt(createdTimestamp) * 1000).toISOString() : new Date().toISOString();
                 return { name, createdStr, pathStr, title };
             });
     } catch (e) {
