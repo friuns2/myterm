@@ -166,30 +166,28 @@ async function showSessionsAndProjectsList() {
                     <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
                         <span class="text-primary">🖥️</span> All Active Sessions
                     </h2>
-                    <div class="grid gap-3 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
                         ${allSessions.length === 0 ? '<p class="text-center opacity-70 py-4">No active sessions</p>' : 
                             allSessions.map(session => `
-                                <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow">
-                                    <div class="card-body p-4">
-                                        <div class="flex justify-between items-start">
-                                            <div class="cursor-pointer flex-1" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    <h3 class="font-semibold text-sm">${session.id}</h3>
-                                                    <span class="badge badge-primary badge-sm">${session.projectName}</span>
-                                                </div>
-                                                <div class="session-thumb">
-                                                    <pre id="session-thumb-${session.id}">${ansiToHtml(escapeHtml(session.thumbnail || ''))}</pre>
-                                                </div>
-                                                <p class="text-xs opacity-70 mt-2" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
-                                                <p class="text-xs opacity-50">Created: ${new Date(session.created).toLocaleString()}</p>
+                                <div class="card bg-base-200 shadow-lg hover:shadow-xl transition-shadow h-fit">
+                                    <div class="card-body p-3">
+                                        <div class="cursor-pointer" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                <h3 class="font-semibold text-xs truncate flex-1">${session.id}</h3>
+                                                <span class="badge badge-primary badge-xs">${session.projectName}</span>
                                             </div>
+                                            <div class="session-thumb mb-2">
+                                                <pre id="session-thumb-${session.id}" class="text-[6px] leading-tight">${ansiToHtml(escapeHtml(session.thumbnail || ''))}</pre>
+                                            </div>
+                                            <p class="text-[10px] opacity-70 mb-1 truncate" id="session-commit-${session.id}">${(session.lastCommitShortHash && session.lastCommitSubject) ? `${session.lastCommitShortHash} — ${session.lastCommitSubject}` : ''}</p>
+                                            <p class="text-[10px] opacity-50 truncate">Created: ${new Date(session.created).toLocaleString()}</p>
                                         </div>
-                                        <div class="flex gap-2 mt-4 justify-end">
-                                            <button class="btn btn-primary btn-sm" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
+                                        <div class="flex gap-1 mt-3">
+                                            <button class="btn btn-primary btn-xs flex-1" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
                                                 Connect
                                             </button>
-                                            <button class="btn btn-error btn-sm" onclick="killSession('${session.id}')">
-                                                Kill
+                                            <button class="btn btn-error btn-xs" onclick="killSession('${session.id}')">
+                                                ❌
                                             </button>
                                         </div>
                                     </div>
@@ -210,34 +208,34 @@ async function showSessionsAndProjectsList() {
                             <button class="btn btn-primary" onclick="createNewProject()">Create Project</button>
                         </div>
                     </div>
-                    <div class="grid gap-4">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                         ${projectsWithWorktrees.length === 0 ? '<p class="text-center opacity-70 py-4">No projects found</p>' : 
                             projectsWithWorktrees.map(project => `
-                                <div class="card bg-base-300 shadow-lg">
-                                    <div class="card-body p-4">
-                                        <div class="flex justify-between items-center mb-4">
+                                <div class="card bg-base-300 shadow-lg h-fit">
+                                    <div class="card-body p-3">
+                                        <div class="flex justify-between items-center mb-3">
                                             <div class="cursor-pointer flex-1" onclick="selectProject('${project.name}')">
-                                                <h3 class="text-lg font-bold">${project.name}</h3>
+                                                <h3 class="text-base font-bold truncate">${project.name}</h3>
                                             </div>
-                                            <div class="flex gap-2">
-                                                <button class="btn btn-primary btn-sm" onclick="selectProject('${project.name}')">
-                                                    Open Project
-                                                </button>
-                                                <button class="btn btn-secondary btn-sm" onclick="createWorktreeModal('${project.name}')">
-                                                    + Worktree
-                                                </button>
-                                                <button class="btn btn-error btn-sm" onclick="deleteProject('${project.name}')">
-                                                    Delete
-                                                </button>
-                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap gap-1 mb-3">
+                                            <button class="btn btn-primary btn-xs" onclick="selectProject('${project.name}')">
+                                                📂 Open
+                                            </button>
+                                            <button class="btn btn-secondary btn-xs" onclick="createWorktreeModal('${project.name}')">
+                                                🌿 Worktree
+                                            </button>
+                                            <button class="btn btn-error btn-xs" onclick="deleteProject('${project.name}')">
+                                                🗑️ Delete
+                                            </button>
                                         </div>
 
                                         ${functionsList.length > 0 ? `
-                                            <div class="mt-2">
-                                                <h4 class="text-sm font-semibold mb-2 opacity-80">Actions:</h4>
+                                            <div class="mb-2">
+                                                <h4 class="text-xs font-semibold mb-1 opacity-80">Actions:</h4>
                                                 <div class="flex flex-wrap gap-1">
                                                     ${functionsList.map(fn => `
-                                                        <button class=\"btn btn-xs btn-accent\" onclick=\"runFunctionFromButton('${project.name}','${fn.name}',${fn.numParams || 0})\">${fn.name}</button>
+                                                        <button class="btn btn-xs btn-accent" onclick="runFunctionFromButton('${project.name}','${fn.name}',${fn.numParams || 0})">${fn.name}</button>
                                                     `).join('')}
                                                 </div>
                                             </div>
@@ -245,35 +243,35 @@ async function showSessionsAndProjectsList() {
                                         
                                         <!-- Worktrees for this project -->
                                         ${project.worktrees.length > 0 ? `
-                                            <div class="mt-3">
-                                                <h4 class="text-sm font-semibold mb-2 opacity-80">Worktrees:</h4>
-                                                <div class="grid gap-2">
+                                            <div>
+                                                <h4 class="text-xs font-semibold mb-1 opacity-80">Worktrees:</h4>
+                                                <div class="space-y-1">
                                                     ${project.worktrees.map(worktree => `
-                                                        <div class="bg-base-100 rounded-lg p-3 flex justify-between items-center">
-                                                            <div class="cursor-pointer flex-1" onclick="openWorktree('${project.name}', '${worktree.name}')">
-                                                                <div class="flex items-center gap-2">
-                                                                    <span class="text-success">🌿</span>
-                                                                    <span class="font-medium text-sm">${worktree.name}</span>
+                                                        <div class="bg-base-100 rounded p-2">
+                                                            <div class="cursor-pointer mb-1" onclick="openWorktree('${project.name}', '${worktree.name}')">
+                                                                <div class="flex items-center gap-1">
+                                                                    <span class="text-success text-xs">🌿</span>
+                                                                    <span class="font-medium text-xs truncate flex-1">${worktree.name}</span>
                                                                     <span class="badge badge-outline badge-xs">${worktree.branch}</span>
                                                                 </div>
-                                                                <p class="text-xs opacity-60 mt-1">${worktree.relativePath}</p>
+                                                                <p class="text-[10px] opacity-60 truncate">${worktree.relativePath}</p>
                                                             </div>
                                                             <div class="flex gap-1">
                                                                 <button class="btn btn-xs btn-primary" onclick="openWorktree('${project.name}', '${worktree.name}')">
-                                                                    Open
+                                                                    📂
                                                                 </button>
                                                                 <button class="btn btn-xs btn-success" onclick="mergeWorktree('${project.name}', '${worktree.name}')">
-                                                                    Merge
+                                                                    🔀
                                                                 </button>
                                                                 <button class="btn btn-xs btn-error" onclick="deleteWorktree('${project.name}', '${worktree.name}')">
-                                                                    Delete
+                                                                    🗑️
                                                                 </button>
                                                             </div>
                                                         </div>
                                                     `).join('')}
                                                 </div>
                                             </div>
-                                        ` : '<p class="text-xs opacity-50 mt-2">No worktrees</p>'}
+                                        ` : '<p class="text-xs opacity-50">No worktrees</p>'}
                                     </div>
                                 </div>
                             `).join('')
