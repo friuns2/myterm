@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const { PROJECTS_DIR } = require('../middleware/security');
 
 const router = express.Router();
@@ -162,10 +162,46 @@ router.delete('/:projectName', (req, res) => {
     }
 
     try {
+        // First, find and kill all tmux sessions associated with this project
+        let killedSessions = [];
+        try {
+            const out = execSync('tmux list-sessions -F "#{session_name}|#{session_path}" 2>/dev/null || true', { encoding: 'utf8' });
+            const sessions = out
+                .split('\n')
+                .filter(Boolean)
+                .map(line => {
+                    const [name, sessionPath] = line.split('|');
+                    return { name, sessionPath };
+                })
+                .filter(session => {
+                    // Check if session path is within the project directory
+                    return session.sessionPath && session.sessionPath.startsWith(projectPath);
+                });
+
+            // Kill each session associated with this project
+            for (const session of sessions) {
+                try {
+                    execSync(`tmux kill-session -t ${session.name}`);
+                    killedSessions.push(session.name);
+                    console.log(`Killed tmux session: ${session.name}`);
+                } catch (killError) {
+                    console.warn(`Failed to kill session ${session.name}:`, killError.message);
+                }
+            }
+        } catch (tmuxError) {
+            // No tmux or no sessions, continue with project deletion
+            console.log('No tmux sessions found or tmux not available');
+        }
+
         // Remove the entire project directory
         fs.rmSync(projectPath, { recursive: true, force: true });
         console.log(`Project deleted: ${projectPath}`);
-        res.json({ success: true, message: `Project ${projectName} deleted successfully` });
+        
+        const message = killedSessions.length > 0 
+            ? `Project ${projectName} deleted successfully. Closed ${killedSessions.length} session(s): ${killedSessions.join(', ')}`
+            : `Project ${projectName} deleted successfully`;
+            
+        res.json({ success: true, message });
     } catch (error) {
         console.error('Error deleting project:', error);
         res.status(500).json({ error: `Failed to delete project: ${error.message}` });
