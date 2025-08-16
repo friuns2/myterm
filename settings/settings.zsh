@@ -3,6 +3,11 @@ alias gemini='gemini --yolo'
 alias qwen='qwen --yolo'
 source "${0:A:h}/api.zsh"
 
+alias chrome='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"'
+alias chromium='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"'
+alias google-chrome='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"'
+
+
 function t3() {
   local next_num=1
   mkdir -p ./worktrees

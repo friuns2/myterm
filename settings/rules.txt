@@ -33,7 +33,7 @@
 * After starting the server, **validate page rendering** using headless Chrome:
 
   ```bash
-  chrome --headless --disable-gpu --dump-dom https://example.com
+  chromium --headless --disable-gpu --dump-dom https://example.com
   ```
 * Use the dynamically assigned port instead of `example.com` if applicable.
 

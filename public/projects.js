@@ -176,6 +176,7 @@ async function showSessionsAndProjectsList() {
                                                 <h3 class="font-semibold text-xs truncate flex-1">${session.id}</h3>
                                                 <span class="badge badge-primary badge-xs">${session.projectName}</span>
                                             </div>
+                                            ${session.title ? `<div class="text-[10px] opacity-80 mb-1 truncate" title="${escapeHtml(session.title)}">📝 ${escapeHtml(session.title)}</div>` : ''}
                                             <div class="session-thumb mb-2">
                                                 <pre id="session-thumb-${session.id}" class="text-[6px] leading-tight">${ansiToHtml(escapeHtml(session.thumbnail || ''))}</pre>
                                             </div>

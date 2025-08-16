@@ -39,13 +39,13 @@ router.get('/', (req, res) => {
     // Source of truth: list tmux sessions; augment with in-memory attach clients if any
     let tmuxSessions = [];
     try {
-        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created_string}|#{session_path}" 2>/dev/null || true', { encoding: 'utf8' });
+        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created_string}|#{session_path}|#{pane_title}" 2>/dev/null || true', { encoding: 'utf8' });
         tmuxSessions = out
             .split('\n')
             .filter(Boolean)
             .map(line => {
-                const [name, createdStr, pathStr] = line.split('|');
-                return { name, createdStr, pathStr };
+                const [name, createdStr, pathStr, title] = line.split('|');
+                return { name, createdStr, pathStr, title };
             });
     } catch (e) {
         // No tmux or no sessions
@@ -99,7 +99,8 @@ router.get('/', (req, res) => {
 			lastCommitSubject,
 			lastCommitShortHash,
 			created: ts.createdStr || new Date().toISOString(),
-			projectName
+			projectName,
+			title: ts.title || ''
 		};
     });
 
