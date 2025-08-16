@@ -141,7 +141,8 @@ router.post('/pinggy', async (req, res) => {
         // Create pinggy tunnel with timeout
         const { spawn } = require('child_process');
         const pinggyProcess = spawn('ssh', ['-p', '443', '-R0:localhost:' + port, 'a.pinggy.io'], {
-            stdio: ['pipe', 'pipe', 'pipe']
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, SSH_AUTH_SOCK: undefined } // Disable SSH agent to force password auth
         });
         
         let tunnelUrl = null;
@@ -155,7 +156,8 @@ router.post('/pinggy', async (req, res) => {
             
             pinggyProcess.stdout.on('data', (data) => {
                 const output = data.toString();
-                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.a\.pinggy\.io/);
+                console.log('Pinggy stdout:', output);
+                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.(a\.pinggy\.io|a\.free\.pinggy\.link)/);
                 if (urlMatch) {
                     tunnelUrl = urlMatch[0];
                     clearTimeout(timeoutId);
@@ -165,7 +167,8 @@ router.post('/pinggy', async (req, res) => {
             
             pinggyProcess.stderr.on('data', (data) => {
                 const output = data.toString();
-                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.a\.pinggy\.io/);
+                console.log('Pinggy stderr:', output);
+                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.(a\.pinggy\.io|a\.free\.pinggy\.link)/);
                 if (urlMatch) {
                     tunnelUrl = urlMatch[0];
                     clearTimeout(timeoutId);
