@@ -45,6 +45,7 @@ function createNewTerminal() {
         cursorBlink: true,
         fontFamily: 'Courier New, monospace',
         fontSize: 14,
+        scrollback: 100000, // Set large scrollback buffer
         theme: {
             background: '#000000',
             foreground: '#00ff00',
@@ -65,6 +66,31 @@ function createNewTerminal() {
     window.terminal = terminal;
     
     return terminal;
+}
+
+// Function to preload tmux history for existing sessions
+async function preloadTmuxHistory(sessionId) {
+    if (!sessionId) return;
+    
+    try {
+        console.log(`Preloading history for session: ${sessionId}`);
+        const response = await fetch(`/api/sessions/${sessionId}/history?lines=10000`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.history) {
+                // Convert newlines to carriage return + newline for xterm.js
+                const formattedHistory = data.history.replace(/\n/g, '\r\n');
+                // Write the history to terminal
+                terminal.write(formattedHistory);
+                console.log('History preloaded successfully');
+            }
+        } else {
+            console.warn('Failed to fetch tmux history:', response.status);
+        }
+    } catch (error) {
+        console.error('Error preloading tmux history:', error);
+    }
 }
 
 const connectWebSocket = () => {
@@ -89,13 +115,14 @@ const connectWebSocket = () => {
     console.log(`Connecting to WebSocket: ${url}`);
     ws = new WebSocket(url);
 
-    ws.onopen = () => {
+    ws.onopen = async () => {
         console.log('Connected to terminal');
         isConnected = true;
         reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         
-        // Force screen refresh on reconnection
+        // Preload history for existing sessions
         if (sessionID) {
+            await preloadTmuxHistory(sessionID);
             // Clear texture atlas to force redraw
             terminal.clearTextureAtlas();
             // Refresh the entire terminal display
@@ -125,6 +152,8 @@ const connectWebSocket = () => {
                     sessionID = message.sessionID;
                     updateURLWithSession(sessionID, currentProject);
                     console.log(`Received new session ID: ${sessionID}`);
+                    // Preload history for the new session (in case it's reconnecting to existing tmux)
+                    preloadTmuxHistory(sessionID);
                     break;
                 case 'error':
                     // Server rejected the connection due to missing/invalid session

@@ -1,1 +1,2 @@
-always when starting server add & to the end, eg. run_shell_command "some command &"
+if i say hi you say yo
+always start shell tasks in background

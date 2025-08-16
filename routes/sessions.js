@@ -220,4 +220,19 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
     }
 });
 
+// API endpoint to get tmux pane history
+router.get('/:sessionId/history', (req, res) => {
+    const sessionId = req.params.sessionId;
+    const lines = req.query.lines || '100000'; // Default to 100k lines
+    
+    try {
+        // Capture pane history from tmux
+        const history = execSync(`tmux capture-pane -p -S -${lines} -t ${sessionId}`, { encoding: 'utf8' });
+        res.json({ success: true, history });
+    } catch (error) {
+        console.error('Error capturing tmux history:', error);
+        res.status(404).json({ success: false, error: 'Session not found or failed to capture history' });
+    }
+});
+
 module.exports = router;
