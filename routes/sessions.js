@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const { PROJECTS_DIR } = require('../middleware/security');
 const { execSync } = require('child_process');
-const localtunnel = require('localtunnel');
+const { pinggy } = require('@pinggy/pinggy');
 
 const router = express.Router();
 
@@ -239,7 +239,7 @@ router.get('/:sessionId/history', (req, res) => {
 // Store active tunnels
 const activeTunnels = new Map();
 
-// API endpoint to create localtunnel for a port
+// API endpoint to create tunnel for a port using Pinggy
 router.post('/ports/:port/tunnel', async (req, res) => {
     const { port } = req.params;
     const portNum = parseInt(port);
@@ -260,35 +260,24 @@ router.post('/ports/:port/tunnel', async (req, res) => {
         // Close existing tunnel for this port if any
         if (activeTunnels.has(portNum)) {
             try {
-                activeTunnels.get(portNum).close();
+                activeTunnels.get(portNum).stop();
             } catch (e) {
                 console.warn('Error closing existing tunnel:', e.message);
             }
             activeTunnels.delete(portNum);
         }
         
-        // Create new tunnel with timeout
-        console.log(`Creating tunnel for port ${portNum}...`);
+        // Create new tunnel with Pinggy
+        const tunnel = pinggy.createTunnel({ forwardTo: `localhost:${portNum}` });
+        await tunnel.start();
         
-        const tunnelPromise = localtunnel({ port: portNum });
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Tunnel creation timeout')), 30000); // 30 second timeout
-        });
-        
-        const tunnel = await Promise.race([tunnelPromise, timeoutPromise]);
+        const urls = tunnel.urls();
         activeTunnels.set(portNum, tunnel);
-        
-        // Handle tunnel close event
-        tunnel.on('close', () => {
-            console.log(`Tunnel closed for port ${portNum}`);
-            activeTunnels.delete(portNum);
-        });
-        
-        console.log(`Tunnel created successfully for port ${portNum}: ${tunnel.url}`);
         
         res.json({ 
             success: true, 
-            url: tunnel.url,
+            url: urls[0], // Use the first URL (HTTP)
+            urls: urls, // Provide all URLs (HTTP and HTTPS)
             port: portNum,
             message: `Tunnel created for port ${portNum}` 
         });

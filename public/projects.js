@@ -545,12 +545,21 @@ async function createTunnelForPort(port) {
         const result = await response.json();
         
         if (result.success) {
+            const urlsHtml = result.urls.map(url => 
+                `<p><a href="${url}" target="_blank" style="color: #007bff; text-decoration: none;">${url}</a></p>`
+            ).join('');
+            
             await Swal.fire({
-                title: 'Tunnel Created!',
-                text: `Tunnel URL: ${result.url}`,
+                title: 'Pinggy Tunnel Created! 🌐',
+                html: `
+                    <p>Your tunnel is ready:</p>
+                    ${urlsHtml}
+                    <p><small>Port: ${result.port}</small></p>
+                    <p><small>Powered by Pinggy.io</small></p>
+                `,
                 icon: 'success',
-                confirmButtonText: 'Open Tunnel',
                 showCancelButton: true,
+                confirmButtonText: 'Open Primary URL',
                 cancelButtonText: 'Close'
             }).then((swalResult) => {
                 if (swalResult.isConfirmed) {
