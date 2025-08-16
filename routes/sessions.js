@@ -15,7 +15,7 @@ function scanAllDevelopmentPorts() {
     const ports = [];
     try {
         // Use optimized lsof command for faster execution
-        const lsofOutput = execSync(`lsof -iTCP -sTCP:LISTEN -P -n | awk '$9 ~ /:3[0-9][0-9][0-9]$|/:4000$|/:5[1-9][0-9][0-9]$|/:6000$|/:9[0-9][0-9][0-9]$|/:10000$/ {print $9}'`, { encoding: 'utf8' });
+        const lsofOutput = execSync(`lsof -iTCP -sTCP:LISTEN -P -n | awk '$9 ~ /:3[0-9][0-9][0-9]$/ || $9 ~ /:4000$/ || $9 ~ /:5[1-9][0-9][0-9]$/ || $9 ~ /:6000$/ || $9 ~ /:9[0-9][0-9][0-9]$/ || $9 ~ /:10000$/ {print $9}'`, { encoding: 'utf8' });
         const lines = lsofOutput.split('\n').filter(Boolean);
         
         for (const line of lines) {
