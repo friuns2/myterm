@@ -14,12 +14,12 @@ function scanAllDevelopmentPorts() {
     
     const ports = [];
     try {
-        // Use the provided command to scan for development ports
-        const lsofOutput = execSync(`lsof -i -P | grep LISTEN | grep -E ':(3[0-9]{3}|4000|51[0-9]{2}|52[0-9]{2}|53[0-9]{2}|54[0-9]{2}|55[0-9]{2}|56[0-9]{2}|57[0-9]{2}|58[0-9]{2}|59[0-9]{2}|6000|9[0-9]{3}|10000)\\b'`, { encoding: 'utf8' });
+        // Use optimized lsof command for faster execution
+        const lsofOutput = execSync(`lsof -iTCP -sTCP:LISTEN -P -n | awk '$9 ~ /:3[0-9][0-9][0-9]$|/:4000$|/:5[1-9][0-9][0-9]$|/:6000$|/:9[0-9][0-9][0-9]$|/:10000$/ {print $9}'`, { encoding: 'utf8' });
         const lines = lsofOutput.split('\n').filter(Boolean);
         
         for (const line of lines) {
-            const match = line.match(/:([0-9]+)\s+\(LISTEN\)/);
+            const match = line.match(/:([0-9]+)$/);
             if (match) {
                 const port = parseInt(match[1]);
                 if (port && !ports.includes(port)) {
