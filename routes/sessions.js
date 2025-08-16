@@ -104,6 +104,9 @@ router.get('/', (req, res) => {
 		};
     });
 
+    // Sort sessions by creation time, newest first
+    all.sort((a, b) => new Date(b.created) - new Date(a.created));
+
     res.json(all);
 });
 
