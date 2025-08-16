@@ -5,14 +5,14 @@
 
 ### **1. Port Assignment**
 
-* **Never hardcode ports.**
+* **Always define server ports.**
 * Derive the port by hashing the project path.
 * Ensure the port falls in the range `3000–4000`.
 * Example algorithm:
 
-  ```python
-  import hashlib
-  port = 3000 + (int(hashlib.md5(path.encode()).hexdigest(), 16) % 1001)
+  ```javascript
+  import { createHash } from 'crypto'
+  const port = 5173 + (parseInt(createHash('md5').update(projectPath).digest('hex'), 16) % 1001)
   ```
 
 ---

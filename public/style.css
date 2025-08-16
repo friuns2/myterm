@@ -218,24 +218,51 @@
     }
 }
 
+/* Dashboard container overflow fix */
+#dashboard-scroll {
+    max-width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+/* Grid container overflow prevention */
+.grid {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* Session cards overflow fix */
+.card {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
 /* Portrait orientation specific fixes */
 @media (orientation: portrait) and (max-width: 768px) {
     /* Force single column for sessions in portrait mode */
     .grid.grid-cols-1.md\:grid-cols-2.lg\:grid-cols-3.xl\:grid-cols-4 {
         grid-template-columns: 1fr !important;
         gap: 0.75rem !important;
+        max-width: 100%;
+        overflow: hidden;
     }
     
     /* Ensure session cards don't grow too wide */
     .card {
         max-width: 100%;
         width: 100%;
+        min-width: 0;
     }
     
     /* Optimize session thumbnails for portrait */
     .session-thumb {
         max-height: 70px;
         width: 100%;
+        overflow: hidden;
     }
     
     .session-thumb pre {
@@ -243,6 +270,14 @@
         max-height: 62px;
         width: 100%;
         box-sizing: border-box;
+        overflow: hidden;
+    }
+    
+    /* Dashboard container adjustments for portrait */
+    #dashboard-scroll {
+        padding: 1rem;
+        max-width: 100vw;
+        overflow-x: hidden;
     }
 }
 
