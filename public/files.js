@@ -26,6 +26,19 @@ async function toggleFileBrowser() {
     }
 }
 
+// Function to download a file
+function downloadFile(filePath) {
+    const downloadUrl = `/api/download?path=${encodeURIComponent(filePath)}`;
+    
+    // Create a temporary link element and trigger download
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
 async function loadDirectory(dirPath) {
     try {
         const response = await fetch(`/api/browse?path=${encodeURIComponent(dirPath)}`);
@@ -105,6 +118,22 @@ async function openFileInEditor(filePath) {
         const data = await response.json();
         
         if (!response.ok) {
+            // If it's not a text file, offer to download it
+            if (data.isTextFile === false) {
+                const result = await Swal.fire({
+                    title: 'Non-text file detected',
+                    text: 'This file cannot be edited as text. Would you like to download it instead?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Download',
+                    cancelButtonText: 'Cancel'
+                });
+                
+                if (result.isConfirmed) {
+                    downloadFile(filePath);
+                }
+                return;
+            }
             throw new Error(data.error || 'Failed to load file');
         }
         
@@ -322,4 +351,4 @@ async function handleFolderCreation() {
             icon: 'error'
         });
     }
-} 
+}

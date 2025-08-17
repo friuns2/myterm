@@ -4,6 +4,21 @@ const path = require('path');
 const os = require('os');
 const { validatePath, PROJECTS_DIR } = require('../middleware/security');
 
+// Function to check if a file is text-based
+function isTextFile(filePath) {
+    const textExtensions = [
+        '.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.json', '.xml', '.html', '.htm', '.css', '.scss', '.sass', '.less',
+        '.py', '.rb', '.php', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs', '.swift', '.kt', '.scala',
+        '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd', '.yml', '.yaml', '.toml', '.ini', '.cfg', '.conf',
+        '.log', '.sql', '.r', '.m', '.pl', '.lua', '.vim', '.dockerfile', '.gitignore', '.gitattributes', '.editorconfig',
+        '.env', '.properties', '.makefile', '.cmake', '.gradle', '.maven', '.sbt', '.clj', '.cljs', '.edn', '.ex', '.exs',
+        '.elm', '.hs', '.lhs', '.ml', '.mli', '.fs', '.fsi', '.fsx', '.vb', '.pas', '.pp', '.inc', '.asm', '.s'
+    ];
+    
+    const ext = path.extname(filePath).toLowerCase();
+    return textExtensions.includes(ext) || !ext; // Files without extension are assumed to be text
+}
+
 const router = express.Router();
 
 function normalizePath(inputPath) {
@@ -54,6 +69,44 @@ router.get('/browse', (req, res) => {
     }
 });
 
+// API endpoint to download files
+router.get('/download', (req, res) => {
+    const filePath = req.query.path;
+    
+    if (!filePath) {
+        return res.status(400).json({ error: 'File path is required' });
+    }
+    
+    try {
+        if (!validatePath(filePath)) {
+            return res.status(403).json({ error: 'Access denied to this file' });
+        }
+        const resolvedPath = normalizePath(filePath);
+        
+        if (!fs.existsSync(resolvedPath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        
+        const stats = fs.statSync(resolvedPath);
+        if (stats.isDirectory()) {
+            return res.status(400).json({ error: 'Path is a directory, not a file' });
+        }
+        
+        // Set appropriate headers for download
+        const filename = path.basename(resolvedPath);
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/octet-stream');
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(resolvedPath);
+        fileStream.pipe(res);
+        
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        res.status(500).json({ error: 'Failed to download file' });
+    }
+});
+
 // API endpoint to read file content
 router.get('/file', (req, res) => {
     const filePath = req.query.path;
@@ -82,8 +135,13 @@ router.get('/file', (req, res) => {
             return res.status(413).json({ error: 'File too large to edit' });
         }
         
+        // Check if file is text-based
+        if (!isTextFile(resolvedPath)) {
+            return res.status(400).json({ error: 'File is not a text file', isTextFile: false });
+        }
+        
         const content = fs.readFileSync(resolvedPath, 'utf8');
-        res.json({ content, path: resolvedPath });
+        res.json({ content, path: resolvedPath, isTextFile: true });
     } catch (error) {
         console.error('Error reading file:', error);
         res.status(500).json({ error: 'Failed to read file' });
@@ -144,4 +202,4 @@ router.post('/folder', express.json(), (req, res) => {
     }
 });
 
-module.exports = router; 
+module.exports = router;
