@@ -1,12 +1,14 @@
 const express = require('express');
 const path = require('path');
 const { PROJECTS_DIR } = require('../middleware/security');
-const { execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 const router = express.Router();
 
 // Function to scan all development ports globally
-function scanAllDevelopmentPorts() {
+async function scanAllDevelopmentPorts() {
     // Check if port scanning is enabled via environment variable
     if (process.env.ENABLE_PORT_SCANNING !== 'true') {
         return [];
@@ -14,8 +16,11 @@ function scanAllDevelopmentPorts() {
     
     const ports = [];
     try {
-        // Use optimized lsof command for faster execution
-        const lsofOutput = execSync(`lsof -iTCP -sTCP:LISTEN -P -n | awk '$9 ~ /:3[0-9][0-9][0-9]$/ || $9 ~ /:4000$/ || $9 ~ /:5[1-9][0-9][0-9]$/ || $9 ~ /:6000$/ || $9 ~ /:9[0-9][0-9][0-9]$/ || $9 ~ /:10000$/ {print $9}'`, { encoding: 'utf8' });
+        // Use optimized lsof command for faster execution with timeout
+        const { stdout: lsofOutput } = await execAsync(`lsof -iTCP -sTCP:LISTEN -P -n | awk '$9 ~ /:3[0-9][0-9][0-9]$/ || $9 ~ /:4000$/ || $9 ~ /:5[1-9][0-9][0-9]$/ || $9 ~ /:6000$/ || $9 ~ /:9[0-9][0-9][0-9]$/ || $9 ~ /:10000$/ {print $9}'`, { 
+            encoding: 'utf8',
+            timeout: 500 // 5 second timeout
+        });
         const lines = lsofOutput.split('\n').filter(Boolean);
         
         for (const line of lines) {
@@ -35,11 +40,14 @@ function scanAllDevelopmentPorts() {
 }
 
 // API endpoint to get all sessions across all projects
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     // Source of truth: list tmux sessions; augment with in-memory attach clients if any
     let tmuxSessions = [];
     try {
-        const out = execSync('tmux list-sessions -F "#{session_name}|#{session_created}|#{session_path}|#{pane_title}" 2>/dev/null || true', { encoding: 'utf8' });
+        const { stdout: out } = await execAsync('tmux list-sessions -F "#{session_name}|#{session_created}|#{session_path}|#{pane_title}" 2>/dev/null || true', { 
+            encoding: 'utf8',
+            timeout: 3000 // 3 second timeout
+        });
         tmuxSessions = out
             .split('\n')
             .filter(Boolean)
@@ -55,14 +63,18 @@ router.get('/', (req, res) => {
     }
 
 	// Build response: include raw pane thumbnail (visible screen with ANSI)
-	const all = tmuxSessions.map(ts => {
+	const all = await Promise.all(tmuxSessions.map(async ts => {
 		let thumbnail = '';
 		let lastCommitSubject = '';
 		let lastCommitShortHash = '';
 		try {
 			const safeName = JSON.stringify(ts.name).slice(1, -1); // safely quoted tmux target
 			
-			thumbnail = execSync(`tmux capture-pane -ep -t ${safeName}`, { encoding: 'utf8' });
+			const { stdout: thumbnailOutput } = await execAsync(`tmux capture-pane -ep -t ${safeName}`, { 
+				encoding: 'utf8',
+				timeout: 2000 // 2 second timeout
+			});
+			thumbnail = thumbnailOutput;
 			
 		} catch (_) {
 			thumbnail = '';
@@ -71,10 +83,23 @@ router.get('/', (req, res) => {
         // Try to fetch last commit details if inside a git repo
         try {
             if (ts.pathStr) {
-                const isGit = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} rev-parse --is-inside-work-tree 2>/dev/null || echo no`, { encoding: 'utf8' }).trim();
-                if (isGit === 'true') {
-                    lastCommitSubject = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} log -1 --pretty=%s`, { encoding: 'utf8' }).trim();
-                    lastCommitShortHash = execSync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} log -1 --pretty=%h`, { encoding: 'utf8' }).trim();
+                const { stdout: isGit } = await execAsync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} rev-parse --is-inside-work-tree 2>/dev/null || echo no`, { 
+                    encoding: 'utf8',
+                    timeout: 2000 // 2 second timeout
+                });
+                if (isGit.trim() === 'true') {
+                    const [subjectResult, hashResult] = await Promise.all([
+                        execAsync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} log -1 --pretty=%s`, { 
+                            encoding: 'utf8',
+                            timeout: 2000
+                        }),
+                        execAsync(`git -C ${JSON.stringify(ts.pathStr).slice(1, -1)} log -1 --pretty=%h`, { 
+                            encoding: 'utf8',
+                            timeout: 2000
+                        })
+                    ]);
+                    lastCommitSubject = subjectResult.stdout.trim();
+                    lastCommitShortHash = hashResult.stdout.trim();
                 }
             }
         } catch (_) {
@@ -104,7 +129,7 @@ router.get('/', (req, res) => {
 			projectName,
 			title: ts.title || ''
 		};
-    });
+    }));
 
     // Sort sessions by creation time, newest first
     all.sort((a, b) => new Date(b.created) - new Date(a.created));
@@ -113,9 +138,9 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/sessions/ports - Get all development ports
-router.get('/ports', (req, res) => {
+router.get('/ports', async (req, res) => {
     try {
-        const ports = scanAllDevelopmentPorts();
+        const ports = await scanAllDevelopmentPorts();
         res.json({ ports });
     } catch (error) {
         console.error('Error getting ports:', error);
@@ -133,7 +158,10 @@ router.post('/pinggy', async (req, res) => {
     
     try {
         // Check if port is actually listening
-        const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
+        const { stdout: lsofOutput } = await execAsync(`lsof -ti:${port} 2>/dev/null || true`, { 
+            encoding: 'utf8',
+            timeout: 3000
+        });
         if (!lsofOutput.trim()) {
             return res.status(404).json({ error: `No service found on port ${port}` });
         }
@@ -270,10 +298,10 @@ router.get('/pinggy/:port', (req, res) => {
 });
 
 // API endpoint to kill a session
-router.delete('/:sessionId', (req, res) => {
+router.delete('/:sessionId', async (req, res) => {
     const sessionId = req.params.sessionId;
     try {
-        execSync(`tmux kill-session -t ${sessionId}`);
+        await execAsync(`tmux kill-session -t ${sessionId}`, { timeout: 3000 });
         res.json({ success: true, message: 'Tmux session killed successfully' });
     } catch (e) {
         res.status(404).json({ success: false, message: 'Session not found or failed to kill' });
@@ -281,7 +309,7 @@ router.delete('/:sessionId', (req, res) => {
 });
 
 // DELETE /api/sessions/ports/:port - Kill process by port globally
-router.delete('/ports/:port', (req, res) => {
+router.delete('/ports/:port', async (req, res) => {
     const { port } = req.params;
     const portNum = parseInt(port);
     
@@ -306,14 +334,17 @@ router.delete('/ports/:port', (req, res) => {
         }
         
         // Find the process using the port
-        const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
+        const { stdout: lsofOutput } = await execAsync(`lsof -ti:${port} 2>/dev/null || true`, { 
+            encoding: 'utf8',
+            timeout: 3000
+        });
         const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
         
         // Kill all processes using this port
         let killedCount = 0;
         for (const pid of pids) {
             try {
-                execSync(`kill -9 ${pid}`);
+                await execAsync(`kill -9 ${pid}`, { timeout: 2000 });
                 killedCount++;
             } catch (killError) {
                 console.warn(`Failed to kill process ${pid}:`, killError.message);
@@ -341,7 +372,7 @@ router.delete('/ports/:port', (req, res) => {
 });
 
 // API endpoint to kill process by port
-router.delete('/:sessionId/ports/:port', (req, res) => {
+router.delete('/:sessionId/ports/:port', async (req, res) => {
     const sessionId = req.params.sessionId;
     const port = parseInt(req.params.port);
     
@@ -370,7 +401,10 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
         }
         
         // Find the process using the port
-        const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
+        const { stdout: lsofOutput } = await execAsync(`lsof -ti:${port} 2>/dev/null || true`, { 
+            encoding: 'utf8',
+            timeout: 3000
+        });
         const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
         
         if (pids.length === 0) {
@@ -388,12 +422,12 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
         let killedCount = 0;
         for (const pid of pids) {
             try {
-                execSync(`kill ${pid}`);
+                await execAsync(`kill ${pid}`, { timeout: 2000 });
                 killedCount++;
             } catch (killError) {
                 // Try force kill if regular kill fails
                 try {
-                    execSync(`kill -9 ${pid}`);
+                    await execAsync(`kill -9 ${pid}`, { timeout: 2000 });
                     killedCount++;
                 } catch (_) {
                     // Ignore if process already dead or can't be killed
@@ -420,13 +454,16 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
 });
 
 // API endpoint to get tmux pane history
-router.get('/:sessionId/history', (req, res) => {
+router.get('/:sessionId/history', async (req, res) => {
     const sessionId = req.params.sessionId;
     const lines = req.query.lines || '100000'; // Default to 100k lines
     
     try {
         // Capture pane history from tmux
-        const history = execSync(`tmux capture-pane -p -S -${lines} -t ${sessionId}`, { encoding: 'utf8' });
+        const { stdout: history } = await execAsync(`tmux capture-pane -p -S -${lines} -t ${sessionId}`, { 
+            encoding: 'utf8',
+            timeout: 5000 // 5 second timeout for large history
+        });
         res.json({ success: true, history });
     } catch (error) {
         console.error('Error capturing tmux history:', error);
