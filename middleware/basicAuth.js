@@ -26,23 +26,7 @@ function isLocalhost(req) {
   const host = (req.headers && req.headers.host) || '';
   const remote = req.socket && (req.socket.remoteAddress || req.socket.remoteAddress === '' ? req.socket.remoteAddress : '');
   
-  // Check if this is a tunnel URL (external domain)
-  const isTunnelUrl = typeof host === 'string' && (
-    host.includes('.pinggy.io') || 
-    host.includes('.pinggy.link') || 
-    host.includes('.ngrok.io') || 
-    host.includes('.localtunnel.me') ||
-    host.includes('.serveo.net') ||
-    // Add other common tunnel domains as needed
-    /\.[a-z]+\.(io|me|net|com|link)$/i.test(host)
-  );
-  
-  // If it's a tunnel URL, require authentication
-  if (isTunnelUrl) {
-    return false;
-  }
-  
-  // Accept typical localhost patterns
+  // Only accept localhost and 127.0.0.1 patterns
   const isLocalHostHeader = typeof host === 'string' && (/^(localhost|127\.0\.0\.1)(:\d+)?$/i).test(host.trim());
   const isLoopback = typeof remote === 'string' && (remote === '::1' || remote === '127.0.0.1');
   return isLocalHostHeader || isLoopback;
