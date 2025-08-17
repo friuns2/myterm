@@ -28,7 +28,7 @@ function t3() {
   fi
 }
 
-msh() {
+function msh() {
   local usage="usage: msh <project-path> [folder-name]"
   [[ -n "$1" ]] || { echo "$usage"; return 1; }
   local abs
