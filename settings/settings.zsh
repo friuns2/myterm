@@ -29,14 +29,14 @@ function t3() {
 }
 
 msh() {
-  local usage="usage: msh <project-path>"
+  local usage="usage: msh <project-path> [folder-name]"
   [[ -n "$1" ]] || { echo "$usage"; return 1; }
   local abs
   abs="$(cd "$1" 2>/dev/null && pwd || true)" || true
   [[ -n "$abs" && -d "$abs" ]] || { echo "no such dir: $1"; return 1; }
   local projects_dir
   projects_dir="$(pwd)/projects"
-  local name="${abs:t}"
+  local name="${2:-${abs:t}}"
   mkdir -p "$projects_dir" || return 1
   local target="$projects_dir/$name"
   [[ -e "$target" ]] && { echo "exists: $target"; return 0; }
