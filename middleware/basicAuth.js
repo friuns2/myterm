@@ -26,7 +26,17 @@ function isLocalhost(req) {
   const host = (req.headers && req.headers.host) || '';
   const remote = req.socket && (req.socket.remoteAddress || req.socket.remoteAddress === '' ? req.socket.remoteAddress : '');
   
-  // Only accept localhost and 127.0.0.1 patterns
+  // Check if this is not localhost
+  const isTunnelUrl = typeof host === 'string' && 
+    !host.includes('localhost') && 
+    !host.includes('127.0.0.1');
+  
+  // If it's a tunnel URL, require authentication
+  if (isTunnelUrl) {
+    return false;
+  }
+  
+  // Accept typical localhost patterns
   const isLocalHostHeader = typeof host === 'string' && (/^(localhost|127\.0\.0\.1)(:\d+)?$/i).test(host.trim());
   const isLoopback = typeof remote === 'string' && (remote === '::1' || remote === '127.0.0.1');
   return isLocalHostHeader || isLoopback;

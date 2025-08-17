@@ -35,10 +35,10 @@ msh() {
   abs="$(cd "$1" 2>/dev/null && pwd || true)" || true
   [[ -n "$abs" && -d "$abs" ]] || { echo "no such dir: $1"; return 1; }
   local projects_dir
-  projects_dir="$(pwd)/projects"
+  projects_dir="$HOME/temp/projects"
   local name="${2:-${abs:t}}"
   mkdir -p "$projects_dir" || return 1
   local target="$projects_dir/$name"
   [[ -e "$target" ]] && { echo "exists: $target"; return 0; }
-  ln -s "$abs" "$target" && echo "linked $name -> $abs"
+  ln -s "$abs" "$target" && echo "linked $name -> $abs" && cd "$target"
 }

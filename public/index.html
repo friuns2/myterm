@@ -35,10 +35,14 @@
                     <button id="close-browser" class="btn btn-xs btn-outline">← Back to Console</button>
                     <h3 class="font-semibold">File Browser</h3>
                 </div>
-                <div class="flex gap-1">
+                <div class="flex gap-1 mb-2">
                     <input id="current-dir" class="input input-xs flex-1" readonly>
                     <button id="new-file" class="btn btn-xs btn-primary">+ File</button>
                     <button id="new-folder" class="btn btn-xs btn-secondary">+ Folder</button>
+                </div>
+                <div class="flex gap-1">
+                    <input type="file" id="file-upload-input" class="file-input file-input-xs flex-1" multiple accept="*/*">
+                    <button id="upload-files" class="btn btn-xs btn-accent">📤 Upload</button>
                 </div>
             </div>
             <div id="file-list" class="flex-1 overflow-y-auto p-2"></div>

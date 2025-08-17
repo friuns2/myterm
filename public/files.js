@@ -334,3 +334,86 @@ async function handleFolderCreation() {
         });
     }
 }
+
+// File upload functionality
+async function handleFileUpload() {
+    const fileInput = document.getElementById('file-upload-input');
+    const files = fileInput.files;
+    
+    if (files.length === 0) {
+        await Swal.fire({
+            title: 'No Files Selected',
+            text: 'Please select files to upload',
+            icon: 'warning'
+        });
+        return;
+    }
+    
+    if (!currentBrowserPath) {
+        await Swal.fire({
+            title: 'Error',
+            text: 'No directory selected for upload',
+            icon: 'error'
+        });
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        
+        // Add all selected files to FormData
+        for (let i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
+        
+        // Add upload path
+        formData.append('uploadPath', currentBrowserPath);
+        
+        // Show loading indicator
+        const loadingAlert = Swal.fire({
+            title: 'Uploading Files...',
+            text: `Uploading ${files.length} file(s)`,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to upload files');
+        }
+        
+        // Close loading indicator
+        await loadingAlert;
+        Swal.close();
+        
+        // Show success message
+        await Swal.fire({
+            title: 'Success',
+            text: `Successfully uploaded ${data.files.length} file(s)`,
+            icon: 'success',
+            timer: 2000
+        });
+        
+        // Clear file input
+        fileInput.value = '';
+        
+        // Refresh directory listing
+        await loadDirectory(currentBrowserPath);
+        
+    } catch (error) {
+        console.error('Error uploading files:', error);
+        await Swal.fire({
+            title: 'Upload Failed',
+            text: 'Failed to upload files: ' + error.message,
+            icon: 'error'
+        });
+    }
+}

@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const multer = require('multer');
 const { validatePath, PROJECTS_DIR } = require('../middleware/security');
 
 // Function to check if a file is text-based
@@ -20,6 +21,35 @@ function isTextFile(filePath) {
 }
 
 const router = express.Router();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadPath = req.body.uploadPath || process.cwd();
+        const resolvedPath = normalizePath(uploadPath);
+        
+        if (!validatePath(resolvedPath)) {
+            return cb(new Error('Access denied to this directory'));
+        }
+        
+        if (!fs.existsSync(resolvedPath)) {
+            fs.mkdirSync(resolvedPath, { recursive: true });
+        }
+        
+        cb(null, resolvedPath);
+    },
+    filename: function (req, file, cb) {
+        // Use original filename
+        cb(null, file.originalname);
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB limit
+    }
+});
 
 function normalizePath(inputPath) {
     if (!inputPath) return inputPath;
@@ -217,6 +247,34 @@ router.post('/folder', express.json(), (req, res) => {
     } catch (error) {
         console.error('Error creating folder:', error);
         res.status(500).json({ error: 'Failed to create folder' });
+    }
+});
+
+// API endpoint to upload files
+router.post('/upload', upload.array('files'), (req, res) => {
+    try {
+        const uploadPath = req.body.uploadPath || process.cwd();
+        const resolvedPath = normalizePath(uploadPath);
+        
+        if (!validatePath(resolvedPath)) {
+            return res.status(403).json({ error: 'Access denied to this directory' });
+        }
+        
+        const uploadedFiles = req.files.map(file => ({
+            originalName: file.originalname,
+            filename: file.filename,
+            path: file.path,
+            size: file.size
+        }));
+        
+        res.json({ 
+            success: true, 
+            files: uploadedFiles,
+            uploadPath: resolvedPath
+        });
+    } catch (error) {
+        console.error('Error uploading files:', error);
+        res.status(500).json({ error: 'Failed to upload files' });
     }
 });
 

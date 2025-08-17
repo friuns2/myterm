@@ -81,6 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
         newFileBtn.addEventListener('click', createNewFile);
     }
     
+    const uploadFilesBtn = document.getElementById('upload-files');
+    if (uploadFilesBtn) {
+        uploadFilesBtn.addEventListener('click', handleFileUpload);
+    }
+    
     // Modal event listeners
     const createFileBtn = document.getElementById('create-file-btn');
     if (createFileBtn) {
