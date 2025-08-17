@@ -68,8 +68,9 @@ function ensureLocalSettingsIncluded() {
 port = generatePortFromDirectory();
 console.log(`Generated port ${port} for directory: ${process.cwd()}`);
 
-const server = app.listen(port, () => {
-    console.log(`Web Terminal running at http://localhost:${port}`);
+const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`Web Terminal running at http://0.0.0.0:${port}`);
+    console.log(`Accessible from any IP on port ${port}`);
     // Ensure ~/.zshrc includes local settings file
     ensureLocalSettingsIncluded();
 });
