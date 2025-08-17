@@ -69,8 +69,8 @@ router.get('/browse', (req, res) => {
     }
 });
 
-// API endpoint to download files
-router.get('/download', (req, res) => {
+// API endpoint to serve files directly
+router.get('/view', (req, res) => {
     const filePath = req.query.path;
     
     if (!filePath) {
@@ -92,18 +92,36 @@ router.get('/download', (req, res) => {
             return res.status(400).json({ error: 'Path is a directory, not a file' });
         }
         
-        // Set appropriate headers for download
-        const filename = path.basename(resolvedPath);
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', 'application/octet-stream');
+        // Get file extension to determine MIME type
+        const ext = path.extname(resolvedPath).toLowerCase();
+        const mimeTypes = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.svg': 'image/svg+xml',
+            '.webp': 'image/webp',
+            '.pdf': 'application/pdf',
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.ogg': 'audio/ogg'
+        };
+        
+        const mimeType = mimeTypes[ext] || 'application/octet-stream';
+        
+        // Set appropriate headers for inline viewing
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', 'inline');
         
         // Stream the file
         const fileStream = fs.createReadStream(resolvedPath);
         fileStream.pipe(res);
         
     } catch (error) {
-        console.error('Error downloading file:', error);
-        res.status(500).json({ error: 'Failed to download file' });
+        console.error('Error serving file:', error);
+        res.status(500).json({ error: 'Failed to serve file' });
     }
 });
 

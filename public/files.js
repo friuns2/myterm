@@ -26,17 +26,10 @@ async function toggleFileBrowser() {
     }
 }
 
-// Function to download a file
-function downloadFile(filePath) {
-    const downloadUrl = `/api/download?path=${encodeURIComponent(filePath)}`;
-    
-    // Create a temporary link element and trigger download
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+// Function to open a file in a new tab
+function openFileInNewTab(filePath) {
+    const viewUrl = `/api/view?path=${encodeURIComponent(filePath)}`;
+    window.open(viewUrl, '_blank');
 }
 
 async function loadDirectory(dirPath) {
@@ -118,20 +111,9 @@ async function openFileInEditor(filePath) {
         const data = await response.json();
         
         if (!response.ok) {
-            // If it's not a text file, offer to download it
+            // If it's not a text file, open it directly in a new tab
             if (data.isTextFile === false) {
-                const result = await Swal.fire({
-                    title: 'Non-text file detected',
-                    text: 'This file cannot be edited as text. Would you like to download it instead?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Download',
-                    cancelButtonText: 'Cancel'
-                });
-                
-                if (result.isConfirmed) {
-                    downloadFile(filePath);
-                }
+                openFileInNewTab(filePath);
                 return;
             }
             throw new Error(data.error || 'Failed to load file');
