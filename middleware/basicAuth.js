@@ -29,11 +29,12 @@ function isLocalhost(req) {
   // Check if this is a tunnel URL (external domain)
   const isTunnelUrl = typeof host === 'string' && (
     host.includes('.pinggy.io') || 
+    host.includes('.pinggy.link') || 
     host.includes('.ngrok.io') || 
     host.includes('.localtunnel.me') ||
     host.includes('.serveo.net') ||
     // Add other common tunnel domains as needed
-    /\.[a-z]+\.(io|me|net|com)$/i.test(host)
+    /\.[a-z]+\.(io|me|net|com|link)$/i.test(host)
   );
   
   // If it's a tunnel URL, require authentication
