@@ -283,13 +283,39 @@ router.delete('/:sessionId', (req, res) => {
 // DELETE /api/sessions/ports/:port - Kill process by port globally
 router.delete('/ports/:port', (req, res) => {
     const { port } = req.params;
+    const portNum = parseInt(port);
     
     try {
+        // Initialize tunnel storage if not exists
+        global.pinggyProcesses = global.pinggyProcesses || new Map();
+        global.pinggyTunnels = global.pinggyTunnels || new Map();
+        
+        // Check if there's an associated pinggy tunnel and kill it first
+        const existingTunnel = global.pinggyTunnels.get(portNum);
+        let tunnelKilled = false;
+        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
+            try {
+                existingTunnel.process.kill('SIGTERM');
+                global.pinggyTunnels.delete(portNum);
+                global.pinggyProcesses.delete(portNum);
+                tunnelKilled = true;
+                console.log(`Killed pinggy tunnel for port ${port}`);
+            } catch (tunnelError) {
+                console.warn(`Failed to kill pinggy tunnel for port ${port}:`, tunnelError.message);
+            }
+        }
+        
         // Find the process using the port
         const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
         const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
         
         if (pids.length === 0) {
+            if (tunnelKilled) {
+                return res.json({ 
+                    success: true, 
+                    message: `Killed pinggy tunnel for port ${port}. No other processes found on this port.`
+                });
+            }
             return res.status(404).json({ error: `No process found on port ${port}` });
         }
         
@@ -305,10 +331,14 @@ router.delete('/ports/:port', (req, res) => {
         }
         
         if (killedCount > 0) {
+            const message = tunnelKilled 
+                ? `Killed pinggy tunnel and ${killedCount} process(es) on port ${port}`
+                : `Killed ${killedCount} process(es) on port ${port}`;
             res.json({ 
                 success: true, 
-                message: `Killed ${killedCount} process(es) on port ${port}`,
-                killedPids: pids.slice(0, killedCount)
+                message: message,
+                killedPids: pids.slice(0, killedCount),
+                tunnelKilled: tunnelKilled
             });
         } else {
             res.status(500).json({ error: `Failed to kill processes on port ${port}` });
@@ -330,11 +360,37 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
     }
     
     try {
+        // Initialize tunnel storage if not exists
+        global.pinggyProcesses = global.pinggyProcesses || new Map();
+        global.pinggyTunnels = global.pinggyTunnels || new Map();
+        
+        // Check if there's an associated pinggy tunnel and kill it first
+        const existingTunnel = global.pinggyTunnels.get(port);
+        let tunnelKilled = false;
+        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
+            try {
+                existingTunnel.process.kill('SIGTERM');
+                global.pinggyTunnels.delete(port);
+                global.pinggyProcesses.delete(port);
+                tunnelKilled = true;
+                console.log(`Killed pinggy tunnel for port ${port}`);
+            } catch (tunnelError) {
+                console.warn(`Failed to kill pinggy tunnel for port ${port}:`, tunnelError.message);
+            }
+        }
+        
         // Find the process using the port
         const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
         const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
         
         if (pids.length === 0) {
+            if (tunnelKilled) {
+                return res.json({ 
+                    success: true, 
+                    message: `Killed pinggy tunnel for port ${port}. No other processes found on this port.`,
+                    tunnelKilled: true
+                });
+            }
             return res.status(404).json({ success: false, message: `No process found using port ${port}` });
         }
         
@@ -356,7 +412,14 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
         }
         
         if (killedCount > 0) {
-            res.json({ success: true, message: `Killed ${killedCount} process(es) using port ${port}` });
+            const message = tunnelKilled 
+                ? `Killed pinggy tunnel and ${killedCount} process(es) using port ${port}`
+                : `Killed ${killedCount} process(es) using port ${port}`;
+            res.json({ 
+                success: true, 
+                message: message,
+                tunnelKilled: tunnelKilled
+            });
         } else {
             res.status(500).json({ success: false, message: `Failed to kill processes using port ${port}` });
         }
