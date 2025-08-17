@@ -308,6 +308,39 @@ router.delete('/:sessionId', async (req, res) => {
     }
 });
 
+// API endpoint to rename a session
+router.put('/:sessionId/rename', async (req, res) => {
+    const sessionId = req.params.sessionId;
+    const { newName } = req.body;
+    
+    if (!newName || typeof newName !== 'string' || newName.trim() === '') {
+        return res.status(400).json({ success: false, message: 'New session name is required' });
+    }
+    
+    const sanitizedNewName = newName.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    
+    try {
+        // Check if the new session name already exists
+        try {
+            await execAsync(`tmux has-session -t ${sanitizedNewName}`, { timeout: 2000 });
+            return res.status(409).json({ success: false, message: 'Session with this name already exists' });
+        } catch (e) {
+            // Session doesn't exist, which is what we want
+        }
+        
+        // Rename the session
+        await execAsync(`tmux rename-session -t ${sessionId} ${sanitizedNewName}`, { timeout: 3000 });
+        res.json({ 
+            success: true, 
+            message: 'Tmux session renamed successfully',
+            oldName: sessionId,
+            newName: sanitizedNewName
+        });
+    } catch (e) {
+        res.status(404).json({ success: false, message: 'Session not found or failed to rename' });
+    }
+});
+
 // DELETE /api/sessions/ports/:port - Kill process by port globally
 router.delete('/ports/:port', async (req, res) => {
     const { port } = req.params;
