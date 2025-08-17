@@ -195,6 +195,9 @@ async function showSessionsAndProjectsList() {
                                             <button class="btn btn-primary btn-xs flex-1" onclick="connectToSession('${session.id}', '${session.projectName}', '${session.path || ''}')">
                                                 Connect
                                             </button>
+                                            <button class="btn btn-warning btn-xs" onclick="renameSession('${session.id}')" title="Rename session">
+                                                ✏️
+                                            </button>
                                             <button class="btn btn-error btn-xs" onclick="killSession('${session.id}')">
                                                 ❌
                                             </button>
@@ -505,6 +508,69 @@ async function killSession(sessionId) {
         await Swal.fire({
             title: 'Error',
             text: 'Error killing session',
+            icon: 'error'
+        });
+    }
+}
+
+// Function to rename a session
+async function renameSession(sessionId) {
+    try {
+        const { value: newName } = await Swal.fire({
+            title: 'Rename Session',
+            text: `Enter new name for session "${sessionId}":`,
+            input: 'text',
+            inputValue: sessionId,
+            inputPlaceholder: 'Enter new session name',
+            showCancelButton: true,
+            confirmButtonText: 'Rename',
+            cancelButtonText: 'Cancel',
+            inputValidator: (value) => {
+                if (!value || value.trim() === '') {
+                    return 'Session name cannot be empty';
+                }
+                if (value.trim() === sessionId) {
+                    return 'New name must be different from current name';
+                }
+                return null;
+            }
+        });
+        
+        if (newName) {
+            const response = await fetch(`/api/sessions/${sessionId}/rename`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ newName: newName.trim() })
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                await Swal.fire({
+                    title: 'Success',
+                    text: `Session renamed from "${result.oldName}" to "${result.newName}"`,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                // Refresh the sessions list to show the new name
+                saveDashboardScroll();
+                saveDashboardSnapshot();
+                showSessionsAndProjectsList();
+            } else {
+                await Swal.fire({
+                    title: 'Error',
+                    text: 'Failed to rename session: ' + result.message,
+                    icon: 'error'
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error renaming session:', error);
+        await Swal.fire({
+            title: 'Error',
+            text: 'Error renaming session',
             icon: 'error'
         });
     }
