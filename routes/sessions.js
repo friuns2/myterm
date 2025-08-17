@@ -309,16 +309,6 @@ router.delete('/ports/:port', (req, res) => {
         const lsofOutput = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: 'utf8' });
         const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
         
-        if (pids.length === 0) {
-            if (tunnelKilled) {
-                return res.json({ 
-                    success: true, 
-                    message: `Killed process(es) on port ${port}`
-                });
-            }
-            return res.status(404).json({ error: `No process found on port ${port}` });
-        }
-        
         // Kill all processes using this port
         let killedCount = 0;
         for (const pid of pids) {
@@ -331,11 +321,14 @@ router.delete('/ports/:port', (req, res) => {
         }
         
         if (killedCount > 0) {
-            const totalKilled = tunnelKilled ? killedCount + 1 : killedCount;
+            const message = tunnelKilled 
+                ? `Killed pinggy tunnel and ${killedCount} process(es) on port ${port}`
+                : `Killed ${killedCount} process(es) on port ${port}`;
             res.json({ 
                 success: true, 
-                message: `Killed ${totalKilled} process(es) on port ${port}`,
-                killedPids: pids.slice(0, killedCount)
+                message: message,
+                killedPids: pids.slice(0, killedCount),
+                tunnelKilled: tunnelKilled
             });
         } else {
             res.status(500).json({ error: `Failed to kill processes on port ${port}` });
@@ -384,7 +377,8 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
             if (tunnelKilled) {
                 return res.json({ 
                     success: true, 
-                    message: `Killed process(es) using port ${port}`
+                    message: `Killed pinggy tunnel for port ${port}. No other processes found on this port.`,
+                    tunnelKilled: true
                 });
             }
             return res.status(404).json({ success: false, message: `No process found using port ${port}` });
@@ -408,10 +402,13 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
         }
         
         if (killedCount > 0) {
-            const totalKilled = tunnelKilled ? killedCount + 1 : killedCount;
+            const message = tunnelKilled 
+                ? `Killed pinggy tunnel and ${killedCount} process(es) using port ${port}`
+                : `Killed ${killedCount} process(es) using port ${port}`;
             res.json({ 
                 success: true, 
-                message: `Killed ${totalKilled} process(es) using port ${port}`
+                message: message,
+                tunnelKilled: tunnelKilled
             });
         } else {
             res.status(500).json({ success: false, message: `Failed to kill processes using port ${port}` });
