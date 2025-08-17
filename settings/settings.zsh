@@ -35,7 +35,7 @@ msh() {
   abs="$(cd "$1" 2>/dev/null && pwd || true)" || true
   [[ -n "$abs" && -d "$abs" ]] || { echo "no such dir: $1"; return 1; }
   local projects_dir
-  projects_dir="$(cd "${(%):-%N:h}/../.." && pwd)/projects"
+  projects_dir="$(cd "${0:A:h}/../.." && pwd)/projects"
   local name="${abs:t}"
   mkdir -p "$projects_dir" || return 1
   local target="$projects_dir/$name"
