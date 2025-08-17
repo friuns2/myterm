@@ -281,7 +281,7 @@ router.delete('/:sessionId', (req, res) => {
 });
 
 // DELETE /api/sessions/ports/:port - Kill process by port globally
-router.delete('/ports/:port', (req, res) => {
+router.delete('/ports/:port', async (req, res) => {
     const { port } = req.params;
     const portNum = parseInt(port);
     
@@ -300,6 +300,8 @@ router.delete('/ports/:port', (req, res) => {
                 global.pinggyProcesses.delete(portNum);
                 tunnelKilled = true;
                 console.log(`Killed pinggy tunnel for port ${port}`);
+                // Wait a moment for the process to terminate
+                await new Promise(resolve => setTimeout(resolve, 500));
             } catch (tunnelError) {
                 console.warn(`Failed to kill pinggy tunnel for port ${port}:`, tunnelError.message);
             }
@@ -351,7 +353,7 @@ router.delete('/ports/:port', (req, res) => {
 });
 
 // API endpoint to kill process by port
-router.delete('/:sessionId/ports/:port', (req, res) => {
+router.delete('/:sessionId/ports/:port', async (req, res) => {
     const sessionId = req.params.sessionId;
     const port = parseInt(req.params.port);
     
@@ -374,6 +376,8 @@ router.delete('/:sessionId/ports/:port', (req, res) => {
                 global.pinggyProcesses.delete(port);
                 tunnelKilled = true;
                 console.log(`Killed pinggy tunnel for port ${port}`);
+                // Wait a moment for the process to terminate
+                await new Promise(resolve => setTimeout(resolve, 500));
             } catch (tunnelError) {
                 console.warn(`Failed to kill pinggy tunnel for port ${port}:`, tunnelError.message);
             }
