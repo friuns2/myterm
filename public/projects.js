@@ -526,7 +526,17 @@ function createNewSessionForProject(projectName) {
 // Function to create pinggy tunnel for a port
 async function createPinggyTunnel(port) {
     try {
-        // Show loading indicator
+        // First check if tunnel already exists
+        const checkResponse = await fetch(`/api/sessions/pinggy/${port}`);
+        const checkResult = await checkResponse.json();
+        
+        if (checkResult.exists) {
+            // Tunnel exists, open it directly
+            window.open(checkResult.url, '_blank');
+            return;
+        }
+        
+        // Show loading indicator for new tunnel creation
         const loadingAlert = Swal.fire({
             title: 'Creating Tunnel',
             text: `Creating pinggy tunnel for port ${port}...`,
@@ -551,10 +561,13 @@ async function createPinggyTunnel(port) {
         loadingAlert.close();
         
         if (result.success && result.url) {
+            const title = result.existing ? 'Existing Tunnel Found!' : 'Tunnel Created!';
+            const message = result.existing ? 'Using your existing tunnel!' : 'Your tunnel is ready!';
+            
             await Swal.fire({
-                title: 'Tunnel Created!',
+                title: title,
                 html: `
-                    <p>Your tunnel is ready!</p>
+                    <p>${message}</p>
                     <div style="margin: 15px 0;">
                         <button 
                             onclick="window.open('${result.url}', '_blank')" 

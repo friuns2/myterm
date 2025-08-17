@@ -138,6 +138,22 @@ router.post('/pinggy', async (req, res) => {
             return res.status(404).json({ error: `No service found on port ${port}` });
         }
         
+        // Initialize tunnel storage if not exists
+        global.pinggyProcesses = global.pinggyProcesses || new Map();
+        global.pinggyTunnels = global.pinggyTunnels || new Map();
+        
+        // Check if tunnel already exists for this port
+        const existingTunnel = global.pinggyTunnels.get(port);
+        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
+            return res.json({ 
+                success: true, 
+                url: existingTunnel.url,
+                port: port,
+                existing: true,
+                message: `Using existing pinggy tunnel for port ${port}` 
+            });
+        }
+        
         // Create pinggy tunnel with timeout
         const { spawn } = require('child_process');
         const pinggyProcess = spawn('ssh', ['-p', '443', '-R0:localhost:' + port, 'a.pinggy.io'], {
@@ -192,20 +208,64 @@ router.post('/pinggy', async (req, res) => {
         const url = await promise;
         
         // Keep the process running in background
-        // Store process reference for cleanup if needed
-        global.pinggyProcesses = global.pinggyProcesses || new Map();
+        // Store process reference and URL for reuse
         global.pinggyProcesses.set(port, pinggyProcess);
+        global.pinggyTunnels.set(port, {
+            url: url,
+            process: pinggyProcess,
+            createdAt: new Date().toISOString()
+        });
+        
+        // Clean up tunnel info when process exits
+        pinggyProcess.on('exit', () => {
+            global.pinggyTunnels.delete(port);
+            global.pinggyProcesses.delete(port);
+        });
         
         res.json({ 
             success: true, 
             url: url,
             port: port,
+            existing: false,
             message: `Pinggy tunnel created for port ${port}` 
         });
         
     } catch (error) {
         console.error(`Error creating pinggy tunnel for port ${port}:`, error);
         res.status(500).json({ error: 'Failed to create pinggy tunnel: ' + error.message });
+    }
+});
+
+// GET /api/sessions/pinggy/:port - Get existing tunnel info for a port
+router.get('/pinggy/:port', (req, res) => {
+    const { port } = req.params;
+    const portNum = parseInt(port);
+    
+    if (!portNum || portNum < 1 || portNum > 65535) {
+        return res.status(400).json({ error: 'Invalid port number' });
+    }
+    
+    try {
+        // Initialize tunnel storage if not exists
+        global.pinggyTunnels = global.pinggyTunnels || new Map();
+        
+        const existingTunnel = global.pinggyTunnels.get(portNum);
+        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
+            res.json({ 
+                exists: true,
+                url: existingTunnel.url,
+                port: portNum,
+                createdAt: existingTunnel.createdAt
+            });
+        } else {
+            res.json({ 
+                exists: false,
+                port: portNum
+            });
+        }
+    } catch (error) {
+        console.error(`Error checking tunnel for port ${portNum}:`, error);
+        res.status(500).json({ error: 'Failed to check tunnel status' });
     }
 });
 
