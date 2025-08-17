@@ -221,72 +221,109 @@ async function showSessionsAndProjectsList() {
                         </div>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                        ${projectsWithWorktrees.length === 0 ? '<p class="text-center opacity-70 py-4">No projects found</p>' : 
-                            projectsWithWorktrees.map(project => `
-                                <div class="card bg-base-300 shadow-lg h-fit">
-                                    <div class="card-body p-3">
-                                        <div class="flex justify-between items-center mb-3">
-                                            <div class="cursor-pointer flex-1" onclick="selectProject('${project.name}')">
-                                                <h3 class="text-base font-bold truncate">${project.name}</h3>
-                                            </div>
-                                        </div>
-                                        <div class="flex flex-wrap gap-1 mb-3">
-                                            <button class="btn btn-primary btn-xs" onclick="selectProject('${project.name}')">
-                                                📂 Open
-                                            </button>
-                                            <button class="btn btn-secondary btn-xs" onclick="createWorktreeModal('${project.name}')">
-                                                🌿 Worktree
-                                            </button>
-                                            <button class="btn btn-error btn-xs" onclick="deleteProject('${project.name}')">
-                                                🗑️ Delete
-                                            </button>
-                                        </div>
-
-                                        ${functionsList.length > 0 ? `
-                                            <div class="mb-2">
-                                                <h4 class="text-xs font-semibold mb-1 opacity-80">Actions:</h4>
-                                                <div class="flex flex-wrap gap-1">
-                                                    ${functionsList.map(fn => `
-                                                        <button class="btn btn-xs btn-accent" onclick="runFunctionFromButton('${project.name}','${fn.name}',${fn.numParams || 0})">${fn.name}</button>
-                                                    `).join('')}
+                        ${(() => {
+                            // Flatten projects and worktrees into a single list
+                            const flattenedItems = [];
+                            
+                            projectsWithWorktrees.forEach(project => {
+                                // Add main project
+                                flattenedItems.push({
+                                    type: 'project',
+                                    name: project.name,
+                                    project: project,
+                                    isWorktree: false
+                                });
+                                
+                                // Add worktrees as nested items
+                                project.worktrees.forEach(worktree => {
+                                    flattenedItems.push({
+                                        type: 'worktree',
+                                        name: `${project.name}/${worktree.name}`,
+                                        displayName: worktree.name,
+                                        parentProject: project.name,
+                                        worktree: worktree,
+                                        isWorktree: true
+                                    });
+                                });
+                            });
+                            
+                            if (flattenedItems.length === 0) {
+                                return '<p class="text-center opacity-70 py-4">No projects found</p>';
+                            }
+                            
+                            return flattenedItems.map(item => {
+                                if (item.type === 'project') {
+                                    const project = item.project;
+                                    return `
+                                        <div class="card bg-base-300 shadow-lg h-fit">
+                                            <div class="card-body p-3">
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <div class="cursor-pointer flex-1" onclick="selectProject('${project.name}')">
+                                                        <h3 class="text-base font-bold truncate flex items-center gap-2">
+                                                            <span class="text-primary">📁</span>
+                                                            ${project.name}
+                                                        </h3>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ` : ''}
-                                        
-                                        <!-- Worktrees for this project -->
-                                        ${project.worktrees.length > 0 ? `
-                                            <div>
-                                                <h4 class="text-xs font-semibold mb-1 opacity-80">Worktrees:</h4>
-                                                <div class="space-y-1">
-                                                    ${project.worktrees.map(worktree => `
-                                                        <div class="bg-base-100 rounded p-2">
-                                                            <div class="cursor-pointer mb-1" onclick="openWorktree('${project.name}', '${worktree.name}')">
-                                                                <div class="flex items-center gap-1">
-                                                                    <span class="text-success text-xs">🌿</span>
-                                                                    <span class="font-medium text-xs truncate flex-1">${worktree.name}</span>
-                                                                    <span class="badge badge-outline badge-xs">${worktree.branch}</span>
-                                                                </div>
-                                                                <p class="text-[10px] opacity-60 truncate">${worktree.relativePath}</p>
-                                                            </div>
-                                                            <div class="flex gap-1">
-                                                                <button class="btn btn-xs btn-primary" onclick="openWorktree('${project.name}', '${worktree.name}')">
-                                                                    📂
-                                                                </button>
-                                                                <button class="btn btn-xs btn-success" onclick="mergeWorktree('${project.name}', '${worktree.name}')">
-                                                                    🔀
-                                                                </button>
-                                                                <button class="btn btn-xs btn-error" onclick="deleteWorktree('${project.name}', '${worktree.name}')">
-                                                                    🗑️
-                                                                </button>
-                                                            </div>
+                                                <div class="flex flex-wrap gap-1 mb-3">
+                                                    <button class="btn btn-primary btn-xs" onclick="selectProject('${project.name}')">
+                                                        📂 Open
+                                                    </button>
+                                                    <button class="btn btn-secondary btn-xs" onclick="createWorktreeModal('${project.name}')">
+                                                        🌿 Worktree
+                                                    </button>
+                                                    <button class="btn btn-error btn-xs" onclick="deleteProject('${project.name}')">
+                                                        🗑️ Delete
+                                                    </button>
+                                                </div>
+                                                ${functionsList.length > 0 ? `
+                                                    <div class="mb-2">
+                                                        <h4 class="text-xs font-semibold mb-1 opacity-80">Actions:</h4>
+                                                        <div class="flex flex-wrap gap-1">
+                                                            ${functionsList.map(fn => `
+                                                                <button class="btn btn-xs btn-accent" onclick="runFunctionFromButton('${project.name}','${fn.name}',${fn.numParams || 0})">${fn.name}</button>
+                                                            `).join('')}
                                                         </div>
-                                                    `).join('')}
+                                                    </div>
+                                                ` : ''}
+                                                ${project.worktrees.length > 0 ? `
+                                                    <p class="text-xs opacity-50">${project.worktrees.length} worktree${project.worktrees.length > 1 ? 's' : ''}</p>
+                                                ` : '<p class="text-xs opacity-50">No worktrees</p>'}
+                                            </div>
+                                        </div>
+                                    `;
+                                } else {
+                                    const worktree = item.worktree;
+                                    return `
+                                        <div class="card bg-base-200 shadow-lg h-fit ml-4 border-l-4 border-success">
+                                            <div class="card-body p-3">
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <div class="cursor-pointer flex-1" onclick="openWorktree('${item.parentProject}', '${worktree.name}')">
+                                                        <h3 class="text-base font-bold truncate flex items-center gap-2">
+                                                            <span class="text-success">🌿</span>
+                                                            ${item.displayName}
+                                                            <span class="badge badge-outline badge-xs">${worktree.branch}</span>
+                                                        </h3>
+                                                        <p class="text-xs opacity-60 truncate">↳ ${item.parentProject}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex flex-wrap gap-1">
+                                                    <button class="btn btn-primary btn-xs" onclick="openWorktree('${item.parentProject}', '${worktree.name}')">
+                                                        📂 Open
+                                                    </button>
+                                                    <button class="btn btn-success btn-xs" onclick="mergeWorktree('${item.parentProject}', '${worktree.name}')">
+                                                        🔀 Merge
+                                                    </button>
+                                                    <button class="btn btn-error btn-xs" onclick="deleteWorktree('${item.parentProject}', '${worktree.name}')">
+                                                        🗑️ Delete
+                                                    </button>
                                                 </div>
                                             </div>
-                                        ` : '<p class="text-xs opacity-50">No worktrees</p>'}
-                                    </div>
-                                </div>
-                            `).join('')
+                                        </div>
+                                    `;
+                                }
+                            }).join('');
+                        })()
                         }
                     </div>
                 </div>
