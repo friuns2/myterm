@@ -1,113 +1,171 @@
-# Web Terminal Emulator with PTY Support
+# MyShell25 - Web-Based Terminal Emulator
 
-A compact Node.js web-based terminal emulator using WebSockets and PTY (pseudo-terminal) for full interactive application support.
+A modern, web-based terminal emulator with PTY support that provides a full-featured shell experience through your browser. Built with Node.js, Express, and WebSocket technology.
 
-## ✨ Key Features
+## 🚀 Features
 
-- **Full PTY Support** - Real pseudo-terminal emulation using node-pty
-- **Interactive Apps** - Compatible with nano, tmux, vim, htop, and more
-- **ANSI Escape Codes** - Full terminal control sequences support via xterm.js
-- **Real-time** - WebSocket communication for instant command execution
-- **Terminal Resizing** - Automatic terminal size adjustment
-- **Modern UI** - Browser-based interface with xterm.js terminal emulator
+- **Full PTY Support**: Compatible with interactive applications like nano, tmux, vim, and more
+- **Web-Based Interface**: Access your terminal from any modern web browser
+- **File Management**: Built-in file browser with upload/download capabilities
+- **Project Management**: Organize and manage multiple projects and sessions
+- **Git Worktrees Support**: Advanced Git worktree management
+- **Real-time Terminal**: WebSocket-based real-time terminal communication
+- **Security**: Basic authentication middleware for secure access
+- **Responsive Design**: Modern UI built with Tailwind CSS and DaisyUI
+- **Auto Port Generation**: Automatically generates unique ports based on directory hash
 
-## 🚀 Supported Applications
+## 📋 Prerequisites
 
-✅ **Text Editors**: nano, pico, vim, emacs  
-✅ **System Tools**: htop, top, ps, less, more  
-✅ **Terminal Multiplexers**: tmux, screen  
-✅ **Interactive Tools**: ssh, ftp, python REPL  
-✅ **All Shell Features**: tab completion, command history, ctrl+c/z  
+- Node.js (v14 or higher)
+- npm or yarn
+- Unix-like operating system (Linux, macOS)
 
-## Installation
+## 🛠️ Installation
 
-1. **Clone the repository:**
+1. Clone the repository:
 ```bash
-git clone https://github.com/friuns2/web-terminal-emulator.git
-cd web-terminal-emulator
+git clone <repository-url>
+cd myshell25
 ```
 
-2. **Install dependencies:**
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-3. **Run the terminal:**
+3. Create environment configuration (optional):
+```bash
+cp .env.example .env
+# Edit .env with your preferred settings
+```
+
+## 🚀 Usage
+
+### Starting the Server
+
 ```bash
 npm start
 ```
 
-4. **Open in browser:**
-Navigate to http://localhost:3000
+The server will automatically generate a unique port based on your current directory and start listening on `0.0.0.0:<generated-port>`.
 
-## Configuration
+### Accessing the Terminal
 
-The application can be configured using environment variables in the `.env` file:
+1. Open your web browser
+2. Navigate to `http://localhost:<generated-port>`
+3. Enter your authentication credentials if prompted
+4. Start using the terminal interface
 
-### Port Scanning
-```bash
-# Enable/disable port detection for tmux sessions
-ENABLE_PORT_SCANNING=false  # Set to 'true' to enable
+### Available Scripts
+
+- `npm start` - Start the production server
+- `npm run ngrok` - Expose the server via ngrok tunnel
+
+## 🏗️ Project Structure
+
+```
+myshell25/
+├── middleware/          # Authentication and security middleware
+├── public/             # Frontend static files
+│   ├── index.html     # Main web interface
+│   ├── script.js      # Frontend JavaScript
+│   ├── style.css      # Custom styles
+│   └── ...            # Other frontend assets
+├── routes/            # Express.js API routes
+│   ├── files.js       # File management endpoints
+│   ├── projects.js    # Project management
+│   ├── sessions.js    # Session handling
+│   ├── settings.js    # Application settings
+│   └── worktrees.js   # Git worktree management
+├── settings/          # Configuration files
+│   ├── rules.txt      # Application rules
+│   └── settings.zsh   # Shell configuration
+├── websocket/         # WebSocket handlers
+│   └── terminal.js    # Terminal WebSocket implementation
+├── server.js          # Main server file
+└── package.json       # Project dependencies
 ```
 
-When `ENABLE_PORT_SCANNING` is set to `true`, the application will:
-- Detect ports used by processes within tmux sessions
-- Display port preview buttons in the session UI
-- Allow killing processes by port using kill buttons
+## 🔧 Configuration
 
-When disabled (default), no port scanning is performed for better performance.
+### Environment Variables
 
-## Usage
+Create a `.env` file in the root directory:
 
-### Web Terminal (Recommended)
-```bash
-npm start
-```
-Then open http://localhost:3000 in your browser
+```env
+# Basic Authentication (optional)
+BASIC_AUTH_USERNAME=your_username
+BASIC_AUTH_PASSWORD=your_password
 
-### Command Line Functions
-```bash
-npm run shell
+# Custom port (optional - overrides auto-generation)
+PORT=3551
 ```
 
-## 🎯 Interactive Features
+### Shell Settings
 
-- **Full Keyboard Support** - All special keys, combinations (Ctrl+C, etc.)
-- **ANSI Colors** - Full color terminal output support
-- **Terminal Resizing** - Responsive terminal that adapts to window size
-- **Session Persistence** - Maintains shell state across commands
-- **Real-time Streaming** - Live output for long-running commands
+The application includes shell configuration in `settings/settings.zsh` that provides additional functionality and aliases.
 
-## Technical Details
+## 🌐 API Endpoints
 
-- **Backend**: Node.js with Express and WebSockets
-- **PTY**: node-pty for real terminal emulation
-- **Frontend**: xterm.js for proper terminal rendering
-- **Transport**: WebSocket for bidirectional real-time communication
+- `GET /api/projects` - List all projects
+- `GET /api/sessions` - Manage terminal sessions
+- `GET /api/files` - File system operations
+- `GET /api/worktrees` - Git worktree management
+- `GET /api/settings` - Application settings
+- `GET /api/predictions` - Command predictions and suggestions
 
-## API Functions
+## 🔒 Security Features
 
-- `runCommandSync(command)` - Synchronous execution
-- `runCommand(command, callback)` - Async with callback
-- `runCommandAsync(command)` - Promise-based async
+- Basic HTTP authentication
+- Request validation middleware
+- Secure WebSocket upgrade handling
+- File upload restrictions
 
-## Example
+## 🎨 Frontend Features
 
-```javascript
-const { runCommandSync, runCommandAsync } = require('./shell-executor');
+- **Modern UI**: Built with Tailwind CSS and DaisyUI
+- **Dark Theme**: Optimized for terminal usage
+- **File Browser**: Integrated file management interface
+- **Responsive Design**: Works on desktop and mobile devices
+- **Real-time Updates**: Live terminal output via WebSocket
 
-// Sync
-const result = runCommandSync('ls');
-console.log(result);
+## 🤝 Contributing
 
-// Async
-runCommandAsync('pwd').then(result => console.log(result.stdout));
-```
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Demo
+## 📝 License
 
-Successfully tested with:
-- `nano` - Full text editor functionality
-- `ls -la` - Directory listings with colors
-- `echo` commands with ANSI escape sequences
-- Interactive command-line applications
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Port already in use**: The application generates unique ports, but if you encounter conflicts, set a custom `PORT` in your `.env` file.
+
+2. **PTY not working**: Ensure you're running on a Unix-like system with proper PTY support.
+
+3. **Authentication issues**: Check your `.env` file for correct `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` values.
+
+4. **WebSocket connection failed**: Verify that your firewall allows the generated port and WebSocket connections.
+
+## 🔮 Future Enhancements
+
+- [ ] Multi-user support
+- [ ] Session persistence
+- [ ] Plugin system
+- [ ] Advanced file editor integration
+- [ ] Docker support
+- [ ] Cloud deployment options
+
+## 📞 Support
+
+For support, please open an issue on the GitHub repository or contact the maintainers.
+
+---
+
+**Note**: This is a powerful tool that provides shell access through a web interface. Use responsibly and ensure proper security measures are in place when deploying in production environments.
