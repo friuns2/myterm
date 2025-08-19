@@ -148,154 +148,9 @@ router.get('/ports', async (req, res) => {
     }
 });
 
-// POST /api/sessions/pinggy - Create pinggy tunnel for a port
-router.post('/pinggy', async (req, res) => {
-    const { port } = req.body;
-    
-    if (!port || port < 1 || port > 65535) {
-        return res.status(400).json({ error: 'Invalid port number' });
-    }
-    
-    try {
-        // Check if port is actually listening
-        const { stdout: lsofOutput } = await execAsync(`lsof -ti:${port} 2>/dev/null || true`, { 
-            encoding: 'utf8',
-            timeout: 3000
-        });
-        if (!lsofOutput.trim()) {
-            return res.status(404).json({ error: `No service found on port ${port}` });
-        }
-        
-        // Initialize tunnel storage if not exists
-        global.pinggyProcesses = global.pinggyProcesses || new Map();
-        global.pinggyTunnels = global.pinggyTunnels || new Map();
-        
-        // Check if tunnel already exists for this port
-        const existingTunnel = global.pinggyTunnels.get(port);
-        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
-            return res.json({ 
-                success: true, 
-                url: existingTunnel.url,
-                port: port,
-                existing: true,
-                message: `Using existing pinggy tunnel for port ${port}` 
-            });
-        }
-        
-        // Create pinggy tunnel with timeout
-        const { spawn } = require('child_process');
-        const pinggyProcess = spawn('ssh', ['-p', '443', '-R0:localhost:' + port, 'a.pinggy.io'], {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            env: { ...process.env, SSH_AUTH_SOCK: undefined } // Disable SSH agent to force password auth
-        });
-        
-        let tunnelUrl = null;
-        let timeoutId = null;
-        
-        const promise = new Promise((resolve, reject) => {
-            timeoutId = setTimeout(() => {
-                pinggyProcess.kill();
-                reject(new Error('Timeout creating pinggy tunnel'));
-            }, 10000); // 10 second timeout
-            
-            pinggyProcess.stdout.on('data', (data) => {
-                const output = data.toString();
-                console.log('Pinggy stdout:', output);
-                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.(a\.pinggy\.io|a\.free\.pinggy\.link)/);
-                if (urlMatch) {
-                    tunnelUrl = urlMatch[0];
-                    clearTimeout(timeoutId);
-                    resolve(tunnelUrl);
-                }
-            });
-            
-            pinggyProcess.stderr.on('data', (data) => {
-                const output = data.toString();
-                console.log('Pinggy stderr:', output);
-                const urlMatch = output.match(/https:\/\/[a-zA-Z0-9-]+\.(a\.pinggy\.io|a\.free\.pinggy\.link)/);
-                if (urlMatch) {
-                    tunnelUrl = urlMatch[0];
-                    clearTimeout(timeoutId);
-                    resolve(tunnelUrl);
-                }
-            });
-            
-            pinggyProcess.on('error', (error) => {
-                clearTimeout(timeoutId);
-                reject(error);
-            });
-            
-            pinggyProcess.on('exit', (code) => {
-                if (!tunnelUrl) {
-                    clearTimeout(timeoutId);
-                    reject(new Error(`Pinggy process exited with code ${code}`));
-                }
-            });
-        });
-        
-        const url = await promise;
-        
-        // Keep the process running in background
-        // Store process reference and URL for reuse
-        global.pinggyProcesses.set(port, pinggyProcess);
-        global.pinggyTunnels.set(port, {
-            url: url,
-            process: pinggyProcess,
-            createdAt: new Date().toISOString()
-        });
-        
-        // Clean up tunnel info when process exits
-        pinggyProcess.on('exit', () => {
-            global.pinggyTunnels.delete(port);
-            global.pinggyProcesses.delete(port);
-        });
-        
-        res.json({ 
-            success: true, 
-            url: url,
-            port: port,
-            existing: false,
-            message: `Pinggy tunnel created for port ${port}` 
-        });
-        
-    } catch (error) {
-        console.error(`Error creating pinggy tunnel for port ${port}:`, error);
-        res.status(500).json({ error: 'Failed to create pinggy tunnel: ' + error.message });
-    }
-});
 
-// GET /api/sessions/pinggy/:port - Get existing tunnel info for a port
-router.get('/pinggy/:port', (req, res) => {
-    const { port } = req.params;
-    const portNum = parseInt(port);
-    
-    if (!portNum || portNum < 1 || portNum > 65535) {
-        return res.status(400).json({ error: 'Invalid port number' });
-    }
-    
-    try {
-        // Initialize tunnel storage if not exists
-        global.pinggyTunnels = global.pinggyTunnels || new Map();
-        
-        const existingTunnel = global.pinggyTunnels.get(portNum);
-        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
-            res.json({ 
-                exists: true,
-                url: existingTunnel.url,
-                port: portNum,
-                createdAt: existingTunnel.createdAt
-            });
-        } else {
-            res.json({ 
-                exists: false,
-                port: portNum
-            });
-        }
-    } catch (error) {
-        console.error(`Error checking tunnel for port ${portNum}:`, error);
-        res.status(500).json({ error: 'Failed to check tunnel status' });
-    }
-});
+
+
 
 // API endpoint to kill a session
 router.delete('/:sessionId', async (req, res) => {
@@ -347,25 +202,6 @@ router.delete('/ports/:port', async (req, res) => {
     const portNum = parseInt(port);
     
     try {
-        // Initialize tunnel storage if not exists
-        global.pinggyProcesses = global.pinggyProcesses || new Map();
-        global.pinggyTunnels = global.pinggyTunnels || new Map();
-        
-        // Check if there's an associated pinggy tunnel and kill it first
-        const existingTunnel = global.pinggyTunnels.get(portNum);
-        let tunnelKilled = false;
-        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
-            try {
-                existingTunnel.process.kill('SIGTERM');
-                global.pinggyTunnels.delete(portNum);
-                global.pinggyProcesses.delete(portNum);
-                tunnelKilled = true;
-                console.log(`Killed pinggy tunnel for port ${port}`);
-            } catch (tunnelError) {
-                console.warn(`Failed to kill pinggy tunnel for port ${port}:`, tunnelError.message);
-            }
-        }
-        
         // Find the process using the port
         const { stdout: lsofOutput } = await execAsync(`lsof -ti:${port} 2>/dev/null || true`, { 
             encoding: 'utf8',
@@ -385,14 +221,10 @@ router.delete('/ports/:port', async (req, res) => {
         }
         
         if (killedCount > 0) {
-            const message = tunnelKilled 
-                ? `Killed pinggy tunnel and ${killedCount} process(es) on port ${port}`
-                : `Killed ${killedCount} process(es) on port ${port}`;
             res.json({ 
                 success: true, 
-                message: message,
-                killedPids: pids.slice(0, killedCount),
-                tunnelKilled: tunnelKilled
+                message: `Killed ${killedCount} process(es) on port ${port}`,
+                killedPids: pids.slice(0, killedCount)
             });
         } else {
             res.status(500).json({ error: `Failed to kill processes on port ${port}` });
@@ -414,25 +246,6 @@ router.delete('/:sessionId/ports/:port', async (req, res) => {
     }
     
     try {
-        // Initialize tunnel storage if not exists
-        global.pinggyProcesses = global.pinggyProcesses || new Map();
-        global.pinggyTunnels = global.pinggyTunnels || new Map();
-        
-        // Check if there's an associated pinggy tunnel and kill it first
-        const existingTunnel = global.pinggyTunnels.get(port);
-        let tunnelKilled = false;
-        if (existingTunnel && existingTunnel.process && !existingTunnel.process.killed) {
-            try {
-                existingTunnel.process.kill('SIGTERM');
-                global.pinggyTunnels.delete(port);
-                global.pinggyProcesses.delete(port);
-                tunnelKilled = true;
-                console.log(`Killed pinggy tunnel for port ${port}`);
-            } catch (tunnelError) {
-                console.warn(`Failed to kill pinggy tunnel for port ${port}:`, tunnelError.message);
-            }
-        }
-        
         // Find the process using the port
         const { stdout: lsofOutput } = await execAsync(`lsof -ti:${port} 2>/dev/null || true`, { 
             encoding: 'utf8',
@@ -441,13 +254,6 @@ router.delete('/:sessionId/ports/:port', async (req, res) => {
         const pids = lsofOutput.split('\n').filter(pid => pid.trim() && /^\d+$/.test(pid.trim()));
         
         if (pids.length === 0) {
-            if (tunnelKilled) {
-                return res.json({ 
-                    success: true, 
-                    message: `Killed pinggy tunnel for port ${port}. No other processes found on this port.`,
-                    tunnelKilled: true
-                });
-            }
             return res.status(404).json({ success: false, message: `No process found using port ${port}` });
         }
         
@@ -469,13 +275,9 @@ router.delete('/:sessionId/ports/:port', async (req, res) => {
         }
         
         if (killedCount > 0) {
-            const message = tunnelKilled 
-                ? `Killed pinggy tunnel and ${killedCount} process(es) using port ${port}`
-                : `Killed ${killedCount} process(es) using port ${port}`;
             res.json({ 
                 success: true, 
-                message: message,
-                tunnelKilled: tunnelKilled
+                message: `Killed ${killedCount} process(es) using port ${port}`
             });
         } else {
             res.status(500).json({ success: false, message: `Failed to kill processes using port ${port}` });
