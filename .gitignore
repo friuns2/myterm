@@ -102,3 +102,6 @@ pids
 .idea/
 *.swp
 *.swo api.sh
+
+# Settings files
+settings/api.zsh
