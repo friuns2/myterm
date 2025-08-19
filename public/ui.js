@@ -491,6 +491,11 @@ function setupCustomCommandInput() {
                         customCommandInput.style.height = 'auto';
                         customCommandInput.rows = 1;
                         
+                        // Clear terminal's tracked command
+                        if (typeof window.currentTypedCommand !== 'undefined') {
+                            window.currentTypedCommand = '';
+                        }
+                        
                         // Refocus the input field after sending command
                         setTimeout(() => {
                             customCommandInput.focus();
@@ -508,6 +513,11 @@ function setupCustomCommandInput() {
                     customCommandInput.value = '';
                     customCommandInput.style.height = 'auto';
                     customCommandInput.rows = 1;
+                    
+                    // Clear terminal's tracked command
+                    if (typeof window.currentTypedCommand !== 'undefined') {
+                        window.currentTypedCommand = '';
+                    }
                     
                     // Refocus the input field after sending command
                     setTimeout(() => {
@@ -567,6 +577,11 @@ function setupCustomCommandInput() {
             // Reset history navigation when typing
             historyIndex = -1;
             currentInput = customCommandInput.value;
+            
+            // Sync with terminal's tracked command
+            if (typeof window.currentTypedCommand !== 'undefined') {
+                window.currentTypedCommand = customCommandInput.value;
+            }
             
             // Clear previous debounce timeout
             if (debounceTimeout) {

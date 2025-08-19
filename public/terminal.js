@@ -201,6 +201,52 @@ const connectWebSocket = () => {
     };
 };
 
+// Global variable to track current command being typed
+let currentTypedCommand = '';
+
+// Expose globally for sync with input field
+window.currentTypedCommand = currentTypedCommand;
+
+// Function to sync terminal input with custom command input field
+function syncTerminalInputWithField(data) {
+    const customCommandInput = document.getElementById('custom-command-input');
+    if (!customCommandInput) return;
+    
+    // Handle different types of input data
+    if (data === '\r') {
+        // Enter key - clear the tracked command and input field
+        currentTypedCommand = '';
+        window.currentTypedCommand = '';
+        customCommandInput.value = '';
+        customCommandInput.style.height = 'auto';
+        customCommandInput.rows = 1;
+    } else if (data === '\u007f' || data === '\b') {
+        // Backspace - remove last character
+        if (currentTypedCommand.length > 0) {
+            currentTypedCommand = currentTypedCommand.slice(0, -1);
+            window.currentTypedCommand = currentTypedCommand;
+            customCommandInput.value = currentTypedCommand;
+        }
+    } else if (data === '\u0003') {
+        // Ctrl+C - clear the command
+        currentTypedCommand = '';
+        window.currentTypedCommand = '';
+        customCommandInput.value = '';
+        customCommandInput.style.height = 'auto';
+        customCommandInput.rows = 1;
+    } else if (data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) <= 126) {
+        // Printable ASCII characters
+        currentTypedCommand += data;
+        window.currentTypedCommand = currentTypedCommand;
+        customCommandInput.value = currentTypedCommand;
+        
+        // Auto-resize textarea
+        customCommandInput.style.height = 'auto';
+        customCommandInput.style.height = Math.min(customCommandInput.scrollHeight, 120) + 'px';
+    }
+    // Ignore other control characters and escape sequences
+}
+
 // Function to initialize terminal
 function initializeTerminal() {
     const terminalContainer = document.getElementById('terminal-container');
@@ -232,6 +278,9 @@ function initializeTerminal() {
                 data: data
             }));
         }
+        
+        // Sync typing with custom command input field
+        syncTerminalInputWithField(data);
     });
     
     // Focus the new terminal instance
