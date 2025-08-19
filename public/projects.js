@@ -149,7 +149,7 @@ async function showSessionsAndProjectsList() {
                     <div class="flex flex-wrap gap-2 mb-6">
                         ${allPorts.map(port => `
                             <div class="flex gap-1">
-                                <button class="btn btn-sm btn-outline btn-success" onclick="window.open('http://localhost:${port}', '_blank')" title="Open http://localhost:${port}">
+                                <button class="btn btn-sm btn-outline btn-success" onclick="window.open('http://' + window.location.hostname + ':${port}', '_blank')" title="Open http://' + window.location.hostname + ':${port}">
                                     🌐 ${port}
                                 </button>
                                 <button class="btn btn-sm btn-outline btn-error" onclick="killProcessByPort('', ${port})" title="Kill process on port ${port}">
